@@ -1,92 +1,55 @@
-# FrpcStartup - AI Coding Agent Instructions
+# Copilot Instructions for FrpcStartup
 
 ## Project Overview
-Rust application that manages multiple frpc (fast reverse proxy client) processes with email notifications. Designed to run on Windows as a startup service, monitoring frpc tunnels and alerting via SMTP when processes start or encounter errors.
+FrpcStartup is a Rust-based utility service designed to manage multiple `frpc` (Fast Reverse Proxy Client) processes. It runs as a startup application, ensuring configured tunnels are active, and provides a lightweight web interface for remote management.
 
-## Architecture
+## Architecture & Core Components
 
-### Core Components
-- **main.rs**: Single-file architecture with three main functions:
-  - `run_single_frpc()`: Spawns individual frpc processes with dedicated logging
-  - `send_email()`: HTML email notifications using lettre with template rendering
-  - `main()`: Thread pool manager spawning one thread per frpc configuration entry
+### 1. Service Management (`src/frpc.rs`)
+- **`FrpcManager`**: The core struct that manages child processes.
+- **Process Isolation**: Each `frpc` tunnel runs as a separate child process (`std::process::Command`).
+- **State Tracking**: Keeps track of child process handles to allow starting/stopping individual tunnels.
 
-### Data Flow
-1. Load `config.toml` (SMTP credentials + array of frpc configs with description/arg pairs)
-2. Spawn thread per frpc entry → each runs `frpc.exe -f <arg>` with redirected stdout/stderr
-3. Send success email immediately after spawn
-4. Monitor process with try_wait() loop checking for exit or Ctrl+C shutdown signal
-5. On error: send alert email with last 2KB of log content
+### 2. Web Control Interface (`src/web.rs`)
+- **Custom HTTP Server**: Implemented using raw `std::net::TcpListener` without external web frameworks (like Actix or Axum).
+- **Security**:
+  - **IP Lockout**: Tracks failed authentication attempts and temporarily bans IPs (`IpStatus`).
+  - **Auth**: Simple secret-based authentication (`auth_secret` in config).
+  - **Timeouts**: Implements read timeouts to prevent Slowloris attacks.
+- **Tunneling**: The web interface itself is exposed via a dedicated `frpc` tunnel.
 
-## Configuration Pattern
+### 3. Configuration (`src/config.rs`)
+- **Format**: TOML (`config.toml`).
+- **Structure**:
+  - `[frpc]`: Array of tunnel configurations.
+  - `[web_control]`: Settings for the management interface.
+  - `[smtp]`: **Deprecated** email notification settings.
 
-**config.toml** structure:
-```toml
-[smtp]
-server = "smtp.qq.com"
-username = "user@domain.com"
-password = "app-password"
-from = "user@domain.com"
-to = "recipient@domain.com"
+### 4. Lifecycle (`src/main.rs`)
+- **Startup Delay**: Intentionally waits 25 seconds (`thread::sleep`) to ensure network services are ready on the host machine.
+- **Graceful Shutdown**: Uses `ctrlc` crate to handle termination signals and clean up child processes.
 
-[[frpc]]
-description = "Remote Desktop Access"
-arg = "token:port"
-```
+## Developer Workflows
 
-- Each `[[frpc]]` entry spawns separate thread/process
-- `arg` passed directly to `frpc.exe -f <arg>` (frpc protocol-specific format)
+### Building & Deployment
+- **Script**: Use `deploy.ps1` for the complete build-and-deploy cycle.
+  - Builds release binary (`cargo build --release`).
+  - Copies artifacts to `E:\UserData\.Exe\StartUp`.
+  - Manages config file updates (preserves existing configs).
+- **Prerequisites**: `frpc.exe` must be present in the target directory or system PATH.
 
-## Logging Strategy
+### Logging
+- **Mechanism**: Custom logging via `crate::logger::write_app_log`.
+- **Pattern**: Always log significant state changes (startup, shutdown, process spawn/death).
 
-- **Application logs**: `logs/application.log` - startup/shutdown/config events
-- **Process logs**: `logs/frpc_{index}_{timestamp}.log` - individual frpc stdout/stderr
-- Logs created per-process with datetime stamp for debugging tunnel issues
-- Error emails include last 2048 bytes from process log
+## Coding Conventions
 
-## Email Template System
+- **Web Server**: Do **not** introduce heavy web frameworks. Maintain the raw TCP implementation for minimal footprint.
+- **Error Handling**: Prefer logging errors via `write_app_log` over panicking.
+- **Concurrency**: Use `Arc<Mutex<T>>` for shared state between the main loop and the web server thread.
+- **External Commands**: When spawning `frpc`, ensure arguments are passed correctly as separate strings to `Command::arg()`.
 
-`email_template.html` uses token replacement for dynamic content:
-- `{{COLOR}}`, `{{BG_COLOR}}`, `{{TEXT_COLOR}}`: Conditional styling (red for errors, green for success)
-- `{{SUBJECT}}`, `{{INTRO}}`, `{{CONTENT}}`: Message content
-- Template is read from disk on each send (allows hot-reload without recompile)
-
-## Development Workflows
-
-### Build & Deploy
-```powershell
-.\deploy.ps1  # Compiles release build → copies to E:\UserData\.Exe\StartUp
-```
-- Script preserves existing `config.toml` at target (avoids overwriting credentials)
-- Expects `frpc.exe` in target directory or system PATH
-
-### Testing
-- No automated tests (manual testing workflow)
-- Test by running with sample frpc args and verifying email delivery
-- Check `logs/application.log` for startup sequence
-
-### Local Development
-```powershell
-cargo build --release
-.\target\release\FrpcStartup.exe
-```
-
-## Project-Specific Conventions
-
-1. **No error recovery**: Process errors trigger email and thread termination (fail-fast for monitoring)
-2. **Blocking email sends**: Email delivery happens synchronously in each thread (acceptable for low-frequency notifications)
-3. **Chinese UI strings**: User-facing messages (emails, logs) use Chinese (target audience consideration)
-4. **Windows-specific paths**: Hardcoded `E:\UserData\.Exe` in deploy.ps1 reflects single-user deployment model
-5. **Shutdown handling**: ctrlc crate for graceful termination with Arc<AtomicBool> shared across threads
-
-## Dependencies Note
-
-- **lettre**: SMTP relay mode (not direct connection) - note `SmtpTransport::relay()` usage
-- **chrono**: Log timestamps in `%Y-%m-%d %H:%M:%S` format
-- **ctrlc**: System signal handling for Windows service compatibility
-
-## Key Files
-- `src/main.rs`: All application logic (309 lines)
-- `config.toml`: Runtime configuration (credentials + tunnel definitions)
-- `email_template.html`: HTML email styling with token placeholders
-- `deploy.ps1`: Deployment automation for Windows target environment
+## Critical Files
+- `src/web.rs`: Contains the manual HTTP request parsing and security logic.
+- `deploy.ps1`: The source of truth for deployment paths and file handling.
+- `config.toml`: Defines the schema for runtime configuration.
