@@ -4,83 +4,125 @@ use crate::logger::write_app_log;
 use chrono::Local;
 use std::fs;
 use std::process::{Child, Command};
-use std::sync::{Arc, Mutex};
-use std::thread;
 
 pub struct FrpcManager {
     config: Config,
     processes: Vec<Option<Child>>,
-    monitor_handles: Vec<thread::JoinHandle<()>>,
-    running: Arc<Mutex<bool>>,
 }
 
 impl FrpcManager {
     pub fn new(config: Config) -> Self {
-        Self {
-            config,
-            processes: Vec::new(),
-            monitor_handles: Vec::new(),
-            running: Arc::new(Mutex::new(false)),
+        let count = config.frpc.len();
+        let mut processes = Vec::with_capacity(count);
+        for _ in 0..count {
+            processes.push(None);
         }
+        Self { config, processes }
     }
 
-    pub fn start_services(&mut self) {
-        let mut running = self.running.lock().unwrap();
-        if *running {
-            write_app_log("Services are already running.");
-            return;
-        }
-
+    pub fn start_all(&mut self) {
         write_app_log("Starting all frpc services...");
-        self.processes.clear();
-        self.monitor_handles.clear();
-
-        for (i, frpc_conf) in self.config.frpc.iter().enumerate() {
-            match self.spawn_frpc(i, frpc_conf) {
-                Ok(child) => {
-                    self.processes.push(Some(child));
-                    write_app_log(&format!("Started frpc process {} - {}", i, frpc_conf.description));
-                }
-                Err(e) => {
-                    write_app_log(&format!("Failed to start frpc process {} - {}: {}", i, frpc_conf.description, e));
-                    self.processes.push(None);
-                }
-            }
+        for i in 0..self.config.frpc.len() {
+            self.start_service(i);
         }
-
-        *running = true;
-        
         // Send notification
-        let _ = send_email(&self.config, "FrpcStartup 服务已启动", "所有配置的 frpc 服务已尝试启动。", false);
+        let _ = send_email(
+            &self.config,
+            "FrpcStartup 服务已启动",
+            "所有配置的 frpc 服务已尝试启动。",
+            false,
+        );
     }
 
-    pub fn stop_services(&mut self) {
-        let mut running = self.running.lock().unwrap();
-        if !*running {
-            write_app_log("Services are not running.");
+    pub fn stop_all(&mut self) {
+        write_app_log("Stopping all frpc services...");
+        for i in 0..self.config.frpc.len() {
+            self.stop_service(i);
+        }
+        let _ = send_email(
+            &self.config,
+            "FrpcStartup 服务已停止",
+            "所有 frpc 服务已停止。",
+            false,
+        );
+    }
+
+    pub fn start_service(&mut self, index: usize) {
+        if index >= self.processes.len() {
             return;
         }
 
-        write_app_log("Stopping all frpc services...");
-        for (i, child_opt) in self.processes.iter_mut().enumerate() {
-            if let Some(child) = child_opt {
-                write_app_log(&format!("Killing frpc process {}", i));
-                let _ = child.kill();
-                let _ = child.wait();
+        // Check if already running
+        if let Some(child) = &mut self.processes[index] {
+            if let Ok(None) = child.try_wait() {
+                // Still running
+                return;
             }
-            *child_opt = None;
         }
-        self.processes.clear();
-        *running = false;
-        
-        let _ = send_email(&self.config, "FrpcStartup 服务已停止", "所有 frpc 服务已停止。", false);
+
+        let frpc_conf = &self.config.frpc[index];
+        match self.spawn_frpc(index, frpc_conf) {
+            Ok(child) => {
+                self.processes[index] = Some(child);
+                write_app_log(&format!(
+                    "Started frpc process {} - {}",
+                    index, frpc_conf.description
+                ));
+            }
+            Err(e) => {
+                write_app_log(&format!(
+                    "Failed to start frpc process {} - {}: {}",
+                    index, frpc_conf.description, e
+                ));
+            }
+        }
     }
 
-    pub fn is_running(&self) -> bool {
-        *self.running.lock().unwrap()
+    pub fn stop_service(&mut self, index: usize) {
+        if index >= self.processes.len() {
+            return;
+        }
+
+        if let Some(child) = &mut self.processes[index] {
+            write_app_log(&format!("Stopping frpc process {}", index));
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        self.processes[index] = None;
     }
 
-    fn spawn_frpc(&self, index: usize, frpc_config: &FrpcConfig) -> Result<Child, Box<dyn std::error::Error>> {
+    pub fn get_all_statuses(&mut self) -> Vec<(String, bool)> {
+        let mut statuses = Vec::new();
+        for (i, conf) in self.config.frpc.iter().enumerate() {
+            let is_running = if let Some(child) = &mut self.processes[i] {
+                match child.try_wait() {
+                    Ok(None) => true,
+                    _ => false,
+                }
+            } else {
+                false
+            };
+            statuses.push((conf.description.clone(), is_running));
+        }
+        statuses
+    }
+
+    pub fn is_any_running(&mut self) -> bool {
+        for child_opt in &mut self.processes {
+            if let Some(child) = child_opt {
+                if let Ok(None) = child.try_wait() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn spawn_frpc(
+        &self,
+        index: usize,
+        frpc_config: &FrpcConfig,
+    ) -> Result<Child, Box<dyn std::error::Error>> {
         let now = Local::now();
         let log_dir = "logs";
         fs::create_dir_all(log_dir)?;
@@ -105,24 +147,27 @@ impl FrpcManager {
 
         Ok(child)
     }
-    
+
     // 简单的健康检查，如果发现进程挂了，可以重启或者报警（这里简化为只记录日志）
     pub fn check_health(&mut self) {
-        let running = *self.running.lock().unwrap();
-        if !running {
-            return;
-        }
-
         for (i, child_opt) in self.processes.iter_mut().enumerate() {
             if let Some(child) = child_opt {
                 match child.try_wait() {
                     Ok(Some(status)) => {
-                        write_app_log(&format!("Frpc process {} exited unexpectedly with status: {:?}", i, status));
+                        write_app_log(&format!(
+                            "Frpc process {} exited unexpectedly with status: {:?}",
+                            i, status
+                        ));
                         // 这里可以添加重启逻辑
-                        *child_opt = None; 
-                        
+                        *child_opt = None;
+
                         // 发送报警邮件
-                         let _ = send_email(&self.config, "FrpcStartup 进程异常退出", &format!("进程 {} 异常退出: {:?}", i, status), true);
+                        let _ = send_email(
+                            &self.config,
+                            "FrpcStartup 进程异常退出",
+                            &format!("进程 {} 异常退出: {:?}", i, status),
+                            true,
+                        );
                     }
                     Ok(None) => {
                         // Still running

@@ -200,7 +200,7 @@ impl WebServer {
             write_app_log(&format!("Invalid secret attempt from IP: {}", client_ip));
             // 故意延迟响应，防止计时攻击
             std::thread::sleep(Duration::from_millis(1000));
-            self.serve_dashboard(stream, "Invalid Secret!");
+            self.serve_dashboard(stream, "密钥错误！");
             return;
         }
 
@@ -208,29 +208,51 @@ impl WebServer {
         self.reset_failed_attempts(client_ip);
 
         let mut mgr = self.frpc_manager.lock().unwrap();
-        match action {
-            "start" => {
-                mgr.start_services();
-                self.serve_dashboard(stream, "Services Started");
+        
+        if action == "start_all" {
+            mgr.start_all();
+            self.serve_dashboard(stream, "所有服务已启动");
+        } else if action == "stop_all" {
+            mgr.stop_all();
+            self.serve_dashboard(stream, "所有服务已停止");
+        } else if let Some(idx_str) = action.strip_prefix("start_") {
+            if let Ok(idx) = idx_str.parse::<usize>() {
+                mgr.start_service(idx);
+                self.serve_dashboard(stream, &format!("服务 #{} 已启动", idx));
+            } else {
+                self.serve_dashboard(stream, "无效的服务索引");
             }
-            "stop" => {
-                mgr.stop_services();
-                self.serve_dashboard(stream, "Services Stopped");
+        } else if let Some(idx_str) = action.strip_prefix("stop_") {
+            if let Ok(idx) = idx_str.parse::<usize>() {
+                mgr.stop_service(idx);
+                self.serve_dashboard(stream, &format!("服务 #{} 已停止", idx));
+            } else {
+                self.serve_dashboard(stream, "无效的服务索引");
             }
-            _ => {
-                self.serve_dashboard(stream, "Unknown Action");
-            }
+        } else {
+            self.serve_dashboard(stream, "未知操作");
         }
     }
 
     fn serve_dashboard(&self, stream: &mut TcpStream, message: &str) {
-        let mgr = self.frpc_manager.lock().unwrap();
-        let is_running = mgr.is_running();
-        let status_text = if is_running {
-            "<span style='color:green'>RUNNING</span>"
-        } else {
-            "<span style='color:red'>STOPPED</span>"
-        };
+        let mut mgr = self.frpc_manager.lock().unwrap();
+        let statuses = mgr.get_all_statuses();
+        
+        let mut rows_html = String::new();
+        for (i, (desc, is_running)) in statuses.iter().enumerate() {
+            let status_class = if *is_running { "status-running" } else { "status-stopped" };
+            let status_text = if *is_running { "运行中" } else { "已停止" };
+            let action_btn = if *is_running {
+                format!(r#"<button type="submit" name="action" value="stop_{}" class="btn-sm btn-stop">停止</button>"#, i)
+            } else {
+                format!(r#"<button type="submit" name="action" value="start_{}" class="btn-sm btn-start">启动</button>"#, i)
+            };
+            
+            rows_html.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td class='{}'>{}</td><td>{}</td></tr>",
+                i, desc, status_class, status_text, action_btn
+            ));
+        }
 
         let html = format!(
             r#"
@@ -239,33 +261,66 @@ impl WebServer {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FrpcStartup Control</title>
+    <title>FrpcStartup 控制台</title>
     <style>
-        body {{ font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }}
-        .card {{ background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; width: 300px; }}
-        .status {{ font-size: 1.2rem; margin-bottom: 20px; }}
-        input {{ width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }}
-        button {{ width: 100%; padding: 10px; font-size: 1rem; border-radius: 4px; cursor: pointer; border: none; margin-bottom: 5px; }}
+        body {{ font-family: "Microsoft YaHei", sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }}
+        .card {{ background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; width: 800px; }}
+        .message {{ color: blue; margin-bottom: 15px; font-weight: bold; }}
+        
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; text-align: left; }}
+        th, td {{ padding: 12px; border-bottom: 1px solid #eee; }}
+        th {{ background-color: #f8f9fa; font-weight: 600; }}
+        
+        .status-running {{ color: #28a745; font-weight: bold; }}
+        .status-stopped {{ color: #dc3545; font-weight: bold; }}
+        
+        input[type="password"] {{ width: 100%; padding: 10px; margin-bottom: 20px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }}
+        
+        button {{ cursor: pointer; border: none; border-radius: 4px; transition: background 0.2s; }}
+        .btn-sm {{ padding: 6px 12px; font-size: 0.9rem; }}
+        .btn-lg {{ padding: 10px 20px; font-size: 1rem; width: 48%; margin: 1%; }}
+        
         .btn-start {{ background: #28a745; color: white; }}
+        .btn-start:hover {{ background: #218838; }}
+        
         .btn-stop {{ background: #dc3545; color: white; }}
-        .message {{ color: blue; margin-bottom: 10px; }}
+        .btn-stop:hover {{ background: #c82333; }}
+        
+        .global-actions {{ margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }}
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>Frpc Control</h1>
-        <div class="status">Status: {}</div>
+        <h1>Frpc 控制面板</h1>
         <div class="message">{}</div>
+        
         <form method="POST" action="/action">
-            <input type="password" name="secret" placeholder="Enter Secret" required>
-            <button type="submit" name="action" value="start" class="btn-start">Start Services</button>
-            <button type="submit" name="action" value="stop" class="btn-stop">Stop Services</button>
+            <input type="password" name="secret" placeholder="在此输入访问密钥以执行操作" required>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th width="50">ID</th>
+                        <th>描述</th>
+                        <th width="100">状态</th>
+                        <th width="100">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {}
+                </tbody>
+            </table>
+            
+            <div class="global-actions">
+                <button type="submit" name="action" value="start_all" class="btn-lg btn-start">全部启动</button>
+                <button type="submit" name="action" value="stop_all" class="btn-lg btn-stop">全部停止</button>
+            </div>
         </form>
     </div>
 </body>
 </html>
 "#,
-            status_text, message
+            message, rows_html
         );
 
         let response = format!(

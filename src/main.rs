@@ -61,7 +61,7 @@ fn main() {
     } else {
         // If no web control, start services immediately
         write_app_log("Web control disabled. Starting services immediately.");
-        frpc_manager.lock().unwrap().start_services();
+        frpc_manager.lock().unwrap().start_all();
     }
 
     // Main loop to keep the application alive and handle shutdown
@@ -100,7 +100,7 @@ fn main() {
     write_app_log("Shutting down application...");
     {
         let mut mgr = frpc_manager.lock().unwrap();
-        mgr.stop_services();
+        mgr.stop_all();
     }
     
     // Note: We can't easily stop the WebServer thread because it's blocked on accept()

@@ -10,7 +10,7 @@ to = "Hughsean.F@outlook.com"
 enabled = true
 local_port = 8080
 # 这里的 arg 是用于 Web 控制台的 frpc 隧道参数
-frpc_arg = "web_control_token"
+frpc_arg = "84loylo19t7ut88mbr1afkyhynfbulg8:24585311"
 # Web 控制台访问密钥
 auth_secret = "123456"
 
