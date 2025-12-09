@@ -83,18 +83,12 @@ impl WebServer {
                         continue; // 直接断开连接，不返回任何数据
                     }
 
-                    let mut buffer = [0; MAX_REQUEST_SIZE];
-                    // 限制读取大小
-                    match stream.read(&mut buffer) {
-                        Ok(n) if n > 0 => {
-                            let request = String::from_utf8_lossy(&buffer[..n]);
+                    match self.read_full_request(&mut stream) {
+                        Ok(request) if !request.is_empty() => {
                             self.handle_request(&request, &mut stream, &ip);
                         }
-                        Ok(_) => {
-                            // 0 bytes read, connection closed
-                        }
+                        Ok(_) => {}
                         Err(e) => {
-                            // Timeout or other error
                             write_app_log(&format!("Connection error from {}: {}", ip, e));
                         }
                     }
@@ -104,6 +98,65 @@ impl WebServer {
                 }
             }
         }
+    }
+
+    fn read_full_request(&self, stream: &mut TcpStream) -> std::io::Result<String> {
+        let mut buffer = Vec::new();
+        let mut temp_buf = [0u8; 1024];
+
+        loop {
+            match stream.read(&mut temp_buf) {
+                Ok(n) => {
+                    if n == 0 {
+                        break;
+                    }
+                    buffer.extend_from_slice(&temp_buf[..n]);
+
+                    if buffer.len() > MAX_REQUEST_SIZE {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "Request too large",
+                        ));
+                    }
+
+                    // Check if we have headers end
+                    if let Some(headers_end) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let body_start = headers_end + 4;
+
+                        // Parse Content-Length from headers
+                        let headers_bytes = &buffer[..headers_end];
+                        let headers_str = String::from_utf8_lossy(headers_bytes);
+
+                        let mut content_length = 0;
+                        for line in headers_str.lines() {
+                            if line.to_lowercase().starts_with("content-length:") {
+                                if let Some(val) = line.split(':').nth(1) {
+                                    content_length = val.trim().parse::<usize>().unwrap_or(0);
+                                }
+                                break;
+                            }
+                        }
+
+                        if buffer.len() >= body_start + content_length {
+                            // We have the full body
+                            return Ok(
+                                String::from_utf8_lossy(&buffer[..body_start + content_length]).to_string(),
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    if buffer.is_empty() && e.kind() == std::io::ErrorKind::TimedOut {
+                        // Timeout on first read, likely a pre-connect or idle connection.
+                        return Ok(String::new());
+                    }
+                    return Err(e);
+                }
+            }
+        }
+
+        // If we get here (EOF), return what we have
+        Ok(String::from_utf8_lossy(&buffer).to_string())
     }
 
     fn is_ip_locked(&self, ip: &str) -> bool {
@@ -166,26 +219,30 @@ impl WebServer {
         let path = parts[1];
 
         // Parse body for POST
-        let body = request.split("\r\n\r\n").nth(1).unwrap_or("");
+        let body = if let Some(idx) = request.find("\r\n\r\n") {
+            &request[idx + 4..]
+        } else {
+            ""
+        };
 
         if method == "GET" && path == "/" {
-            self.serve_dashboard(stream, "");
-        } else if method == "POST" && path == "/action" {
-            self.handle_action(body, stream, client_ip);
+            self.serve_dashboard(stream);
+        } else if method == "POST" && path == "/api/action" {
+            self.handle_api_action(body, stream, client_ip);
         } else {
             let response = "HTTP/1.1 404 Not Found\r\n\r\n";
             let _ = stream.write_all(response.as_bytes());
         }
     }
 
-    fn handle_action(&self, body: &str, stream: &mut TcpStream, client_ip: &str) {
+    fn handle_api_action(&self, body: &str, stream: &mut TcpStream, client_ip: &str) {
         // Parse body: action=start&secret=xxx
         let params: HashMap<String, String> = body
             .split('&')
             .filter_map(|s| {
-                let mut split = s.split('=');
+                let mut split = s.splitn(2, '=');
                 if let (Some(k), Some(v)) = (split.next(), split.next()) {
-                    Some((k.to_string(), v.to_string()))
+                    Some((k.to_string(), url_decode(v)))
                 } else {
                     None
                 }
@@ -195,59 +252,94 @@ impl WebServer {
         let secret = params.get("secret").map(|s| s.as_str()).unwrap_or("");
         let action = params.get("action").map(|s| s.as_str()).unwrap_or("");
 
+        let mut success = false;
+        let mut _message = String::new();
+
         if secret != self.config.auth_secret {
             self.record_failed_attempt(client_ip);
-            write_app_log(&format!("Invalid secret attempt from IP: {}", client_ip));
+            write_app_log(&format!(
+                "Invalid secret attempt from IP: {}; secret={}",
+                client_ip, secret
+            ));
             // 故意延迟响应，防止计时攻击
             std::thread::sleep(Duration::from_millis(1000));
-            self.serve_dashboard(stream, "密钥错误！");
-            return;
-        }
-
-        // 验证成功，重置计数器
-        self.reset_failed_attempts(client_ip);
-
-        let mut mgr = self.frpc_manager.lock().unwrap();
-        
-        if action == "start_all" {
-            mgr.start_all();
-            self.serve_dashboard(stream, "所有服务已启动");
-        } else if action == "stop_all" {
-            mgr.stop_all();
-            self.serve_dashboard(stream, "所有服务已停止");
-        } else if let Some(idx_str) = action.strip_prefix("start_") {
-            if let Ok(idx) = idx_str.parse::<usize>() {
-                mgr.start_service(idx);
-                self.serve_dashboard(stream, &format!("服务 #{} 已启动", idx));
-            } else {
-                self.serve_dashboard(stream, "无效的服务索引");
-            }
-        } else if let Some(idx_str) = action.strip_prefix("stop_") {
-            if let Ok(idx) = idx_str.parse::<usize>() {
-                mgr.stop_service(idx);
-                self.serve_dashboard(stream, &format!("服务 #{} 已停止", idx));
-            } else {
-                self.serve_dashboard(stream, "无效的服务索引");
-            }
+            _message = "密钥错误！".to_string();
         } else {
-            self.serve_dashboard(stream, "未知操作");
+            // 验证成功，重置计数器
+            self.reset_failed_attempts(client_ip);
+            success = true;
+
+            let mut mgr = self.frpc_manager.lock().unwrap();
+
+            if action == "start_all" {
+                mgr.start_all();
+                _message = "所有服务已启动".to_string();
+            } else if action == "stop_all" {
+                mgr.stop_all();
+                _message = "所有服务已停止".to_string();
+            } else if let Some(idx_str) = action.strip_prefix("start_") {
+                if let Ok(idx) = idx_str.parse::<usize>() {
+                    mgr.start_service(idx);
+                    _message = format!("服务 #{} 已启动", idx);
+                } else {
+                    success = false;
+                    _message = "无效的服务索引".to_string();
+                }
+            } else if let Some(idx_str) = action.strip_prefix("stop_") {
+                if let Ok(idx) = idx_str.parse::<usize>() {
+                    mgr.stop_service(idx);
+                    _message = format!("服务 #{} 已停止", idx);
+                } else {
+                    success = false;
+                    _message = "无效的服务索引".to_string();
+                }
+            } else {
+                success = false;
+                _message = "未知操作".to_string();
+            }
         }
+
+        let response_json = format!(
+            r#"{{"success": {}, "message": "{}"}}"#,
+            success, _message
+        );
+
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
+            response_json.len(),
+            response_json
+        );
+        let _ = stream.write_all(response.as_bytes());
     }
 
-    fn serve_dashboard(&self, stream: &mut TcpStream, message: &str) {
+    fn serve_dashboard(&self, stream: &mut TcpStream) {
         let mut mgr = self.frpc_manager.lock().unwrap();
         let statuses = mgr.get_all_statuses();
-        
+
         let mut rows_html = String::new();
         for (i, (desc, is_running)) in statuses.iter().enumerate() {
-            let status_class = if *is_running { "status-running" } else { "status-stopped" };
-            let status_text = if *is_running { "运行中" } else { "已停止" };
-            let action_btn = if *is_running {
-                format!(r#"<button type="submit" name="action" value="stop_{}" class="btn-sm btn-stop">停止</button>"#, i)
+            let status_class = if *is_running {
+                "status-running"
             } else {
-                format!(r#"<button type="submit" name="action" value="start_{}" class="btn-sm btn-start">启动</button>"#, i)
+                "status-stopped"
             };
-            
+            let status_text = if *is_running {
+                "运行中"
+            } else {
+                "已停止"
+            };
+            let action_btn = if *is_running {
+                format!(
+                    r#"<button onclick="sendAction('stop_{}')" class="btn-sm btn-stop">停止</button>"#,
+                    i
+                )
+            } else {
+                format!(
+                    r#"<button onclick="sendAction('start_{}')" class="btn-sm btn-start">启动</button>"#,
+                    i
+                )
+            };
+
             rows_html.push_str(&format!(
                 "<tr><td>{}</td><td>{}</td><td class='{}'>{}</td><td>{}</td></tr>",
                 i, desc, status_class, status_text, action_btn
@@ -288,39 +380,73 @@ impl WebServer {
         
         .global-actions {{ margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }}
     </style>
+    <script>
+        window.onload = function() {{
+            const savedSecret = localStorage.getItem('frpc_secret');
+            if (savedSecret) {{
+                document.getElementById('secret').value = savedSecret;
+            }}
+        }};
+
+        async function sendAction(action) {{
+            const secret = document.getElementById('secret').value;
+            if (!secret) {{
+                alert('请输入访问密钥');
+                return;
+            }}
+            
+            try {{
+                const response = await fetch('/api/action', {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }},
+                    body: 'action=' + encodeURIComponent(action) + '&secret=' + encodeURIComponent(secret)
+                }});
+                
+                const result = await response.json();
+                if (result.success) {{
+                    localStorage.setItem('frpc_secret', secret);
+                    alert(result.message);
+                    location.reload();
+                }} else {{
+                    alert('错误: ' + result.message);
+                }}
+            }} catch (e) {{
+                alert('请求失败: ' + e);
+            }}
+        }}
+    </script>
 </head>
 <body>
     <div class="card">
         <h1>Frpc 控制面板</h1>
-        <div class="message">{}</div>
         
-        <form method="POST" action="/action">
-            <input type="password" name="secret" placeholder="在此输入访问密钥以执行操作" required>
-            
-            <table>
-                <thead>
-                    <tr>
-                        <th width="50">ID</th>
-                        <th>描述</th>
-                        <th width="100">状态</th>
-                        <th width="100">操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {}
-                </tbody>
-            </table>
-            
-            <div class="global-actions">
-                <button type="submit" name="action" value="start_all" class="btn-lg btn-start">全部启动</button>
-                <button type="submit" name="action" value="stop_all" class="btn-lg btn-stop">全部停止</button>
-            </div>
-        </form>
+        <input type="password" id="secret" placeholder="在此输入访问密钥以执行操作" required>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th width="50">ID</th>
+                    <th>描述</th>
+                    <th width="100">状态</th>
+                    <th width="100">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {}
+            </tbody>
+        </table>
+        
+        <div class="global-actions">
+            <button onclick="sendAction('start_all')" class="btn-lg btn-start">全部启动</button>
+            <button onclick="sendAction('stop_all')" class="btn-lg btn-stop">全部停止</button>
+        </div>
     </div>
 </body>
 </html>
 "#,
-            message, rows_html
+            rows_html
         );
 
         let response = format!(
@@ -330,4 +456,27 @@ impl WebServer {
         );
         let _ = stream.write_all(response.as_bytes());
     }
+}
+
+fn url_decode(input: &str) -> String {
+    let mut bytes = Vec::new();
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let h1 = chars.next().unwrap_or('0');
+            let h2 = chars.next().unwrap_or('0');
+            if let Ok(b) = u8::from_str_radix(&format!("{}{}", h1, h2), 16) {
+                bytes.push(b);
+            } else {
+                bytes.push(b'%');
+                bytes.push(h1 as u8);
+                bytes.push(h2 as u8);
+            }
+        } else if c == '+' {
+            bytes.push(b' ');
+        } else {
+            bytes.push(c as u8);
+        }
+    }
+    String::from_utf8_lossy(&bytes).to_string()
 }

@@ -1,5 +1,5 @@
 use crate::config::{Config, FrpcConfig};
-use crate::email::send_email;
+// use crate::email::send_email;
 use crate::logger::write_app_log;
 use chrono::Local;
 use std::fs;
@@ -26,12 +26,12 @@ impl FrpcManager {
             self.start_service(i);
         }
         // Send notification
-        let _ = send_email(
-            &self.config,
-            "FrpcStartup 服务已启动",
-            "所有配置的 frpc 服务已尝试启动。",
-            false,
-        );
+        // let _ = send_email(
+        //     &self.config,
+        //     "FrpcStartup 服务已启动",
+        //     "所有配置的 frpc 服务已尝试启动。",
+        //     false,
+        // );
     }
 
     pub fn stop_all(&mut self) {
@@ -39,12 +39,12 @@ impl FrpcManager {
         for i in 0..self.config.frpc.len() {
             self.stop_service(i);
         }
-        let _ = send_email(
-            &self.config,
-            "FrpcStartup 服务已停止",
-            "所有 frpc 服务已停止。",
-            false,
-        );
+        // let _ = send_email(
+        //     &self.config,
+        //     "FrpcStartup 服务已停止",
+        //     "所有 frpc 服务已停止。",
+        //     false,
+        // );
     }
 
     pub fn start_service(&mut self, index: usize) {
@@ -107,6 +107,7 @@ impl FrpcManager {
         statuses
     }
 
+    #[allow(dead_code)]
     pub fn is_any_running(&mut self) -> bool {
         for child_opt in &mut self.processes {
             if let Some(child) = child_opt {
@@ -162,12 +163,12 @@ impl FrpcManager {
                         *child_opt = None;
 
                         // 发送报警邮件
-                        let _ = send_email(
-                            &self.config,
-                            "FrpcStartup 进程异常退出",
-                            &format!("进程 {} 异常退出: {:?}", i, status),
-                            true,
-                        );
+                        // let _ = send_email(
+                        //     &self.config,
+                        //     "FrpcStartup 进程异常退出",
+                        //     &format!("进程 {} 异常退出: {:?}", i, status),
+                        //     true,
+                        // );
                     }
                     Ok(None) => {
                         // Still running

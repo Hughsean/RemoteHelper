@@ -22,7 +22,7 @@ fn main() {
 
     // 等待网络就绪 - 延迟25秒确保DNS和网络服务已启动
     write_app_log("Waiting 25 seconds for network initialization...");
-    thread::sleep(Duration::from_secs(25));
+    // thread::sleep(Duration::from_secs(25));
     write_app_log("Network wait completed, proceeding with startup.");
 
     let config = match load_config() {

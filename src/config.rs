@@ -2,6 +2,7 @@ use serde::Deserialize;
 use std::fs;
 
 #[derive(Deserialize, Clone)]
+#[deprecated(since = "0.2.0", note = "Email functionality is deprecated")]
 pub struct SmtpConfig {
     pub enabled: bool,
     pub server: String,
@@ -26,7 +27,9 @@ pub struct FrpcConfig {
 }
 
 #[derive(Deserialize, Clone)]
+#[allow(deprecated)]
 pub struct Config {
+    #[deprecated(since = "0.2.0", note = "Email functionality is deprecated")]
     pub smtp: SmtpConfig,
     pub web_control: Option<WebControlConfig>,
     pub frpc: Vec<FrpcConfig>,

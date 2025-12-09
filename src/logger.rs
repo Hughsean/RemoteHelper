@@ -6,10 +6,12 @@ use std::sync::Mutex;
 // 全局日志锁，防止多线程写入冲突
 static LOG_MUTEX: Mutex<()> = Mutex::new(());
 
+#[track_caller]
 pub fn write_app_log(message: &str) {
     // 使用锁保护日志写入，防止多线程交错
     let _lock = LOG_MUTEX.lock().unwrap();
 
+    let location = std::panic::Location::caller();
     let now = Local::now();
     let log_dir = "logs";
     if let Err(e) = fs::create_dir_all(log_dir) {
@@ -30,7 +32,14 @@ pub fn write_app_log(message: &str) {
         }
     };
 
-    if let Err(e) = writeln!(file, "[{}] {}", now.format("%Y-%m-%d %H:%M:%S"), message) {
+    if let Err(e) = writeln!(
+        file,
+        "[{}] [{}:{}] {}",
+        now.format("%Y-%m-%d %H:%M:%S"),
+        location.file(),
+        location.line(),
+        message
+    ) {
         eprintln!("Failed to write to application log: {}", e);
     }
     // 锁在此处自动释放

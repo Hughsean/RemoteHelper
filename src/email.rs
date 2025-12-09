@@ -5,6 +5,9 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use std::fs;
 
+#[deprecated(since = "0.2.0", note = "Email functionality is deprecated in favor of Web Control")]
+#[allow(deprecated)]
+#[allow(dead_code)]
 pub fn send_email(
     config: &Config,
     subject: &str,
