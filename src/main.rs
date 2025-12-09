@@ -22,7 +22,7 @@ fn main() {
 
     // 等待网络就绪 - 延迟25秒确保DNS和网络服务已启动
     write_app_log("Waiting 25 seconds for network initialization...");
-    // thread::sleep(Duration::from_secs(25));
+    thread::sleep(Duration::from_secs(25));
     write_app_log("Network wait completed, proceeding with startup.");
 
     let config = match load_config() {
@@ -50,7 +50,7 @@ fn main() {
             write_app_log("Web control enabled. Starting Web Server...");
             let frpc_manager_clone = frpc_manager.clone();
             let web_server_running_clone = web_server_running.clone();
-            
+
             web_server_handle = Some(thread::spawn(move || {
                 let mut server = WebServer::new(web_conf, frpc_manager_clone);
                 server.start();
@@ -78,13 +78,13 @@ fn main() {
         if *shutdown.lock().unwrap() {
             break;
         }
-        
+
         // Check if web server thread died unexpectedly
         if let Some(ref _handle) = web_server_handle {
-             if !*web_server_running.lock().unwrap() {
-                 write_app_log("Web server thread exited. Shutting down.");
-                 break;
-             }
+            if !*web_server_running.lock().unwrap() {
+                write_app_log("Web server thread exited. Shutting down.");
+                break;
+            }
         }
 
         // Periodic health check
@@ -102,10 +102,10 @@ fn main() {
         let mut mgr = frpc_manager.lock().unwrap();
         mgr.stop_all();
     }
-    
+
     // Note: We can't easily stop the WebServer thread because it's blocked on accept()
     // But since we are exiting the process, it will be cleaned up by OS.
     // Ideally WebServer should have a shutdown mechanism (e.g. non-blocking accept or select)
-    
+
     write_app_log("Application exited.");
 }

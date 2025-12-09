@@ -139,9 +139,10 @@ impl WebServer {
 
                         if buffer.len() >= body_start + content_length {
                             // We have the full body
-                            return Ok(
-                                String::from_utf8_lossy(&buffer[..body_start + content_length]).to_string(),
-                            );
+                            return Ok(String::from_utf8_lossy(
+                                &buffer[..body_start + content_length],
+                            )
+                            .to_string());
                         }
                     }
                 }
@@ -299,10 +300,7 @@ impl WebServer {
             }
         }
 
-        let response_json = format!(
-            r#"{{"success": {}, "message": "{}"}}"#,
-            success, _message
-        );
+        let response_json = format!(r#"{{"success": {}, "message": "{}"}}"#, success, _message);
 
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
