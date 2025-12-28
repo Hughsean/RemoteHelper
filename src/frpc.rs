@@ -119,6 +119,20 @@ impl FrpcManager {
         false
     }
 
+    pub fn start_auto_services(&mut self) {
+        write_app_log("Starting auto frpc services...");
+        let indices: Vec<usize> = self
+            .config
+            .frpc
+            .iter()
+            .enumerate()
+            .filter_map(|(i, frpc)| frpc.auto_start.unwrap_or(false).then_some(i))
+            .collect();
+        for i in indices {
+            self.start_service(i);
+        }
+    }
+
     fn spawn_frpc(
         &self,
         index: usize,

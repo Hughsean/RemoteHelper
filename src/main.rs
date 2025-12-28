@@ -38,8 +38,12 @@ fn main() {
         }
     };
 
-    // Initialize FrpcManager
+    // 初始化 FrpcManager 并启动自动服务
     let frpc_manager = Arc::new(Mutex::new(FrpcManager::new(config.clone())));
+    {
+        let mut manager = frpc_manager.lock().unwrap();
+        manager.start_auto_services();
+    }
 
     // Handle Web Control
     let mut web_server_handle = None;

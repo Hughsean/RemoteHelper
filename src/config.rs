@@ -24,6 +24,7 @@ pub struct WebControlConfig {
 pub struct FrpcConfig {
     pub description: String,
     pub arg: String,
+    pub auto_start: Option<bool>, // 新增 auto_start 字段
 }
 
 #[derive(Deserialize, Clone)]
@@ -38,7 +39,15 @@ pub struct Config {
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     let content = fs::read_to_string("config.toml")
         .map_err(|e| format!("Failed to read config.toml: {}", e))?;
-    let config: Config =
+    let mut config: Config =
         toml::from_str(&content).map_err(|e| format!("Failed to parse config.toml: {}", e))?;
+
+    // 默认 auto_start 为 false
+    config.frpc.iter_mut().for_each(|frpc| {
+        if frpc.auto_start.is_none() {
+            frpc.auto_start = Some(false);
+        }
+    });
+
     Ok(config)
 }

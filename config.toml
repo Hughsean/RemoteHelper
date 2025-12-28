@@ -17,7 +17,9 @@ auth_secret = "123456"
 [[frpc]]
 description = "Remote Desktop Access"
 arg = "84loylo19t7ut88mbr1afkyhynfbulg8:24539947"
+auto_start = false
 
 [[frpc]]
 description = "SSH Access"
 arg = "84loylo19t7ut88mbr1afkyhynfbulg8:23371163"
+auto_start = true
