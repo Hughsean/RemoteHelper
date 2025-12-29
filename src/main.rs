@@ -1,114 +1,145 @@
 mod config;
-mod service;
-mod logger;
-mod web;
+mod state;
+mod server;
+mod process;
 
-use crate::config::load_config;
-use crate::service::ServiceManager;
-use crate::logger::write_app_log;
-use crate::web::WebServer;
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::net::SocketAddr;
 use std::time::Duration;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use crate::config::AppConfig;
+use crate::state::AppState;
 
-fn main() {
-    // 添加日志分隔符
-    write_app_log("\n\n");
-    write_app_log("========================================");
-    write_app_log("======== APPLICATION STARTING ==========");
-    write_app_log("========================================");
-    write_app_log("Application starting...");
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_file(true)
+                .with_line_number(true),
+        )
+        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .init();
 
-    // 等待网络就绪 - 延迟25秒确保DNS和网络服务已启动
-    write_app_log("Waiting 25 seconds for network initialization...");
-    // thread::sleep(Duration::from_secs(25));
-    write_app_log("Network wait completed, proceeding with startup.");
+    tracing::info!("Starting RemoteHelper...");
 
-    let config = match load_config() {
-        Ok(c) => {
-            write_app_log("Config loaded successfully.");
-            c
-        }
-        Err(e) => {
-            let err_msg = format!("Failed to load config: {}", e);
-            eprintln!("{}", err_msg);
-            write_app_log(&err_msg);
-            return;
-        }
-    };
+    // Load configuration
+    let config = AppConfig::load()?;
+    tracing::info!("Configuration loaded successfully.");
 
-    // 初始化 ServiceManager 并启动自动服务
-    let service_manager = Arc::new(Mutex::new(ServiceManager::new(config.clone())));
-    {
-        let mut manager = service_manager.lock().unwrap();
-        manager.start_auto_services();
-    }
+    // Initialize state
+    let state = AppState::new(config.clone());
 
-    // Handle Web Panel
-    let mut web_server_handle = None;
-    let web_server_running = Arc::new(Mutex::new(true));
-
-    if let Some(web_conf) = config.web_panel.clone() {
-        if web_conf.enabled {
-            write_app_log("Web panel enabled. Starting Web Server...");
-            let service_manager_clone = service_manager.clone();
-            let web_server_running_clone = web_server_running.clone();
-
-            web_server_handle = Some(thread::spawn(move || {
-                let mut server = WebServer::new(web_conf, service_manager_clone);
-                server.start();
-                // If start returns, it means server stopped or error
-                *web_server_running_clone.lock().unwrap() = false;
-            }));
-        }
-    } else {
-        // If no web control, start services immediately
-        write_app_log("Web control disabled. Starting services immediately.");
-        service_manager.lock().unwrap().start_all();
-    }
-
-    // Main loop to keep the application alive and handle shutdown
-    let shutdown = Arc::new(Mutex::new(false));
-    let shutdown_clone = shutdown.clone();
-
-    ctrlc::set_handler(move || {
-        write_app_log("Received shutdown signal (Ctrl+C or system shutdown)");
-        *shutdown_clone.lock().unwrap() = true;
-    })
-    .expect("Error setting Ctrl-C handler");
-
-    loop {
-        if *shutdown.lock().unwrap() {
-            break;
-        }
-
-        // Check if web server thread died unexpectedly
-        if let Some(ref _handle) = web_server_handle {
-            if !*web_server_running.lock().unwrap() {
-                write_app_log("Web server thread exited. Shutting down.");
-                break;
+    // Start background monitoring task
+    let monitor_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(2));
+        loop {
+            interval.tick().await;
+            {
+                let mut sys = monitor_state.sys.lock().unwrap();
+                sys.refresh_cpu_all();
+                sys.refresh_memory();
             }
         }
+    });
 
-        // Periodic health check
-        {
-            let mut mgr = service_manager.lock().unwrap();
-            mgr.check_health();
+    // Auto-start services
+    for (id, svc) in state.config.service.iter().enumerate() {
+        if svc.auto_start {
+            if let Err(e) = process::start_service(&state, id).await {
+                tracing::error!("Failed to auto-start service {}: {}", svc.description, e);
+            }
         }
-
-        thread::sleep(Duration::from_secs(5));
     }
 
-    // Cleanup
-    write_app_log("Shutting down application...");
+    // Auto-start web tunnel
+    if let Err(e) = process::start_web_tunnel(&state).await {
+        tracing::error!("Failed to start web tunnel: {}", e);
+    }
+    
+    // Keep a clone for cleanup
+    let cleanup_state = state.clone();
+
+    // Run it
+    let port = config.web_panel.local_port;
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    tracing::info!("Listening on {}", addr);
+    
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    
+    // Accept loop
+    let server_state = state.clone();
+    tokio::select! {
+        _ = async {
+            loop {
+                match listener.accept().await {
+                    Ok((socket, addr)) => {
+                        tracing::info!("New connection from {}", addr);
+                        let state = server_state.clone();
+                        tokio::spawn(async move {
+                            server::handle_connection(socket, state).await;
+                        });
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to accept connection: {}", e);
+                    }
+                }
+            }
+        } => {},
+        _ = shutdown_signal() => {},
+    }
+
+    // Cleanup logic
+    tracing::info!("Shutting down, killing child processes...");
+    
+    // Kill service processes
     {
-        let mut mgr = service_manager.lock().unwrap();
-        mgr.stop_all();
+        let mut processes = cleanup_state.service_processes.lock().unwrap();
+        for (id, child) in processes.iter_mut() {
+            tracing::info!("Killing service process {}", id);
+            if let Err(e) = child.start_kill() {
+                tracing::error!("Failed to kill service process {}: {}", id, e);
+            }
+        }
     }
 
-    // Note: We can't easily stop the WebServer thread because it's blocked on accept()
-    // But since we are exiting the process, it will be cleaned up by OS.
-    // Ideally WebServer should have a shutdown mechanism (e.g. non-blocking accept or select)
+    // Kill web tunnel
+    {
+        let mut tunnel = cleanup_state.web_tunnel_process.lock().unwrap();
+        if let Some(child) = tunnel.as_mut() {
+            tracing::info!("Killing web tunnel process");
+            if let Err(e) = child.start_kill() {
+                tracing::error!("Failed to kill web tunnel: {}", e);
+            }
+        }
+    }
 
-    write_app_log("Application exited.");
+    Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("Signal received, starting graceful shutdown");
 }

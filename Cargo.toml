@@ -1,11 +1,21 @@
 [package]
 name = "RemoteHelper"
-version = "0.2.0"
+version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-chrono = "0.4.42"
-lettre = "0.11.19"
+anyhow = "1.0.100"
+nvml-wrapper = "0.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
-toml = "0.9.8"
-ctrlc = "3.5.1"
+serde_json = "1.0.148"
+sysinfo = "0.37.2"
+tokio = { version = "1.48.0", features = ["full"] }
+toml = "0.9.10"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+common = { path = "common" }
+
+
+[workspace]
+members = ["common","client/src-tauri"]
+
