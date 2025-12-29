@@ -4,7 +4,7 @@ use crate::logger::write_app_log;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -229,6 +229,8 @@ impl WebServer {
 
         if method == "GET" && path == "/" {
             self.serve_dashboard(stream);
+        } else if method == "GET" && path == "/metrics" {
+            self.serve_telegraf_metrics(stream);
         } else if method == "POST" && path == "/api/action" {
             self.handle_api_action(body, stream, client_ip);
         } else {
@@ -365,6 +367,31 @@ impl WebServer {
             html
         );
         let _ = stream.write_all(response.as_bytes());
+    }
+
+    // 将本机 Telegraf Prometheus 端点透传到 Web，便于在同域下查看指标
+    fn serve_telegraf_metrics(&self, stream: &mut TcpStream) {
+        match fetch_telegraf_metrics() {
+            Ok((content_type, body)) => {
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
+                    content_type,
+                    body.len()
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.write_all(&body);
+            }
+            Err(e) => {
+                write_app_log(&format!("Failed to proxy Telegraf metrics: {}", e));
+                let body = b"Telegraf metrics unavailable";
+                let response = format!(
+                    "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.write_all(body);
+            }
+        }
     }
 }
 
@@ -553,4 +580,39 @@ fn url_decode(input: &str) -> String {
         }
     }
     String::from_utf8_lossy(&bytes).to_string()
+}
+
+// 简单 HTTP GET 127.0.0.1:9273/metrics（Telegraf prometheus_client 默认端口），供 Web 透传
+fn fetch_telegraf_metrics() -> Result<(String, Vec<u8>), Box<dyn std::error::Error>> {
+    let addr: SocketAddr = "127.0.0.1:9273".parse()?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3))?;
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+
+    let request = b"GET /metrics HTTP/1.1\r\nHost: 127.0.0.1:9273\r\nConnection: close\r\n\r\n";
+    stream.write_all(request)?;
+
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf)?;
+
+    // 解析响应头与正文
+    let mut headers = String::new();
+    let mut body: Vec<u8> = Vec::new();
+
+    if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+        headers = String::from_utf8_lossy(&buf[..pos]).to_string();
+        body.extend_from_slice(&buf[pos + 4..]);
+    } else {
+        // 未找到分隔，整体当正文
+        body = buf;
+    }
+
+    let mut content_type = "text/plain; charset=utf-8".to_string();
+    for line in headers.lines() {
+        if let Some(rest) = line.strip_prefix("Content-Type:") {
+            content_type = rest.trim().to_string();
+            break;
+        }
+    }
+
+    Ok((content_type, body))
 }

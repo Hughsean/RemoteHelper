@@ -29,8 +29,9 @@ auto_start = true
 allow_web_control = true
 
 [[service]]
-description = "HWiNFO AutoStart"
-exe_path ="D:\\Trusted\\.Apps\\apps\\HWiNFO\\current\\HWiNFO.exe"
-working_dir = "D:\\Trusted\\.Apps\\apps\\HWiNFO\\current"
+description = "Telegraf Metrics Agent"
+exe_path = "D:\\Trusted\\.Apps\\apps\\Telegraf\\current\\telegraf.exe"
+args = ["--config", "D:\\Trusted\\.Apps\\persist\\Telegraf\\telegraf.conf"]
 auto_start = true
 allow_web_control = false
+
