@@ -1,18 +1,18 @@
-use crate::config::{Config, FrpcConfig};
+use crate::config::{Config, ServiceConfig};
 // use crate::email::send_email;
 use crate::logger::write_app_log;
 use chrono::Local;
 use std::fs;
 use std::process::{Child, Command};
 
-pub struct FrpcManager {
+pub struct ServiceManager {
     config: Config,
     processes: Vec<Option<Child>>,
 }
 
-impl FrpcManager {
+impl ServiceManager {
     pub fn new(config: Config) -> Self {
-        let count = config.frpc.len();
+        let count = config.service.len();
         let mut processes = Vec::with_capacity(count);
         for _ in 0..count {
             processes.push(None);
@@ -21,8 +21,8 @@ impl FrpcManager {
     }
 
     pub fn start_all(&mut self) {
-        write_app_log("Starting all frpc services...");
-        for i in 0..self.config.frpc.len() {
+        write_app_log("Starting all configured services...");
+        for i in 0..self.config.service.len() {
             self.start_service(i);
         }
         // Send notification
@@ -35,8 +35,8 @@ impl FrpcManager {
     }
 
     pub fn stop_all(&mut self) {
-        write_app_log("Stopping all frpc services...");
-        for i in 0..self.config.frpc.len() {
+        write_app_log("Stopping all configured services...");
+        for i in 0..self.config.service.len() {
             self.stop_service(i);
         }
         // let _ = send_email(
@@ -60,19 +60,19 @@ impl FrpcManager {
             }
         }
 
-        let frpc_conf = &self.config.frpc[index];
-        match self.spawn_frpc(index, frpc_conf) {
+        let svc_conf = &self.config.service[index];
+        match self.spawn_service(index, svc_conf) {
             Ok(child) => {
                 self.processes[index] = Some(child);
                 write_app_log(&format!(
-                    "Started frpc process {} - {}",
-                    index, frpc_conf.description
+                    "Started service {} - {}",
+                    index, svc_conf.description
                 ));
             }
             Err(e) => {
                 write_app_log(&format!(
-                    "Failed to start frpc process {} - {}: {}",
-                    index, frpc_conf.description, e
+                    "Failed to start service {} - {}: {}",
+                    index, svc_conf.description, e
                 ));
             }
         }
@@ -84,27 +84,28 @@ impl FrpcManager {
         }
 
         if let Some(child) = &mut self.processes[index] {
-            write_app_log(&format!("Stopping frpc process {}", index));
+            write_app_log(&format!("Stopping service {}", index));
             let _ = child.kill();
             let _ = child.wait();
         }
         self.processes[index] = None;
     }
 
-    pub fn get_all_statuses(&mut self) -> Vec<(String, bool)> {
-        let mut statuses = Vec::new();
-        for (i, conf) in self.config.frpc.iter().enumerate() {
-            let is_running = if let Some(child) = &mut self.processes[i] {
-                match child.try_wait() {
-                    Ok(None) => true,
-                    _ => false,
-                }
-            } else {
-                false
-            };
-            statuses.push((conf.description.clone(), is_running));
-        }
-        statuses
+    pub fn get_all_statuses(&mut self) -> Vec<(String, bool, bool)> {
+        self.config
+            .service
+            .iter()
+            .enumerate()
+            .map(|(i, conf)| {
+                let is_running = if let Some(child) = &mut self.processes[i] {
+                    matches!(child.try_wait(), Ok(None))
+                } else {
+                    false
+                };
+                let allow_web = conf.allow_web_control.unwrap_or(true);
+                (conf.description.clone(), is_running, allow_web)
+            })
+            .collect()
     }
 
     #[allow(dead_code)]
@@ -120,30 +121,54 @@ impl FrpcManager {
     }
 
     pub fn start_auto_services(&mut self) {
-        write_app_log("Starting auto frpc services...");
+        write_app_log("Starting auto services...");
         let indices: Vec<usize> = self
             .config
-            .frpc
+            .service
             .iter()
             .enumerate()
-            .filter_map(|(i, frpc)| frpc.auto_start.unwrap_or(false).then_some(i))
+            .filter_map(|(i, svc)| svc.auto_start.unwrap_or(false).then_some(i))
             .collect();
         for i in indices {
             self.start_service(i);
         }
     }
 
-    fn spawn_frpc(
+    pub fn start_all_controllable(&mut self) {
+        for i in 0..self.config.service.len() {
+            if self.is_web_control_allowed(i) {
+                self.start_service(i);
+            }
+        }
+    }
+
+    pub fn stop_all_controllable(&mut self) {
+        for i in 0..self.config.service.len() {
+            if self.is_web_control_allowed(i) {
+                self.stop_service(i);
+            }
+        }
+    }
+
+    pub fn is_web_control_allowed(&self, index: usize) -> bool {
+        self.config
+            .service
+            .get(index)
+            .and_then(|svc| svc.allow_web_control)
+            .unwrap_or(true)
+    }
+
+    fn spawn_service(
         &self,
         index: usize,
-        frpc_config: &FrpcConfig,
+        service_config: &ServiceConfig,
     ) -> Result<Child, Box<dyn std::error::Error>> {
         let now = Local::now();
         let log_dir = "logs";
         fs::create_dir_all(log_dir)?;
 
         let log_file_path = format!(
-            "{}/frpc_{}_{}.log",
+            "{}/service_{}_{}.log",
             log_dir,
             index,
             now.format("%Y-%m-%d_%H-%M-%S")
@@ -153,12 +178,22 @@ impl FrpcManager {
         let stdout_log = log_file.try_clone()?;
         let stderr_log = log_file.try_clone()?;
 
-        let child = Command::new(r"frpc.exe")
-            .arg("-f")
-            .arg(&frpc_config.arg)
-            .stdout(stdout_log)
-            .stderr(stderr_log)
-            .spawn()?;
+        let exe_path = service_config
+            .exe_path
+            .clone()
+            .unwrap_or_else(|| "frpc.exe".to_string());
+        let args = service_config.args.clone().unwrap_or_default();
+
+        let mut cmd = Command::new(exe_path);
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        if let Some(dir) = &service_config.working_dir {
+            cmd.current_dir(dir);
+        }
+
+        let child = cmd.stdout(stdout_log).stderr(stderr_log).spawn()?;
 
         Ok(child)
     }
@@ -170,7 +205,7 @@ impl FrpcManager {
                 match child.try_wait() {
                     Ok(Some(status)) => {
                         write_app_log(&format!(
-                            "Frpc process {} exited unexpectedly with status: {:?}",
+                            "Service {} exited unexpectedly with status: {:?}",
                             i, status
                         ));
                         // 这里可以添加重启逻辑

@@ -5,7 +5,7 @@ mod logger;
 mod web;
 
 use crate::config::load_config;
-use crate::frpc::FrpcManager;
+use crate::frpc::ServiceManager;
 use crate::logger::write_app_log;
 use crate::web::WebServer;
 use std::sync::{Arc, Mutex};
@@ -38,10 +38,10 @@ fn main() {
         }
     };
 
-    // 初始化 FrpcManager 并启动自动服务
-    let frpc_manager = Arc::new(Mutex::new(FrpcManager::new(config.clone())));
+    // 初始化 ServiceManager 并启动自动服务
+    let service_manager = Arc::new(Mutex::new(ServiceManager::new(config.clone())));
     {
-        let mut manager = frpc_manager.lock().unwrap();
+        let mut manager = service_manager.lock().unwrap();
         manager.start_auto_services();
     }
 
@@ -52,11 +52,11 @@ fn main() {
     if let Some(web_conf) = config.web_control.clone() {
         if web_conf.enabled {
             write_app_log("Web control enabled. Starting Web Server...");
-            let frpc_manager_clone = frpc_manager.clone();
+            let service_manager_clone = service_manager.clone();
             let web_server_running_clone = web_server_running.clone();
 
             web_server_handle = Some(thread::spawn(move || {
-                let mut server = WebServer::new(web_conf, frpc_manager_clone);
+                let mut server = WebServer::new(web_conf, service_manager_clone);
                 server.start();
                 // If start returns, it means server stopped or error
                 *web_server_running_clone.lock().unwrap() = false;
@@ -65,7 +65,7 @@ fn main() {
     } else {
         // If no web control, start services immediately
         write_app_log("Web control disabled. Starting services immediately.");
-        frpc_manager.lock().unwrap().start_all();
+        service_manager.lock().unwrap().start_all();
     }
 
     // Main loop to keep the application alive and handle shutdown
@@ -93,7 +93,7 @@ fn main() {
 
         // Periodic health check
         {
-            let mut mgr = frpc_manager.lock().unwrap();
+            let mut mgr = service_manager.lock().unwrap();
             mgr.check_health();
         }
 
@@ -103,7 +103,7 @@ fn main() {
     // Cleanup
     write_app_log("Shutting down application...");
     {
-        let mut mgr = frpc_manager.lock().unwrap();
+        let mut mgr = service_manager.lock().unwrap();
         mgr.stop_all();
     }
 

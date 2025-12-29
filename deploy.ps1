@@ -1,6 +1,6 @@
 # deploy.ps1
-$TargetDir = "E:\UserData\.Exe\StartUp"
-$SourceExe = "d:\WorkBench\.B\release\FrpcStartup.exe"
+$TargetDir = "E:\UserData\.Exe\AutoStartHelper"
+$SourceExe = "d:\WorkBench\.B\release\AutoStartHelper.exe"
 $ConfigFiles = @("config.toml", "email_template.html")
 
 # 1. 检查并创建目标目录
@@ -23,7 +23,7 @@ Write-Host "正在复制文件到 $TargetDir ..." -ForegroundColor Cyan
 
 # 复制可执行文件
 Copy-Item -Path $SourceExe -Destination $TargetDir -Force
-Write-Host "已复制: FrpcStartup.exe" -ForegroundColor Green
+Write-Host "已复制: AutoStartHelper.exe" -ForegroundColor Green
 
 # 复制配置文件 (如果目标不存在，或者强制覆盖)
 foreach ($file in $ConfigFiles) {

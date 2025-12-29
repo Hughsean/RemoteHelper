@@ -21,10 +21,19 @@ pub struct WebControlConfig {
 }
 
 #[derive(Deserialize, Clone)]
-pub struct FrpcConfig {
+pub struct ServiceConfig {
     pub description: String,
-    pub arg: String,
-    pub auto_start: Option<bool>, // 新增 auto_start 字段
+    #[serde(default)]
+    pub exe_path: Option<String>,
+    #[serde(default)]
+    pub args: Option<Vec<String>>, // 优先使用新的 args 数组
+    #[serde(default)]
+    pub arg: Option<String>, // 兼容旧版单个 frpc 参数
+    pub auto_start: Option<bool>,
+    #[serde(default)]
+    pub working_dir: Option<String>,
+    #[serde(default)]
+    pub allow_web_control: Option<bool>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -33,7 +42,8 @@ pub struct Config {
     #[deprecated(since = "0.2.0", note = "Email functionality is deprecated")]
     pub smtp: SmtpConfig,
     pub web_control: Option<WebControlConfig>,
-    pub frpc: Vec<FrpcConfig>,
+    #[serde(rename = "service", alias = "frpc")]
+    pub service: Vec<ServiceConfig>,
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
@@ -42,10 +52,26 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     let mut config: Config =
         toml::from_str(&content).map_err(|e| format!("Failed to parse config.toml: {}", e))?;
 
-    // 默认 auto_start 为 false
-    config.frpc.iter_mut().for_each(|frpc| {
-        if frpc.auto_start.is_none() {
-            frpc.auto_start = Some(false);
+    // 默认值兼容：auto_start, exe_path, args (含旧版 arg 映射)
+    config.service.iter_mut().for_each(|svc| {
+        if svc.auto_start.is_none() {
+            svc.auto_start = Some(false);
+        }
+
+        if svc.exe_path.is_none() {
+            svc.exe_path = Some("frpc.exe".to_string());
+        }
+
+        if svc.args.is_none() {
+            if let Some(arg) = &svc.arg {
+                svc.args = Some(vec!["-f".to_string(), arg.clone()]);
+            } else {
+                svc.args = Some(Vec::new());
+            }
+        }
+
+        if svc.allow_web_control.is_none() {
+            svc.allow_web_control = Some(true);
         }
     });
 

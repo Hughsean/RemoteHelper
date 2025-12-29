@@ -1,7 +1,8 @@
 use crate::config::WebControlConfig;
-use crate::frpc::FrpcManager;
+use crate::frpc::ServiceManager;
 use crate::logger::write_app_log;
 use std::collections::HashMap;
+use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command};
@@ -21,16 +22,16 @@ struct IpStatus {
 
 pub struct WebServer {
     config: WebControlConfig,
-    frpc_manager: Arc<Mutex<FrpcManager>>,
+    service_manager: Arc<Mutex<ServiceManager>>,
     tunnel_process: Option<Child>,
     ip_tracker: Arc<Mutex<HashMap<String, IpStatus>>>,
 }
 
 impl WebServer {
-    pub fn new(config: WebControlConfig, frpc_manager: Arc<Mutex<FrpcManager>>) -> Self {
+    pub fn new(config: WebControlConfig, service_manager: Arc<Mutex<ServiceManager>>) -> Self {
         Self {
             config,
-            frpc_manager,
+            service_manager,
             tunnel_process: None,
             ip_tracker: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -270,26 +271,36 @@ impl WebServer {
             self.reset_failed_attempts(client_ip);
             success = true;
 
-            let mut mgr = self.frpc_manager.lock().unwrap();
+            let mut mgr = self.service_manager.lock().unwrap();
 
             if action == "start_all" {
-                mgr.start_all();
-                _message = "所有服务已启动".to_string();
+                mgr.start_all_controllable();
+                _message = "可控服务已启动".to_string();
             } else if action == "stop_all" {
-                mgr.stop_all();
-                _message = "所有服务已停止".to_string();
+                mgr.stop_all_controllable();
+                _message = "可控服务已停止".to_string();
             } else if let Some(idx_str) = action.strip_prefix("start_") {
                 if let Ok(idx) = idx_str.parse::<usize>() {
-                    mgr.start_service(idx);
-                    _message = format!("服务 #{} 已启动", idx);
+                    if mgr.is_web_control_allowed(idx) {
+                        mgr.start_service(idx);
+                        _message = format!("服务 #{} 已启动", idx);
+                    } else {
+                        success = false;
+                        _message = "该服务未开放 Web 控制".to_string();
+                    }
                 } else {
                     success = false;
                     _message = "无效的服务索引".to_string();
                 }
             } else if let Some(idx_str) = action.strip_prefix("stop_") {
                 if let Ok(idx) = idx_str.parse::<usize>() {
-                    mgr.stop_service(idx);
-                    _message = format!("服务 #{} 已停止", idx);
+                    if mgr.is_web_control_allowed(idx) {
+                        mgr.stop_service(idx);
+                        _message = format!("服务 #{} 已停止", idx);
+                    } else {
+                        success = false;
+                        _message = "该服务未开放 Web 控制".to_string();
+                    }
                 } else {
                     success = false;
                     _message = "无效的服务索引".to_string();
@@ -311,11 +322,11 @@ impl WebServer {
     }
 
     fn serve_dashboard(&self, stream: &mut TcpStream) {
-        let mut mgr = self.frpc_manager.lock().unwrap();
+        let mut mgr = self.service_manager.lock().unwrap();
         let statuses = mgr.get_all_statuses();
 
         let mut rows_html = String::new();
-        for (i, (desc, is_running)) in statuses.iter().enumerate() {
+        for (i, (desc, is_running, allow_web)) in statuses.iter().enumerate() {
             let status_class = if *is_running {
                 "status-running"
             } else {
@@ -326,7 +337,9 @@ impl WebServer {
             } else {
                 "已停止"
             };
-            let action_btn = if *is_running {
+            let action_btn = if !*allow_web {
+                "<span style='color:#888;'>禁用</span>".to_string()
+            } else if *is_running {
                 format!(
                     r#"<button onclick="sendAction('stop_{}')" class="btn-sm btn-stop">停止</button>"#,
                     i
@@ -344,43 +357,107 @@ impl WebServer {
             ));
         }
 
-        let html = format!(
-            r#"
-<!DOCTYPE html>
+        let html = render_dashboard_html(&rows_html);
+
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
+            html.len(),
+            html
+        );
+        let _ = stream.write_all(response.as_bytes());
+    }
+}
+
+fn render_dashboard_html(rows_html: &str) -> String {
+    const TEMPLATE_PATH: &str = "web/dashboard.html";
+    match fs::read_to_string(TEMPLATE_PATH) {
+        Ok(tpl) => tpl.replace("{{ROWS}}", rows_html),
+        Err(e) => {
+            write_app_log(&format!(
+                "Failed to read dashboard template ({}): {}. Falling back to built-in HTML.",
+                TEMPLATE_PATH, e
+            ));
+            fallback_dashboard_html(rows_html)
+        }
+    }
+}
+
+fn fallback_dashboard_html(rows_html: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FrpcStartup 控制台</title>
+    <title>FrpcStartup 服务控制台</title>
     <style>
-        body {{ font-family: "Microsoft YaHei", sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }}
-        .card {{ background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; width: 800px; }}
-        .message {{ color: blue; margin-bottom: 15px; font-weight: bold; }}
-        
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; text-align: left; }}
-        th, td {{ padding: 12px; border-bottom: 1px solid #eee; }}
-        th {{ background-color: #f8f9fa; font-weight: 600; }}
-        
-        .status-running {{ color: #28a745; font-weight: bold; }}
-        .status-stopped {{ color: #dc3545; font-weight: bold; }}
-        
-        input[type="password"] {{ width: 100%; padding: 10px; margin-bottom: 20px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }}
-        
-        button {{ cursor: pointer; border: none; border-radius: 4px; transition: background 0.2s; }}
-        .btn-sm {{ padding: 6px 12px; font-size: 0.9rem; }}
-        .btn-lg {{ padding: 10px 20px; font-size: 1rem; width: 48%; margin: 1%; }}
-        
-        .btn-start {{ background: #28a745; color: white; }}
-        .btn-start:hover {{ background: #218838; }}
-        
-        .btn-stop {{ background: #dc3545; color: white; }}
-        .btn-stop:hover {{ background: #c82333; }}
-        
-        .global-actions {{ margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }}
+        :root {{
+            --bg: #0f172a;
+            --card: rgba(255, 255, 255, 0.06);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --primary: #10b981;
+            --primary-strong: #0f9b6b;
+            --danger: #ef4444;
+            --danger-strong: #dc2626;
+            --table-stripe: rgba(255, 255, 255, 0.04);
+            --shadow: 0 20px 60px rgba(0,0,0,0.35);
+        }}
+
+        body {{ font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: radial-gradient(circle at 10% 20%, rgba(16,185,129,0.12), transparent 35%), radial-gradient(circle at 90% 10%, rgba(59,130,246,0.1), transparent 30%), var(--bg); color: var(--text); margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 24px; box-sizing: border-box; }}
+
+        .card {{ width: 940px; max-width: 100%; background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); backdrop-filter: blur(10px); }}
+
+        .header {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }}
+        .title {{ font-size: 22px; letter-spacing: 0.4px; }}
+        .subtitle {{ color: var(--muted); font-size: 14px; }}
+
+        .input-row {{ margin-bottom: 16px; }}
+        .input-row label {{ display: block; color: var(--muted); margin-bottom: 6px; font-size: 14px; }}
+        input[type="password"] {{ width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: rgba(255, 255, 255, 0.05); color: var(--text); outline: none; transition: border-color 0.2s ease, background 0.2s ease; }}
+        input[type="password"]:focus {{ border-color: var(--primary); background: rgba(255, 255, 255, 0.08); }}
+
+        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+        th, td {{ padding: 12px; text-align: left; }}
+        th {{ color: var(--muted); font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--card-border); }}
+        tbody tr {{ border-bottom: 1px solid var(--card-border); background: transparent; }}
+        tbody tr:nth-child(odd) {{ background: var(--table-stripe); }}
+        tbody tr:hover {{ background: rgba(255, 255, 255, 0.08); }}
+
+        .badge {{ display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }}
+        .badge.running {{ background: rgba(16, 185, 129, 0.16); color: #34d399; }}
+        .badge.stopped {{ background: rgba(239, 68, 68, 0.16); color: #f87171; }}
+
+        button {{ cursor: pointer; border: none; border-radius: 10px; transition: transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease; color: #fff; font-weight: 600; }}
+        .btn-sm {{ padding: 8px 14px; font-size: 13px; }}
+        .btn-lg {{ padding: 12px 18px; font-size: 14px; min-width: 140px; }}
+        .btn-start {{ background: linear-gradient(135deg, var(--primary), var(--primary-strong)); box-shadow: 0 10px 30px rgba(16,185,129,0.35); }}
+        .btn-start:hover {{ transform: translateY(-1px); box-shadow: 0 12px 34px rgba(16,185,129,0.45); }}
+        .btn-stop {{ background: linear-gradient(135deg, var(--danger), var(--danger-strong)); box-shadow: 0 10px 30px rgba(239,68,68,0.35); }}
+        .btn-stop:hover {{ transform: translateY(-1px); box-shadow: 0 12px 34px rgba(239,68,68,0.45); }}
+        .btn-disabled {{ background: rgba(148,163,184,0.3); color: var(--muted); cursor: not-allowed; box-shadow: none; }}
+
+        .global-actions {{ margin-top: 18px; border-top: 1px solid var(--card-border); padding-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; }}
+
+        .toast {{ position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #fff; padding: 12px 18px; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.25); opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; z-index: 999; border: 1px solid rgba(255,255,255,0.08); }}
+        .toast.show {{ opacity: 1; transform: translateX(-50%) translateY(2px); }}
+        .toast.error {{ background: #7f1d1d; }}
     </style>
     <script>
+        let toastTimer;
+
+        function showToast(msg, isError) {{
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.toggle('error', !!isError);
+            toast.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+        }}
+
         window.onload = function() {{
-            const savedSecret = localStorage.getItem('frpc_secret');
+            const savedSecret = localStorage.getItem('service_secret');
             if (savedSecret) {{
                 document.getElementById('secret').value = savedSecret;
             }}
@@ -389,7 +466,7 @@ impl WebServer {
         async function sendAction(action) {{
             const secret = document.getElementById('secret').value;
             if (!secret) {{
-                alert('请输入访问密钥');
+                showToast('请输入访问密钥', true);
                 return;
             }}
             
@@ -404,35 +481,42 @@ impl WebServer {
                 
                 const result = await response.json();
                 if (result.success) {{
-                    localStorage.setItem('frpc_secret', secret);
-                    alert(result.message);
-                    location.reload();
+                    localStorage.setItem('service_secret', secret);
+                    showToast(result.message, false);
+                    setTimeout(() => location.reload(), 500);
                 }} else {{
-                    alert('错误: ' + result.message);
+                    showToast('错误: ' + result.message, true);
                 }}
             }} catch (e) {{
-                alert('请求失败: ' + e);
+                showToast('请求失败: ' + e, true);
             }}
         }}
     </script>
 </head>
 <body>
+    <div id="toast" class="toast"></div>
     <div class="card">
-        <h1>Frpc 控制面板</h1>
-        
-        <input type="password" id="secret" placeholder="在此输入访问密钥以执行操作" required>
-        
+        <div class="header">
+            <div class="title">服务控制面板</div>
+            <div class="subtitle">FrpcStartup</div>
+        </div>
+
+        <div class="input-row">
+            <label for="secret">访问密钥</label>
+            <input type="password" id="secret" placeholder="在此输入访问密钥以执行操作" required>
+        </div>
+
         <table>
             <thead>
                 <tr>
                     <th width="50">ID</th>
                     <th>描述</th>
-                    <th width="100">状态</th>
+                    <th width="120">状态</th>
                     <th width="100">操作</th>
                 </tr>
             </thead>
             <tbody>
-                {}
+                {rows}
             </tbody>
         </table>
         
@@ -444,16 +528,8 @@ impl WebServer {
 </body>
 </html>
 "#,
-            rows_html
-        );
-
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
-            html.len(),
-            html
-        );
-        let _ = stream.write_all(response.as_bytes());
-    }
+        rows = rows_html
+    )
 }
 
 fn url_decode(input: &str) -> String {

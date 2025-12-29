@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FrpcStartup 服务控制台</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: rgba(255, 255, 255, 0.06);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --primary: #10b981;
+            --primary-strong: #0f9b6b;
+            --danger: #ef4444;
+            --danger-strong: #dc2626;
+            --table-stripe: rgba(255, 255, 255, 0.04);
+            --shadow: 0 20px 60px rgba(0,0,0,0.35);
+        }
+
+        body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: radial-gradient(circle at 10% 20%, rgba(16,185,129,0.12), transparent 35%), radial-gradient(circle at 90% 10%, rgba(59,130,246,0.1), transparent 30%), var(--bg); color: var(--text); margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 24px; box-sizing: border-box; }
+
+        .card { width: 940px; max-width: 100%; background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); backdrop-filter: blur(10px); }
+
+        .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }
+        .title { font-size: 22px; letter-spacing: 0.4px; }
+        .subtitle { color: var(--muted); font-size: 14px; }
+
+        .input-row { margin-bottom: 16px; }
+        .input-row label { display: block; color: var(--muted); margin-bottom: 6px; font-size: 14px; }
+        input[type="password"] { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: rgba(255, 255, 255, 0.05); color: var(--text); outline: none; transition: border-color 0.2s ease, background 0.2s ease; }
+        input[type="password"]:focus { border-color: var(--primary); background: rgba(255, 255, 255, 0.08); }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; }
+        th { color: var(--muted); font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--card-border); }
+        tbody tr { border-bottom: 1px solid var(--card-border); background: transparent; }
+        tbody tr:nth-child(odd) { background: var(--table-stripe); }
+        tbody tr:hover { background: rgba(255, 255, 255, 0.08); }
+
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+        .badge.running { background: rgba(16, 185, 129, 0.16); color: #34d399; }
+        .badge.stopped { background: rgba(239, 68, 68, 0.16); color: #f87171; }
+
+        button { cursor: pointer; border: none; border-radius: 10px; transition: transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease; color: #fff; font-weight: 600; }
+        .btn-sm { padding: 8px 14px; font-size: 13px; }
+        .btn-lg { padding: 12px 18px; font-size: 14px; min-width: 140px; }
+        .btn-start { background: linear-gradient(135deg, var(--primary), var(--primary-strong)); box-shadow: 0 10px 30px rgba(16,185,129,0.35); }
+        .btn-start:hover { transform: translateY(-1px); box-shadow: 0 12px 34px rgba(16,185,129,0.45); }
+        .btn-stop { background: linear-gradient(135deg, var(--danger), var(--danger-strong)); box-shadow: 0 10px 30px rgba(239,68,68,0.35); }
+        .btn-stop:hover { transform: translateY(-1px); box-shadow: 0 12px 34px rgba(239,68,68,0.45); }
+        .btn-disabled { background: rgba(148,163,184,0.3); color: var(--muted); cursor: not-allowed; box-shadow: none; }
+
+        .global-actions { margin-top: 18px; border-top: 1px solid var(--card-border); padding-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; }
+
+        .toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #fff; padding: 12px 18px; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.25); opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; z-index: 999; border: 1px solid rgba(255,255,255,0.08); }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(2px); }
+        .toast.error { background: #7f1d1d; }
+    </style>
+    <script>
+        window.onload = function() {
+            const savedSecret = localStorage.getItem('service_secret');
+            if (savedSecret) {
+                document.getElementById('secret').value = savedSecret;
+            }
+        };
+
+        let toastTimer;
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.toggle('error', !!isError);
+            toast.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+        }
+
+        async function sendAction(action) {
+            const secret = document.getElementById('secret').value;
+            if (!secret) {
+                showToast('请输入访问密钥', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: 'action=' + encodeURIComponent(action) + '&secret=' + encodeURIComponent(secret)
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    localStorage.setItem('service_secret', secret);
+                    showToast(result.message);
+                    setTimeout(() => location.reload(), 500);
+                } else {
+                    showToast('错误: ' + result.message, true);
+                }
+            } catch (e) {
+                showToast('请求失败: ' + e, true);
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+    <div class="card">
+        <h1>服务控制面板</h1>
+        
+        <input type="password" id="secret" placeholder="在此输入访问密钥以执行操作" required>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th width="50">ID</th>
+                    <th>描述</th>
+                    <th width="100">状态</th>
+                    <th width="100">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ROWS}}
+            </tbody>
+        </table>
+        
+        <div class="global-actions">
+            <button onclick="sendAction('start_all')" class="btn-lg btn-start">全部启动</button>
+            <button onclick="sendAction('stop_all')" class="btn-lg btn-stop">全部停止</button>
+        </div>
+    </div>
+</body>
+</html>
