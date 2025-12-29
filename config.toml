@@ -1,37 +1,24 @@
-[smtp]
-enabled = false  # 是否启用邮件通知 (true: 启用, false: 禁用)
-server = "smtp.qq.com"
-username = "Hughsean@qq.com"
-password = "lrgbulnorlvwbaii"
-from = "Hughsean@qq.com"
-to = "Hughsean.F@outlook.com"
-
-[web_control]
+[web_panel]
 enabled = true
-local_port = 8080
+local_port = 8088
+# 可选：指定用于隧道的 frpc 可执行路径，缺省为 frpc.exe（需在 PATH 或工作目录）
+frpc_exe_path = "E:\\UserData\\.Exe\\frpc.exe"
 # 这里的 arg 是用于 Web 控制台的 frpc 隧道参数
-frpc_arg = "84loylo19t7ut88mbr1afkyhynfbulg8:24585311"
+frpc_arg = "84loylo19t7ut88mbr1afkyhynfbulg8:24958801"
 # Web 控制台访问密钥
 auth_secret = "Fxs.2211"
 
 [[service]]
 description = "Remote Desktop Access"
-exe_path = "frpc.exe"
+exe_path = "E:\\UserData\\.Exe\\frpc.exe"
 args = ["-f", "84loylo19t7ut88mbr1afkyhynfbulg8:24539947"]
 auto_start = false
 allow_web_control = true
 
 [[service]]
 description = "SSH Access"
-exe_path = "frpc.exe"
+exe_path = "E:\\UserData\\.Exe\\frpc.exe"
 args = ["-f", "84loylo19t7ut88mbr1afkyhynfbulg8:23371163"]
-auto_start = true
+auto_start = false
 allow_web_control = true
-
-[[service]]
-description = "Telegraf Metrics Agent"
-exe_path = "D:\\Trusted\\.Apps\\apps\\Telegraf\\current\\telegraf.exe"
-args = ["--config", "D:\\Trusted\\.Apps\\persist\\Telegraf\\telegraf.conf"]
-auto_start = true
-allow_web_control = false
 

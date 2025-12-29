@@ -1,11 +1,10 @@
 mod config;
-mod email;
-mod frpc;
+mod service;
 mod logger;
 mod web;
 
 use crate::config::load_config;
-use crate::frpc::ServiceManager;
+use crate::service::ServiceManager;
 use crate::logger::write_app_log;
 use crate::web::WebServer;
 use std::sync::{Arc, Mutex};
@@ -22,7 +21,7 @@ fn main() {
 
     // 等待网络就绪 - 延迟25秒确保DNS和网络服务已启动
     write_app_log("Waiting 25 seconds for network initialization...");
-    thread::sleep(Duration::from_secs(25));
+    // thread::sleep(Duration::from_secs(25));
     write_app_log("Network wait completed, proceeding with startup.");
 
     let config = match load_config() {
@@ -45,13 +44,13 @@ fn main() {
         manager.start_auto_services();
     }
 
-    // Handle Web Control
+    // Handle Web Panel
     let mut web_server_handle = None;
     let web_server_running = Arc::new(Mutex::new(true));
 
-    if let Some(web_conf) = config.web_control.clone() {
+    if let Some(web_conf) = config.web_panel.clone() {
         if web_conf.enabled {
-            write_app_log("Web control enabled. Starting Web Server...");
+            write_app_log("Web panel enabled. Starting Web Server...");
             let service_manager_clone = service_manager.clone();
             let web_server_running_clone = web_server_running.clone();
 

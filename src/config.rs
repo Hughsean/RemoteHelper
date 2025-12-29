@@ -13,11 +13,13 @@ pub struct SmtpConfig {
 }
 
 #[derive(Deserialize, Clone)]
-pub struct WebControlConfig {
+pub struct WebPanelConfig {
     pub enabled: bool,
     pub local_port: u16,
     pub frpc_arg: String,
     pub auth_secret: String,
+    #[serde(default)]
+    pub frpc_exe_path: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -39,9 +41,10 @@ pub struct ServiceConfig {
 #[derive(Deserialize, Clone)]
 #[allow(deprecated)]
 pub struct Config {
-    #[deprecated(since = "0.2.0", note = "Email functionality is deprecated")]
-    pub smtp: SmtpConfig,
-    pub web_control: Option<WebControlConfig>,
+    // #[deprecated(since = "0.2.0", note = "Email functionality is deprecated")]
+    // pub smtp: SmtpConfig,
+    #[serde(rename = "web_panel", alias = "web_control")]
+    pub web_panel: Option<WebPanelConfig>,
     #[serde(rename = "service", alias = "frpc")]
     pub service: Vec<ServiceConfig>,
 }

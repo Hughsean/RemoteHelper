@@ -1,5 +1,5 @@
-use crate::config::WebControlConfig;
-use crate::frpc::ServiceManager;
+use crate::config::WebPanelConfig;
+use crate::service::ServiceManager;
 use crate::logger::write_app_log;
 use std::collections::HashMap;
 use std::fs;
@@ -21,14 +21,14 @@ struct IpStatus {
 }
 
 pub struct WebServer {
-    config: WebControlConfig,
+    config: WebPanelConfig,
     service_manager: Arc<Mutex<ServiceManager>>,
     tunnel_process: Option<Child>,
     ip_tracker: Arc<Mutex<HashMap<String, IpStatus>>>,
 }
 
 impl WebServer {
-    pub fn new(config: WebControlConfig, service_manager: Arc<Mutex<ServiceManager>>) -> Self {
+    pub fn new(config: WebPanelConfig, service_manager: Arc<Mutex<ServiceManager>>) -> Self {
         Self {
             config,
             service_manager,
@@ -40,13 +40,21 @@ impl WebServer {
     pub fn start(&mut self) {
         let local_port = self.config.local_port;
         let frpc_arg = self.config.frpc_arg.clone();
+        let frpc_bin = self
+            .config
+            .frpc_exe_path
+            .clone()
+            .unwrap_or_else(|| "frpc.exe".to_string());
 
-        // 1. Start frpc tunnel for web control
-        write_app_log("Starting frpc tunnel for web control...");
-        match Command::new("frpc.exe").arg("-f").arg(&frpc_arg).spawn() {
+        // 1. Start frpc tunnel for web panel
+        write_app_log("Starting frpc tunnel for web panel...");
+        match Command::new(frpc_bin.clone()).arg("-f").arg(&frpc_arg).spawn() {
             Ok(c) => self.tunnel_process = Some(c),
             Err(e) => {
-                write_app_log(&format!("Failed to start web control tunnel: {}", e));
+                write_app_log(&format!(
+                    "Failed to start web panel tunnel (exe: {}): {}",
+                    frpc_bin, e
+                ));
                 return;
             }
         }
@@ -55,12 +63,12 @@ impl WebServer {
         let listener = match TcpListener::bind(format!("0.0.0.0:{}", local_port)) {
             Ok(l) => l,
             Err(e) => {
-                write_app_log(&format!("Failed to bind web control port: {}", e));
+                write_app_log(&format!("Failed to bind web panel port: {}", e));
                 return;
             }
         };
 
-        write_app_log(&format!("Web Control listening on port {}", local_port));
+        write_app_log(&format!("Web Panel listening on port {}", local_port));
 
         for stream in listener.incoming() {
             match stream {
@@ -231,6 +239,8 @@ impl WebServer {
             self.serve_dashboard(stream);
         } else if method == "GET" && path == "/metrics" {
             self.serve_telegraf_metrics(stream);
+        } else if method == "GET" && path == "/health" {
+            self.serve_healthcheck(stream);
         } else if method == "POST" && path == "/api/action" {
             self.handle_api_action(body, stream, client_ip);
         } else {
@@ -329,16 +339,8 @@ impl WebServer {
 
         let mut rows_html = String::new();
         for (i, (desc, is_running, allow_web)) in statuses.iter().enumerate() {
-            let status_class = if *is_running {
-                "status-running"
-            } else {
-                "status-stopped"
-            };
-            let status_text = if *is_running {
-                "运行中"
-            } else {
-                "已停止"
-            };
+            let status_class = if *is_running { "badge running" } else { "badge stopped" };
+            let status_text = if *is_running { "运行中" } else { "已停止" };
             let action_btn = if !*allow_web {
                 "<span style='color:#888;'>禁用</span>".to_string()
             } else if *is_running {
@@ -354,7 +356,7 @@ impl WebServer {
             };
 
             rows_html.push_str(&format!(
-                "<tr><td>{}</td><td>{}</td><td class='{}'>{}</td><td>{}</td></tr>",
+                "<tr><td>{}</td><td>{}</td><td><span class='{}'>{}</span></td><td>{}</td></tr>",
                 i, desc, status_class, status_text, action_btn
             ));
         }
@@ -392,6 +394,38 @@ impl WebServer {
                 let _ = stream.write_all(body);
             }
         }
+    }
+
+    // 轻量级健康探测，便于外部监控探针验证 Web 线程与子进程状态
+    fn serve_healthcheck(&self, stream: &mut TcpStream) {
+        let mut mgr = self.service_manager.lock().unwrap();
+        let statuses = mgr.get_all_statuses();
+        let running = statuses.iter().filter(|(_, r, _)| *r).count();
+
+        let mut services_json = String::new();
+        for (i, (desc, is_running, allow_web)) in statuses.iter().enumerate() {
+            if i > 0 {
+                services_json.push(',');
+            }
+            services_json.push_str(&format!(
+                r#"{{"id":{},"description":"{}","running":{},"allow_web":{}}}"#,
+                i,
+                escape_json_string(desc),
+                is_running,
+                allow_web
+            ));
+        }
+
+        let body = format!(
+            r#"{{"status":"ok","services":[{}],"running":{},"total":{}}}"#,
+            services_json, running, statuses.len()
+        );
+
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(), body
+        );
+        let _ = stream.write_all(response.as_bytes());
     }
 }
 
@@ -434,11 +468,16 @@ fn fallback_dashboard_html(rows_html: &str) -> String {
 
         body {{ font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: radial-gradient(circle at 10% 20%, rgba(16,185,129,0.12), transparent 35%), radial-gradient(circle at 90% 10%, rgba(59,130,246,0.1), transparent 30%), var(--bg); color: var(--text); margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 24px; box-sizing: border-box; }}
 
-        .card {{ width: 940px; max-width: 100%; background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); backdrop-filter: blur(10px); }}
+        .card {{ width: 1080px; max-width: 100%; background: var(--card); border: 1px solid var(--card-border); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); backdrop-filter: blur(10px); }}
 
-        .header {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }}
+        .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }}
+        .title-wrap {{ display: flex; flex-direction: column; gap: 4px; }}
         .title {{ font-size: 22px; letter-spacing: 0.4px; }}
         .subtitle {{ color: var(--muted); font-size: 14px; }}
+
+        .toolbar {{ display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }}
+        .toolbar select {{ padding: 8px 10px; border-radius: 10px; border: 1px solid var(--card-border); background: rgba(255,255,255,0.05); color: var(--text); }}
+        .toolbar .btn-ghost {{ background: rgba(255, 255, 255, 0.08); color: var(--text); padding: 10px 14px; border-radius: 10px; border: 1px solid var(--card-border); }}
 
         .input-row {{ margin-bottom: 16px; }}
         .input-row label {{ display: block; color: var(--muted); margin-bottom: 6px; font-size: 14px; }}
@@ -467,6 +506,15 @@ fn fallback_dashboard_html(rows_html: &str) -> String {
 
         .global-actions {{ margin-top: 18px; border-top: 1px solid var(--card-border); padding-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; }}
 
+        .metrics-section {{ margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--card-border); }}
+        .section-header {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }}
+        .section-title {{ font-size: 18px; }}
+        .section-desc {{ color: var(--muted); font-size: 13px; margin-top: 4px; }}
+        .metrics-meta {{ color: var(--muted); font-size: 12px; margin-top: 4px; }}
+        .metrics-table th, .metrics-table td {{ font-variant-numeric: tabular-nums; }}
+        .metrics-table td.num {{ text-align: right; font-weight: 600; }}
+        .placeholder {{ text-align: center; color: var(--muted); padding: 12px; }}
+
         .toast {{ position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #fff; padding: 12px 18px; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.25); opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; z-index: 999; border: 1px solid rgba(255,255,255,0.08); }}
         .toast.show {{ opacity: 1; transform: translateX(-50%) translateY(2px); }}
         .toast.error {{ background: #7f1d1d; }}
@@ -488,6 +536,14 @@ fn fallback_dashboard_html(rows_html: &str) -> String {
             if (savedSecret) {{
                 document.getElementById('secret').value = savedSecret;
             }}
+
+            const savedInterval = localStorage.getItem('refresh_interval_ms');
+            if (savedInterval) {{
+                const select = document.getElementById('refresh-select');
+                select.value = savedInterval;
+            }}
+            applyRefreshInterval();
+            runRefresh(false);
         }};
 
         async function sendAction(action) {{
@@ -510,7 +566,7 @@ fn fallback_dashboard_html(rows_html: &str) -> String {
                 if (result.success) {{
                     localStorage.setItem('service_secret', secret);
                     showToast(result.message, false);
-                    setTimeout(() => location.reload(), 500);
+                    setTimeout(() => runRefresh(), 500);
                 }} else {{
                     showToast('错误: ' + result.message, true);
                 }}
@@ -518,14 +574,184 @@ fn fallback_dashboard_html(rows_html: &str) -> String {
                 showToast('请求失败: ' + e, true);
             }}
         }}
+
+        async function runRefresh(showError = true) {{
+            await Promise.all([loadStatuses(showError), loadMetrics(showError)]);
+        }}
+
+        async function loadStatuses(showError = true) {{
+            try {{
+                const res = await fetch('/health');
+                const data = await res.json();
+                renderRows(data.services);
+            }} catch (e) {{
+                if (showError) {{
+                    showToast('刷新失败: ' + e, true);
+                }}
+            }}
+        }}
+
+        function renderRows(services) {{
+            const tbody = document.getElementById('service-rows');
+            tbody.innerHTML = services.map(s => {{
+                const statusClass = s.running ? 'badge running' : 'badge stopped';
+                const statusText = s.running ? '运行中' : '已停止';
+                let actionCell = '<span style="color:#888;">禁用</span>';
+                if (s.allow_web) {{
+                    if (s.running) {{
+                        actionCell = `<button onclick="sendAction('stop_{{s.id}}')" class="btn-sm btn-stop">停止</button>`;
+                    }} else {{
+                        actionCell = `<button onclick="sendAction('start_{{s.id}}')" class="btn-sm btn-start">启动</button>`;
+                    }}
+                }}
+
+                return `<tr><td>{{s.id}}</td><td>{{escapeHtml(s.description)}}</td><td><span class='{{statusClass}}'>{{statusText}}</span></td><td>{{actionCell}}</td></tr>`;
+            }}).join('');
+        }}
+
+        const metricStats = new Map();
+
+        async function loadMetrics(showError = true) {{
+            try {{
+                const res = await fetch('/metrics');
+                if (!res.ok) {{
+                    throw new Error('HTTP ' + res.status);
+                }}
+                const text = await res.text();
+                const samples = parsePrometheusText(text);
+                updateMetricStats(samples);
+                renderMetricRows();
+                updateMetricsMeta();
+            }} catch (e) {{
+                if (showError) {{
+                    showToast('指标拉取失败: ' + e, true);
+                }}
+            }}
+        }}
+
+        function parsePrometheusText(text) {{
+            const lines = text.split('\n');
+            const samples = [];
+            for (const line of lines) {{
+                if (!line || line.startsWith('#')) continue;
+                const match = line.match(/^([^ {{]+)(\{{[^}}]*\}})?\s+([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)/);
+                if (!match) continue;
+                const name = match[1];
+                const labelsRaw = match[2];
+                const value = parseFloat(match[3]);
+                if (!isFinite(value)) continue;
+                const labels = {{}};
+                if (labelsRaw && labelsRaw.length > 2) {{
+                    const inner = labelsRaw.slice(1, -1);
+                    const parts = inner.match(/[^,]+="(?:\\"|[^"])*"/g) || [];
+                    for (const p of parts) {{
+                        const [k, v] = p.split('=');
+                        labels[k.trim()] = (v || '').replace(/^"|"$/g, '').replace(/\\"/g, '"');
+                    }}
+                }}
+                samples.push({{ name, labels, value }});
+            }}
+            return samples;
+        }}
+
+        function metricKey(name, labels) {{
+            const keys = Object.keys(labels).sort();
+            if (keys.length == 0) return name;
+            const labelStr = keys.map(k => `${{k}}=${{labels[k]}}`).join(', ');
+            return `${{name}} (${{labelStr}})`;
+        }}
+
+        function updateMetricStats(samples) {{
+            for (const s of samples) {{
+                const key = metricKey(s.name, s.labels);
+                const prev = metricStats.get(key) || {{ name: key, current: s.value, min: s.value, max: s.value, sum: 0, count: 0 }};
+                prev.current = s.value;
+                prev.min = Math.min(prev.min, s.value);
+                prev.max = Math.max(prev.max, s.value);
+                prev.sum += s.value;
+                prev.count += 1;
+                metricStats.set(key, prev);
+            }}
+        }}
+
+        function renderMetricRows() {{
+            const tbody = document.getElementById('metrics-rows');
+            const rows = Array.from(metricStats.values())
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .slice(0, 200)
+                .map(m => {{
+                    const avg = m.sum / Math.max(m.count, 1);
+                    return `<tr><td>${{escapeHtml(m.name)}}</td><td class='num'>${{formatValue(m.current)}}</td><td class='num'>${{formatValue(m.min)}}</td><td class='num'>${{formatValue(m.max)}}</td><td class='num'>${{formatValue(avg)}}</td></tr>`;
+                }})
+                .join('');
+            tbody.innerHTML = rows || '<tr><td colspan="5" class="placeholder">等待指标采集...</td></tr>';
+        }}
+
+        function formatValue(v) {{
+            if (!isFinite(v)) return '-';
+            if (Math.abs(v) >= 1000 || Math.abs(v) < 0.01) {{
+                return v.toExponential(3);
+            }}
+            return v.toFixed(3);
+        }}
+
+        function resetMetricStats() {{
+            metricStats.clear();
+            renderMetricRows();
+            updateMetricsMeta(true);
+        }}
+
+        function updateMetricsMeta(reset = false) {{
+            const meta = document.getElementById('metrics-meta');
+            if (reset || metricStats.size == 0) {{
+                meta.textContent = '等待拉取...';
+                return;
+            }}
+            const now = new Date();
+            meta.textContent = `最后更新 ${{now.toLocaleTimeString()}} · 会话内累计 ${{metricStats.size}} 项`;
+        }}
+
+        let refreshTimer;
+        function applyRefreshInterval() {{
+            if (refreshTimer) clearInterval(refreshTimer);
+            const select = document.getElementById('refresh-select');
+            const interval = parseInt(select.value, 10);
+            localStorage.setItem('refresh_interval_ms', interval);
+            if (interval > 0) {{
+                refreshTimer = setInterval(() => runRefresh(false), interval);
+            }}
+        }}
+
+        function escapeHtml(text) {{
+            const map = {{ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }};
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }}
+
+        function openMetrics() {{
+            window.open('/metrics', '_blank');
+        }}
     </script>
 </head>
 <body>
     <div id="toast" class="toast"></div>
     <div class="card">
         <div class="header">
-            <div class="title">服务控制面板</div>
-            <div class="subtitle">FrpcStartup</div>
+            <div class="title-wrap">
+                <div class="title">服务控制面板</div>
+                <div class="subtitle">FrpcStartup</div>
+            </div>
+            <div class="toolbar">
+                <button class="btn-ghost" onclick="openMetrics()">查看原始指标</button>
+                <label class="subtitle" for="refresh-select">刷新间隔</label>
+                <select id="refresh-select" onchange="applyRefreshInterval()">
+                    <option value="0">手动</option>
+                    <option value="3000">3s</option>
+                    <option value="5000" selected>5s</option>
+                    <option value="10000">10s</option>
+                    <option value="30000">30s</option>
+                </select>
+                <button class="btn-ghost" onclick="runRefresh()">立即刷新</button>
+            </div>
         </div>
 
         <div class="input-row">
@@ -542,7 +768,7 @@ fn fallback_dashboard_html(rows_html: &str) -> String {
                     <th width="100">操作</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="service-rows">
                 {rows}
             </tbody>
         </table>
@@ -551,12 +777,57 @@ fn fallback_dashboard_html(rows_html: &str) -> String {
             <button onclick="sendAction('start_all')" class="btn-lg btn-start">全部启动</button>
             <button onclick="sendAction('stop_all')" class="btn-lg btn-stop">全部停止</button>
         </div>
+
+        <div class="metrics-section">
+            <div class="section-header">
+                <div>
+                    <div class="section-title">性能监测（HWiNFO 风格）</div>
+                    <div class="section-desc">前端会话内累积统计：当前 / 最小 / 最大 / 平均</div>
+                    <div id="metrics-meta" class="metrics-meta">等待拉取...</div>
+                </div>
+                <div class="toolbar">
+                    <button class="btn-ghost" onclick="resetMetricStats()">重置统计</button>
+                    <button class="btn-ghost" onclick="runRefresh()">立即刷新</button>
+                </div>
+            </div>
+
+            <table class="metrics-table">
+                <thead>
+                    <tr>
+                        <th>指标</th>
+                        <th width="120">当前</th>
+                        <th width="120">最小</th>
+                        <th width="120">最大</th>
+                        <th width="120">平均</th>
+                    </tr>
+                </thead>
+                <tbody id="metrics-rows">
+                    <tr><td colspan="5" class="placeholder">等待指标采集...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </body>
 </html>
 "#,
         rows = rows_html
     )
+}
+
+fn escape_json_string(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for c in input.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\u{:04x}", c as u32)),
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 fn url_decode(input: &str) -> String {

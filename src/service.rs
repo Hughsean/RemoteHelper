@@ -193,6 +193,15 @@ impl ServiceManager {
             cmd.current_dir(dir);
         }
 
+        // 记录启动命令，便于排查未监听端口或路径错误的问题
+        write_app_log(&format!(
+            "Spawning service {}: exe={:?}, args={:?}, workdir={:?}",
+            index,
+            cmd.get_program(),
+            cmd.get_args().collect::<Vec<_>>(),
+            cmd.get_current_dir()
+        ));
+
         let child = cmd.stdout(stdout_log).stderr(stderr_log).spawn()?;
 
         Ok(child)
