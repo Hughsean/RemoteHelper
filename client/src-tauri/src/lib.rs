@@ -75,7 +75,7 @@ pub fn run() {
 
             // 仅在非 macOS 平台（如 Windows）启动时自动显示窗口
             // macOS 保持隐藏，等待用户点击菜单栏图标
-            #[cfg(not(target_os = "macos"))]
+            // #[cfg(not(target_os = "macos"))]
             {
                 if let Some(main_window) = app.get_webview_window("main") {
                     tauri::async_runtime::spawn(async move {
