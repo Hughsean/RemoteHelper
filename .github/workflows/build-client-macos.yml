@@ -1,107 +1,114 @@
 name: Build Client macOS
 
 on:
-    push:
-        tags:
-            - "v*"
-    workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 jobs:
-    build-tauri:
-        permissions:
-            contents: write
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - platform: "macos-latest" # ARM64
-                      args: "--target aarch64-apple-darwin"
+  build-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # ARM64
+            args: "--target aarch64-apple-darwin"
 
-        runs-on: ${{ matrix.platform }}
-        steps:
-            - uses: actions/checkout@v4
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Validate tag version and release uniqueness
-              if: startsWith(github.ref, 'refs/tags/')
-              uses: actions/github-script@v7
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  script: |
-                      const ref = context.ref;
-                      const tag = ref.replace('refs/tags/', '');
-                      const versionFromTag = tag.startsWith('v') ? tag.slice(1) : tag;
+      - name: Validate tag version and release uniqueness
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const ref = context.ref;
+            const tag = ref.replace('refs/tags/', '');
+            const versionFromTag = tag.startsWith('v') ? tag.slice(1) : tag;
 
-                      const fs = require('fs');
-                      const path = require('path');
-                      const configPath = path.join(process.env.GITHUB_WORKSPACE, 'client', 'src-tauri', 'tauri.conf.json');
-                      const tauriConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-                      const versionFromConfig = tauriConfig.version;
+            const fs = require('fs');
+            const path = require('path');
+            const configPath = path.join(process.env.GITHUB_WORKSPACE, 'client', 'src-tauri', 'tauri.conf.json');
+            const tauriConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            const versionFromConfig = tauriConfig.version;
 
-                      if (versionFromConfig !== versionFromTag) {
-                          core.setFailed(`Tag version ${versionFromTag} does not match tauri.conf.json version ${versionFromConfig}`);
-                          return;
-                      }
+            if (versionFromConfig !== versionFromTag) {
+                core.setFailed(`Tag version ${versionFromTag} does not match tauri.conf.json version ${versionFromConfig}`);
+                return;
+            }
 
-                      try {
-                          await github.rest.repos.getReleaseByTag({
-                              owner: context.repo.owner,
-                              repo: context.repo.repo,
-                              tag,
-                          });
-                          core.setFailed(`Release for tag ${tag} already exists; aborting.`);
-                      } catch (error) {
-                          if (error.status === 404) {
-                              core.info(`No existing release for ${tag}; continuing.`);
-                          } else {
-                              throw error;
-                          }
-                      }
+            try {
+                await github.rest.repos.getReleaseByTag({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    tag,
+                });
+                core.setFailed(`Release for tag ${tag} already exists; aborting.`);
+            } catch (error) {
+                if (error.status === 404) {
+                    core.info(`No existing release for ${tag}; continuing.`);
+                } else {
+                    throw error;
+                }
+            }
 
-            - name: Install pnpm
-              uses: pnpm/action-setup@v4
-              with:
-                  version: 9
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 20
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-            - name: Install Rust
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}
 
-            - name: Install frontend dependencies
-              working-directory: client
-              run: pnpm install --no-frozen-lockfile
+      - name: Install frontend dependencies
+        working-directory: client
+        run: pnpm install --no-frozen-lockfile
 
-            - name: Build Tauri App
-              uses: tauri-apps/tauri-action@v0
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  projectPath: client
-                  tagName: ${{ github.ref_name }}
-                  releaseName: "RemoteHelper v__VERSION__"
-                  releaseDraft: false
-                  prerelease: false
-                  args: ${{ matrix.args }}
-                  releaseBody: |
-                      RemoteHelper 1.0.3 (macOS only)
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: client
+          tagName: ${{ github.ref_name }}
+          releaseName: "RemoteHelper v__VERSION__"
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+          releaseBody: |
+            RemoteHelper 1.0.4 (macOS only)
 
-                      ### 🎨 UI 与布局优化
-                      - **紧凑视图**：大幅减少了卡片间距与内边距，使界面更加紧凑高效，一屏展示更多信息。
-                      - **响应式输入栏**：服务管理顶部的“服务器地址”与“密钥”输入框现在支持弹性伸缩，在窄窗口下自动调整宽度，避免布局挤压。
-                      - **表格重构**：
-                        - 启用固定列宽，长描述文本自动截断（Hover 可见完整内容）。
-                        - 状态列改为双行显示（状态 + PID），信息层级更清晰。
-                        - 操作按钮强制单行排列，统一了按钮尺寸与间距。
-                      - **滚动条优化**：移除了页面级滚动条，改为表格区域内部独立滚动，并修复了底部边距过窄的问题。
+            本次发布为 1.0.3 → 1.0.4 的小版本修复与改进，重点提升 macOS 上的菜单栏/窗口交互体验并修复若干用户可见的问题：
 
-                      ### 💄 视觉一致性
-                      - **状态标签统一**：修复了“运行中”与“已停止”标签宽度不一致的问题，现在统一为固定宽度并居中对齐，且均包含状态圆点指示器。
+            ## 与 1.0.3 的差异（摘要）
+            - 修复：解决了 macOS 下主窗口在某些情况下无法被调到前台或无法进入原生全屏的问题（原因：运行时激活策略 Accessory 导致）。
+            - 修复：在单实例（single-instance）唤起与托盘图标点击时，应用现在会在显示窗口前切换为 `Regular` 激活策略，从而保证窗口可聚焦并支持 macOS 原生全屏；隐藏窗口时再恢复为 `Accessory` 行为以保留菜单栏图标体验。
+            - 优化：改进了单实例唤起逻辑，确保重复打开时能正确展示并聚焦现有窗口。
+            - UI 优化：细化表格、标签与图表渲染逻辑，改善在窄视图或高密度信息场景下的可读性。
 
-                      ### 📈 图表增强
-                      - **智能标签防重叠**：重写了性能趋势图的标签绘制逻辑，增加了碰撞检测。当 CPU/GPU 曲线靠得太近时，标签会自动避让，不再重叠。
-                      - **边界检测**：防止图表标签在数值较低时被挤出图表底部区域。
+            ## 具体改动点
+            - macOS 窗口行为
+                - 显示窗口前切换到 `Regular` activation policy，允许窗口接受焦点并进入原生全屏。
+                - 隐藏/关闭窗口时切回 `Accessory`，保持菜单栏图标与 Dock 隐藏的预期行为。
+            - 单实例（single-instance）
+                - 在重复打开时把现有窗口显示并聚焦，避免因激活策略导致无法台前的问题。
+            - 界面与图表
+                - 表格列宽、状态列样式、操作按钮布局以及图表标签避让逻辑的若干修正与优化。
+
+            ## 兼容性与注意事项
+            - 该修复主要是运行时代码逻辑改动，对 macOS 生效；Windows/Linux 行为不受影响。
+
+            ## 致谢
+            感谢反馈该问题的用户与贡献者，若在 macOS 上仍遇到与窗口聚焦或全屏相关的问题，请提交 issue 并附上系统版本与复现步骤。

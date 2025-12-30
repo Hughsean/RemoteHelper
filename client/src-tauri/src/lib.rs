@@ -16,14 +16,22 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
+                // When another instance is opened, bring the existing window
+                // to front. On macOS we must set Regular activation policy to
+                // allow focusing and native full-screen.
+                #[cfg(target_os = "macos")]
+                {
+                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                }
                 let _ = window.show();
                 let _ = window.set_focus();
             }
         }))
         .setup(|app| {
-            // 设置 macOS 仅在菜单栏显示 (隐藏 Dock 图标)
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            // macOS: don't force Accessory policy at startup here. We'll
+            // switch activation policy at runtime when showing/hiding the
+            // main window so the app supports native full-screen when shown
+            // while still behaving like a menu-bar accessory when hidden.
 
             let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "显示/隐藏", true, None::<&str>)?;
@@ -44,8 +52,18 @@ pub fn run() {
                     "show" => {
                         if let Some(window) = app.get_webview_window("main") {
                             if window.is_visible().unwrap_or(false) {
+                                // Hide: switch back to Accessory so Dock stays hidden
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                                }
                                 let _ = window.hide();
                             } else {
+                                // Showing window: make app Regular so native full-screen works
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                                }
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
@@ -62,8 +80,18 @@ pub fn run() {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
                             if window.is_visible().unwrap_or(false) {
+                                // Hide: switch back to Accessory so Dock stays hidden
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                                }
                                 let _ = window.hide();
                             } else {
+                                // Showing window: make app Regular so native full-screen works
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                                }
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
@@ -75,7 +103,7 @@ pub fn run() {
 
             // 仅在非 macOS 平台（如 Windows）启动时自动显示窗口
             // macOS 保持隐藏，等待用户点击菜单栏图标
-            // #[cfg(not(target_os = "macos"))]
+            #[cfg(not(target_os = "macos"))]
             {
                 if let Some(main_window) = app.get_webview_window("main") {
                     tauri::async_runtime::spawn(async move {
@@ -90,6 +118,13 @@ pub fn run() {
         })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
+                // When window is closed (hidden), on macOS switch to Accessory
+                // so the app behaves like a menu-bar accessory.
+                #[cfg(target_os = "macos")]
+                {
+                    let app = window.app_handle();
+                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                }
                 if let Err(e) = window.hide() {
                     log::error!("Failed to hide window: {}", e);
                 }
