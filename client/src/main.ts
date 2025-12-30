@@ -42,6 +42,7 @@ declare global {
     confirmAddService: () => void;
     registerAndStart: (index: number) => Promise<void>;
     deleteCustomService: (index: number) => void;
+    showCustomInputModal: (opts: { title?: string; message?: string; defaultValue?: string }) => Promise<string | null>;
   }
 }
 
@@ -533,6 +534,60 @@ window.confirmAddService = function() {
     window.refreshAll();
 }
 
+// Custom input modal helper (returns Promise<string | null>)
+function showCustomInputModal(opts: { title?: string; message?: string; defaultValue?: string }): Promise<string | null> {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('custom-input-modal') as HTMLElement | null;
+    const titleEl = document.getElementById('custom-input-title') as HTMLElement | null;
+    const msgEl = document.getElementById('custom-input-message') as HTMLElement | null;
+    const inputEl = document.getElementById('custom-input-value') as HTMLInputElement | null;
+    const okBtn = document.getElementById('custom-input-ok') as HTMLButtonElement | null;
+    const cancelBtn = document.getElementById('custom-input-cancel') as HTMLButtonElement | null;
+    if (!modal || !inputEl || !okBtn || !cancelBtn) {
+      // Fallback to native prompt if modal not found
+      const v = window.prompt(opts.message || '', opts.defaultValue || '');
+      resolve(v === null ? null : v);
+      return;
+    }
+
+    titleEl && (titleEl.textContent = opts.title || '输入');
+    msgEl && (msgEl.textContent = opts.message || '');
+    inputEl.value = opts.defaultValue || '';
+
+    const cleanup = () => {
+      modal.classList.add('hidden');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      modal.removeEventListener('keydown', onKeyDown);
+    };
+
+    const onOk = () => {
+      const val = inputEl.value;
+      cleanup();
+      resolve(val);
+    };
+    const onCancel = () => {
+      cleanup();
+      resolve(null);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') onOk();
+      if (e.key === 'Escape') onCancel();
+    };
+
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    modal.addEventListener('keydown', onKeyDown as any);
+
+    modal.classList.remove('hidden');
+    // Focus input after a tick
+    setTimeout(() => inputEl.focus(), 20);
+  });
+}
+
+// Expose helper for potential external use
+window['showCustomInputModal'] = showCustomInputModal;
+
 window.registerAndStart = async function(index: number) {
     const svc = customServices[index];
     if (!svc) return;
@@ -606,22 +661,35 @@ function startAutoRefresh() {
     
     let interval = 0;
     if (select.value === "custom") {
-        const input = prompt("请输入刷新间隔 (毫秒, 最低100):", "1000");
-        if (input) {
-            let val = parseInt(input);
-            if (isNaN(val) || val < 100) {
-                alert("无效的间隔，已重置为 100ms");
-                val = 100;
-            }
-            interval = val;
-            select.dataset.customValue = val.toString();
-            if (display) display.textContent = `${val}ms`;
+      // Use custom modal input instead of prompt (better cross-platform behavior)
+      showCustomInputModal({
+        title: '自定义刷新间隔',
+        message: '请输入刷新间隔 (毫秒, 最低100):',
+        defaultValue: select.dataset.customValue || '1000'
+      }).then(input => {
+        if (input === null) {
+          // Cancelled, revert to default
+          select.value = '3000';
+          interval = 3000;
+          if (display) display.textContent = '3s';
         } else {
-            // Cancelled, revert to default
-            select.value = "3000";
-            interval = 3000;
-            if (display) display.textContent = "3s";
+          let val = parseInt(input);
+          if (isNaN(val) || val < 100) {
+            alert('无效的间隔，已重置为 100ms');
+            val = 100;
+          }
+          interval = val;
+          select.dataset.customValue = val.toString();
+          if (display) display.textContent = `${val}ms`;
         }
+        // Because this branch is async, ensure timer setup happens after resolution
+        if (interval > 0) {
+          refreshTimer = window.setInterval(window.refreshAll, interval);
+          window.refreshAll();
+        }
+      });
+      // Return early because timer setup is handled in the promise resolution
+      return;
     } else {
         interval = parseInt(select.value);
         // Update display text
