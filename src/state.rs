@@ -22,6 +22,7 @@ pub struct AppState {
     pub nvml: Arc<RwLock<Option<Nvml>>>,
     pub gpu_cache: Arc<RwLock<GpuCache>>,
     pub refresh_interval: Arc<RwLock<u64>>,
+    pub last_read_time: Arc<RwLock<std::time::Instant>>,
     pub update_notify: Arc<Notify>,
     pub service_processes: Arc<RwLock<HashMap<usize, Child>>>,
     pub web_tunnel_process: Arc<Mutex<Option<Child>>>,
@@ -36,6 +37,7 @@ impl AppState {
             nvml: Arc::new(RwLock::new(Nvml::init().ok())),
             gpu_cache: Arc::new(RwLock::new(GpuCache::default())),
             refresh_interval: Arc::new(RwLock::new(1000)), // Default 1s
+            last_read_time: Arc::new(RwLock::new(std::time::Instant::now())),
             update_notify: Arc::new(Notify::new()),
             service_processes: Arc::new(RwLock::new(HashMap::new())),
             web_tunnel_process: Arc::new(Mutex::new(None)),

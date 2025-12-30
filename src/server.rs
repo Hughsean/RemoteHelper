@@ -183,6 +183,12 @@ fn verify_login(state: &AppState, pub_key_b64: &str, sig_b64: &str, challenge: &
 async fn process_authenticated_request(req: Request, state: &AppState) -> Response {
     match req {
         Request::GetStatus { interval_ms } => {
+            // Update last read time
+            {
+                let mut last_read = state.last_read_time.write().await;
+                *last_read = std::time::Instant::now();
+            }
+
             // Update refresh interval if provided
             if let Some(ms) = interval_ms {
                 if ms >= 100 {

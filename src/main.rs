@@ -52,13 +52,35 @@ async fn main() -> anyhow::Result<()> {
         loop {
             let interval_ms = *monitor_state.refresh_interval.read().await;
 
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_millis(interval_ms)) => {
+            // Check if we should pause updates (no reads for 10s)
+            let should_pause = {
+                let last_read = *monitor_state.last_read_time.read().await;
+                if last_read.elapsed() > Duration::from_secs(10) {
+                    true
+                } else {
+                    false
+                }
+            };
+
+            let timeout = tokio::select! {
+                _ = if should_pause {
+                    tokio::time::sleep(Duration::from_secs(1))
+                }
+                else {
+                    tokio::time::sleep(Duration::from_millis(interval_ms))
+                } => {
+                    true
                     // Timer expired, refresh
                 }
                 _ = monitor_state.update_notify.notified() => {
+                    false
                     // Config changed, wake up immediately (and refresh)
                 }
+            };
+
+            if timeout && should_pause {
+                // Skip this cycle
+                continue;
             }
 
             {
