@@ -28,6 +28,7 @@ declare global {
     refreshAll: () => Promise<void>;
     controlService: (id: number, action: string) => Promise<void>;
     controlAll: (action: string) => Promise<void>;
+    quitApp: () => Promise<void>;
   }
 }
 
@@ -241,14 +242,36 @@ function renderServices(services: ServiceInfo[]) {
   const tbody = document.getElementById("service-list-body");
   if (!tbody) return;
 
-  tbody.innerHTML = "";
+  // Diff logic to prevent full re-render flicker
+  const existingRows = Array.from(tbody.children) as HTMLTableRowElement[];
+  const newIds = new Set(services.map(s => s.id));
 
-  services.forEach((svc) => {
-    const tr = document.createElement("tr");
-    tr.className = "hover:bg-slate-800/50 transition-colors";
+  // Remove old rows
+  existingRows.forEach(row => {
+    const id = parseInt(row.dataset.id || "0");
+    if (id && !newIds.has(id)) {
+      row.remove();
+    }
+  });
+  
+  // Clear placeholder if services exist
+  if (services.length > 0 && tbody.querySelector('td[colspan="4"]')) {
+      tbody.innerHTML = '';
+  }
+
+  services.forEach((svc, index) => {
+    let tr = tbody.querySelector(`tr[data-id="${svc.id}"]`) as HTMLTableRowElement;
+    
+    if (!tr) {
+      tr = document.createElement("tr");
+      tr.dataset.id = svc.id.toString();
+      tr.className = "hover:bg-slate-800/50 transition-colors animate-slide-up opacity-0 border-b border-slate-800/50 last:border-0";
+      tr.style.animationDelay = `${index * 50}ms`;
+      tbody.appendChild(tr);
+    }
 
     const statusBadge = svc.running
-      ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+      ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                 <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-400 rounded-full animate-pulse"></span>运行中 (PID: ${svc.pid})
                </span>`
       : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
@@ -256,27 +279,26 @@ function renderServices(services: ServiceInfo[]) {
                </span>`;
 
     tr.innerHTML = `
-            <td class="px-6 py-4 font-mono text-slate-500 text-xs">${
-              svc.id
-            }</td>
-            <td class="px-6 py-4 font-medium text-slate-200">${
-              svc.description
-            }</td>
+            <td class="px-6 py-4 font-mono text-slate-500 text-xs">#${svc.id}</td>
+            <td class="px-6 py-4 font-medium text-slate-200">${svc.description}</td>
             <td class="px-6 py-4">${statusBadge}</td>
             <td class="px-6 py-4 text-right space-x-2">
                 <button onclick="controlService(${svc.id}, 'start')" 
-                    class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
                     ${svc.running ? "disabled" : ""}>启动</button>
                 <button onclick="controlService(${svc.id}, 'stop')" 
-                    class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-rose-900/30 hover:text-rose-400 hover:border-rose-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-rose-900/30 hover:text-rose-400 hover:border-rose-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
                     ${!svc.running ? "disabled" : ""}>停止</button>
                 <button onclick="controlService(${svc.id}, 'restart')" 
-                    class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-indigo-900/30 hover:text-indigo-400 hover:border-indigo-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-indigo-900/30 hover:text-indigo-400 hover:border-indigo-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
                     ${!svc.running ? "disabled" : ""}>重启</button>
             </td>
         `;
-    tbody.appendChild(tr);
   });
+  
+  if (services.length === 0 && tbody.children.length === 0) {
+     tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-8 text-center text-slate-500 animate-pulse-soft">暂无服务或未连接</td></tr>`;
+  }
 }
 
 // Actions
@@ -303,6 +325,14 @@ window.controlAll = async function (action: string) {
     }
   } catch (e) {
     console.error("Control all failed:", e);
+  }
+};
+
+window.quitApp = async function () {
+  try {
+    await invoke("quit_app");
+  } catch (e) {
+    console.error("Quit app failed:", e);
   }
 };
 
