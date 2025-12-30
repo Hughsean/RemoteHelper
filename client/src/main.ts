@@ -221,6 +221,22 @@ function initChart() {
   });
 }
 
+// Helper: format milliseconds to human-readable string (max 1 day)
+function formatDuration(ms: number): string {
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  if (ms >= ONE_DAY) return '1d';
+  if (ms <= 0) return '0ms';
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
 window.toggleChart = function () {
   const container = document.getElementById("chart-container");
   const chevron = document.getElementById("chart-chevron");
@@ -278,15 +294,27 @@ window.refreshAll = async function () {
             // We can read it from the timer or a stored variable.
             // Let's use the global refreshTimer interval if possible, or default to 1000.
             // Actually, let's store the custom value in a data attribute or variable.
-            const customVal = parseInt(select.dataset.customValue || "1000");
-            interval = customVal;
+              let customVal = parseInt(select.dataset.customValue || "1000");
+              const ONE_DAY = 24 * 60 * 60 * 1000;
+              if (isNaN(customVal) || customVal < 100) customVal = 100;
+              if (customVal > ONE_DAY) {
+                alert('自定义间隔超过 1 天，已自动重置为 1 天');
+                customVal = ONE_DAY;
+                select.dataset.customValue = customVal.toString();
+                // also update display if present
+                const display = document.getElementById('refresh-display');
+                if (display) display.textContent = formatDuration(customVal);
+              }
+              interval = customVal;
         } else {
             interval = parseInt(val);
         }
     }
     
-    // Ensure interval is valid for server (>= 100ms)
+    // Ensure interval is valid for server (>= 100ms) and clamp to 1 day
+    const ONE_DAY = 24 * 60 * 60 * 1000;
     if (interval < 100 && interval !== 0) interval = 100;
+    if (interval > ONE_DAY) interval = ONE_DAY;
     if (interval === 0) interval = 3000; // If paused, tell server to keep default or last
 
     await Promise.all([getStatus(interval), listServices()]);
@@ -666,21 +694,26 @@ function startAutoRefresh() {
         title: '自定义刷新间隔',
         message: '请输入刷新间隔 (毫秒, 最低100):',
         defaultValue: select.dataset.customValue || '1000'
-      }).then(input => {
+        }).then(input => {
         if (input === null) {
           // Cancelled, revert to default
           select.value = '3000';
           interval = 3000;
           if (display) display.textContent = '3s';
-        } else {
+          } else {
           let val = parseInt(input);
           if (isNaN(val) || val < 100) {
             alert('无效的间隔，已重置为 100ms');
             val = 100;
           }
+          const ONE_DAY = 24 * 60 * 60 * 1000;
+          if (val > ONE_DAY) {
+            alert('最大间隔为 1 天，已重置为 1 天');
+            val = ONE_DAY;
+          }
           interval = val;
           select.dataset.customValue = val.toString();
-          if (display) display.textContent = `${val}ms`;
+          if (display) display.textContent = formatDuration(val);
         }
         // Because this branch is async, ensure timer setup happens after resolution
         if (interval > 0) {
@@ -691,12 +724,14 @@ function startAutoRefresh() {
       // Return early because timer setup is handled in the promise resolution
       return;
     } else {
-        interval = parseInt(select.value);
-        // Update display text
-        if (display) {
-            const selectedOption = select.options[select.selectedIndex];
-            display.textContent = selectedOption.text;
-        }
+      interval = parseInt(select.value);
+      // Update display text
+      if (display) {
+        const selectedOption = select.options[select.selectedIndex];
+        // If option value is numeric, format it
+        const v = parseInt(select.value);
+        display.textContent = !isNaN(v) && v > 0 ? formatDuration(v) : selectedOption.text;
+      }
     }
 
     if (interval > 0) {
@@ -707,5 +742,22 @@ function startAutoRefresh() {
   };
 
   select.addEventListener("change", updateTimer);
+  // Initialize display text to match current selection/custom value
+  if (display) {
+    if (select.value === 'custom') {
+      let v = parseInt(select.dataset.customValue || '1000');
+      const ONE_DAY = 24 * 60 * 60 * 1000;
+      if (isNaN(v) || v < 100) v = 100;
+      if (v > ONE_DAY) {
+        alert('自定义间隔超过 1 天，已自动重置为 1 天');
+        v = ONE_DAY;
+        select.dataset.customValue = v.toString();
+      }
+      display.textContent = formatDuration(v);
+    } else {
+      const vv = parseInt(select.value);
+      display.textContent = !isNaN(vv) && vv > 0 ? formatDuration(vv) : select.options[select.selectedIndex].text;
+    }
+  }
   updateTimer(); // Start immediately
 }
