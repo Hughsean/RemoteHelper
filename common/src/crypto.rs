@@ -5,7 +5,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
 };
 use anyhow::{Result, anyhow};
-use rand_core::OsRng;
+use rand::rngs::OsRng;
 use sha2::{Digest, Sha256};
 use x25519_dalek::{EphemeralSecret, PublicKey};
 

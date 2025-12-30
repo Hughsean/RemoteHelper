@@ -24,7 +24,7 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-log = "2"
 tauri-plugin-single-instance = "2"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
-rand = "0"
+rand = "0.8"
 base64 = "0.22.1"
 aes-gcm = "0.10.3"
 pbkdf2 = "0.12.2"
