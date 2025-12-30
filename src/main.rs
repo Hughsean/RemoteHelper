@@ -6,22 +6,8 @@ mod state;
 use crate::config::AppConfig;
 use crate::state::AppState;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio_rustls::TlsAcceptor;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-fn load_certs(path: &str) -> std::io::Result<Vec<rustls::pki_types::CertificateDer<'static>>> {
-    let certfile = std::fs::File::open(path)?;
-    let mut reader = std::io::BufReader::new(certfile);
-    rustls_pemfile::certs(&mut reader).collect()
-}
-
-fn load_private_key(path: &str) -> std::io::Result<rustls::pki_types::PrivateKeyDer<'static>> {
-    let keyfile = std::fs::File::open(path)?;
-    let mut reader = std::io::BufReader::new(keyfile);
-    rustls_pemfile::private_key(&mut reader)?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No private key found"))
-}
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
@@ -56,16 +42,6 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let config = AppConfig::load()?;
     tracing::info!("Configuration loaded successfully.");
-
-    // Load TLS Config
-    let certs = load_certs(&config.web_panel.cert_path)?;
-    let key = load_private_key(&config.web_panel.key_path)?;
-
-    let tls_config = rustls::ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certs, key)
-        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
-    let acceptor = TlsAcceptor::from(Arc::new(tls_config));
 
     // Initialize state
     let state = AppState::new(config.clone());
@@ -144,17 +120,9 @@ async fn main() -> anyhow::Result<()> {
                 match listener.accept().await {
                     Ok((socket, addr)) => {
                         tracing::info!("New connection from {}", addr);
-                        let acceptor = acceptor.clone();
                         let state = server_state.clone();
                         tokio::spawn(async move {
-                            match acceptor.accept(socket).await {
-                                Ok(tls_stream) => {
-                                    server::handle_connection(tls_stream, state).await;
-                                }
-                                Err(e) => {
-                                    tracing::error!("TLS handshake failed: {}", e);
-                                }
-                            }
+                            server::handle_connection(socket, state).await;
                         });
                     }
                     Err(e) => {

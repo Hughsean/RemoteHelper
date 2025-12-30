@@ -1,0 +1,85 @@
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    aead::consts::U12,
+    aead::generic_array::GenericArray,
+    Aes256Gcm,
+};
+use anyhow::{anyhow, Result};
+use rand_core::OsRng;
+use sha2::{Digest, Sha256};
+use x25519_dalek::{EphemeralSecret, PublicKey};
+
+type AeadNonce = GenericArray<u8, U12>;
+
+pub struct CryptoSession {
+    cipher: Aes256Gcm,
+    // We use a simple counter for nonce. 
+    // AES-GCM nonce is 12 bytes (96 bits).
+    // We'll use 4 bytes of fixed prefix (derived from handshake) + 8 bytes counter.
+    // Or just 12 bytes counter if keys are unique.
+    // Since we generate a fresh key every session, starting nonce at 0 is fine.
+    // We need separate counters for read and write to avoid reuse if same key is used (which it is).
+    // Actually, usually we derive two keys: client_write_key and server_write_key.
+    // For simplicity, let's derive ONE key, but use different Nonce prefixes?
+    // Or just use different keys.
+    write_nonce: u64,
+    read_nonce: u64,
+    is_server: bool,
+}
+
+impl CryptoSession {
+    pub fn new(shared_secret: [u8; 32], is_server: bool) -> Self {
+        // Derive session key from shared secret
+        // Simple: SHA256(secret) -> 32 bytes
+        let key_bytes = Sha256::digest(&shared_secret);
+        let cipher = Aes256Gcm::new(&key_bytes);
+
+        Self {
+            cipher,
+            write_nonce: 0,
+            read_nonce: 0,
+            is_server,
+        }
+    }
+
+    fn get_nonce(counter: u64, is_server_sender: bool) -> AeadNonce {
+        let mut bytes = [0u8; 12];
+        // High bit of first byte indicates sender direction to avoid collision
+        // if we used the same key.
+        // Server sends with MSB 1, Client with MSB 0.
+        if is_server_sender {
+            bytes[0] |= 0x80;
+        }
+        
+        // Put counter in last 8 bytes (big endian)
+        let counter_bytes = counter.to_be_bytes();
+        bytes[4..12].copy_from_slice(&counter_bytes);
+        
+        GenericArray::clone_from_slice(&bytes)
+    }
+
+    pub fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        let nonce = Self::get_nonce(self.write_nonce, self.is_server);
+        self.write_nonce += 1;
+        
+        let ciphertext = self.cipher.encrypt(&nonce, plaintext)
+            .map_err(|e| anyhow!("Encryption failed: {}", e))?;
+        Ok(ciphertext)
+    }
+
+    pub fn decrypt(&mut self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        // When decrypting, the sender is the opposite of us
+        let nonce = Self::get_nonce(self.read_nonce, !self.is_server);
+        self.read_nonce += 1;
+
+        let plaintext = self.cipher.decrypt(&nonce, ciphertext)
+            .map_err(|e| anyhow!("Decryption failed: {}", e))?;
+        Ok(plaintext)
+    }
+}
+
+pub fn generate_ephemeral() -> (EphemeralSecret, PublicKey) {
+    let secret = EphemeralSecret::random_from_rng(OsRng);
+    let public = PublicKey::from(&secret);
+    (secret, public)
+}

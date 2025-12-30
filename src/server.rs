@@ -1,46 +1,92 @@
 use crate::state::AppState;
+use anyhow::Result;
 use base64::prelude::*;
-use common::{Request, Response, ServiceAction, ServiceData, StatusData};
+use common::{crypto::CryptoSession, Handshake, Request, Response, ServiceAction, ServiceData, StatusData};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use rand::Rng;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio_rustls::server::TlsStream;
 use tracing::{error, info, warn};
+use x25519_dalek::PublicKey;
 
-pub async fn handle_connection(mut socket: TlsStream<TcpStream>, state: AppState) {
-    let mut buf = [0; 5 * 1024]; // 5 KB buffer
+pub async fn handle_connection(mut socket: TcpStream, state: AppState) {
+    if let Err(e) = handle_connection_inner(&mut socket, state).await {
+        error!("Connection error: {}", e);
+    }
+}
+
+async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Result<()> {
+    // --- Handshake Phase ---
+    let mut buf = [0u8; 1024];
+
+    // 1. Read ClientHello
+    let len = socket.read_u32().await? as usize;
+    if len > buf.len() {
+        return Err(anyhow::anyhow!("Handshake message too large"));
+    }
+    socket.read_exact(&mut buf[..len]).await?;
+    
+    let client_hello: Handshake = serde_json::from_slice(&buf[..len])?;
+    let client_pub_bytes = match client_hello {
+        Handshake::ClientHello { public_key } => BASE64_STANDARD.decode(public_key)?,
+        _ => return Err(anyhow::anyhow!("Expected ClientHello")),
+    };
+
+    // 2. Generate Server Key & Shared Secret
+    let (secret, server_public) = common::crypto::generate_ephemeral();
+    let server_pub_b64 = BASE64_STANDARD.encode(server_public.as_bytes());
+
+    // 3. Send ServerHello
+    let resp = Handshake::ServerHello { public_key: server_pub_b64 };
+    let resp_bytes = serde_json::to_vec(&resp)?;
+    socket.write_u32(resp_bytes.len() as u32).await?;
+    socket.write_all(&resp_bytes).await?;
+
+    // 4. Initialize Crypto Session
+    let client_public_key = PublicKey::from(TryInto::<[u8; 32]>::try_into(client_pub_bytes).unwrap());
+    let shared_secret = secret.diffie_hellman(&client_public_key);
+    let mut crypto = CryptoSession::new(shared_secret.to_bytes(), true);
+
+    info!("Encrypted session established");
+
+    // --- Encrypted Loop ---
     let mut authenticated = false;
     let mut current_challenge: Option<String> = None;
+    let mut read_buf = [0u8; 10 * 1024]; // 10 KB buffer for encrypted frames
 
     loop {
-        // Read length prefix (4 bytes, big endian)
+        // Read encrypted length (4 bytes)
+        // Note: This length is the length of the CIPHERTEXT (including tag)
         let len = match socket.read_u32().await {
             Ok(n) => n as usize,
-            Err(_) => return, // Connection closed or error
+            Err(_) => break, // Connection closed
         };
 
-        if len > buf.len() {
-            error!("Request too large: {} bytes", len);
-            return;
+        if len > read_buf.len() {
+            return Err(anyhow::anyhow!("Request too large: {} bytes", len));
         }
 
-        // Read body
-        if let Err(e) = socket.read_exact(&mut buf[..len]).await {
-            error!("Failed to read body: {}", e);
-            return;
-        }
+        // Read encrypted body
+        socket.read_exact(&mut read_buf[..len]).await?;
+
+        // Decrypt
+        let plaintext = match crypto.decrypt(&read_buf[..len]) {
+            Ok(pt) => pt,
+            Err(e) => {
+                error!("Decryption failed: {}", e);
+                return Err(e);
+            }
+        };
 
         // Deserialize request
-        let req: Request = match serde_json::from_slice(&buf[..len]) {
+        let req: Request = match serde_json::from_slice(&plaintext) {
             Ok(r) => r,
             Err(e) => {
                 error!("Invalid JSON: {}", e);
+                // We can try to send an encrypted error response, but if JSON is bad, maybe just close?
+                // Let's try to send error.
                 let err_resp = Response::Error(format!("Invalid JSON request: {}", e));
-                if let Ok(bytes) = serde_json::to_vec(&err_resp) {
-                    let _ = socket.write_u32(bytes.len() as u32).await;
-                    let _ = socket.write_all(&bytes).await;
-                }
+                send_response(socket, &mut crypto, &err_resp).await?;
                 continue;
             }
         };
@@ -80,27 +126,18 @@ pub async fn handle_connection(mut socket: TlsStream<TcpStream>, state: AppState
             }
         };
 
-        // Serialize response
-        let resp_bytes = match serde_json::to_vec(&response) {
-            Ok(b) => b,
-            Err(e) => {
-                error!("Failed to serialize response: {}", e);
-                continue;
-            }
-        };
-
-        // Write length prefix
-        if let Err(e) = socket.write_u32(resp_bytes.len() as u32).await {
-            error!("Failed to write length prefix: {}", e);
-            return;
-        }
-
-        // Write body
-        if let Err(e) = socket.write_all(&resp_bytes).await {
-            error!("Failed to write body: {}", e);
-            return;
-        }
+        send_response(socket, &mut crypto, &response).await?;
     }
+    Ok(())
+}
+
+async fn send_response(socket: &mut TcpStream, crypto: &mut CryptoSession, response: &Response) -> Result<()> {
+    let resp_bytes = serde_json::to_vec(response)?;
+    let ciphertext = crypto.encrypt(&resp_bytes)?;
+    
+    socket.write_u32(ciphertext.len() as u32).await?;
+    socket.write_all(&ciphertext).await?;
+    Ok(())
 }
 
 fn verify_login(state: &AppState, pub_key_b64: &str, sig_b64: &str, challenge: &str) -> bool {

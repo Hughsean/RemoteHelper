@@ -1,4 +1,12 @@
+pub mod crypto;
+
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Handshake {
+    ClientHello { public_key: String },
+    ServerHello { public_key: String },
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Request {

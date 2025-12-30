@@ -3,7 +3,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
 };
 use base64::prelude::*;
-use common::{Request, Response, ServiceAction};
+use common::{Request, Response, ServiceAction, Handshake, crypto::CryptoSession};
 use ed25519_dalek::{Signer, SigningKey};
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
@@ -11,12 +11,9 @@ use serde::Deserialize;
 use sha2::Sha256;
 use std::sync::LazyLock;
 use std::sync::Mutex;
-use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio_rustls::client::TlsStream;
-use tokio_rustls::TlsConnector;
-use rustls::pki_types::ServerName;
+use x25519_dalek::PublicKey;
 
 // Global state to hold the decrypted private key
 static SIGNING_KEY: LazyLock<Mutex<Option<(SigningKey, String)>>> =
@@ -25,7 +22,12 @@ static SIGNING_KEY: LazyLock<Mutex<Option<(SigningKey, String)>>> =
 static SERVER_ADDRESS: LazyLock<Mutex<String>> =
     LazyLock::new(|| Mutex::new("frp-egg.com:28450".to_string()));
 
-static CONNECTION: LazyLock<tokio::sync::Mutex<Option<TlsStream<TcpStream>>>> =
+struct EncryptedConnection {
+    stream: TcpStream,
+    crypto: CryptoSession,
+}
+
+static CONNECTION: LazyLock<tokio::sync::Mutex<Option<EncryptedConnection>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(None));
 
 #[derive(Deserialize)]
@@ -36,7 +38,7 @@ struct KeyFile {
     nonce: String,
 }
 
-async fn connect_and_auth() -> Result<TlsStream<TcpStream>, String> {
+async fn connect_and_auth() -> Result<EncryptedConnection, String> {
     // 1. Check if we are authenticated (have a key)
     let (signing_key, pub_key) = {
         let guard = SIGNING_KEY
@@ -54,49 +56,43 @@ async fn connect_and_auth() -> Result<TlsStream<TcpStream>, String> {
         guard.clone()
     };
     
-    let stream = TcpStream::connect(&addr)
+    let mut stream = TcpStream::connect(&addr)
         .await
         .map_err(|e| format!("Failed to connect to server: {}", e))?;
 
-    // TLS Handshake
-    let mut root_store = rustls::RootCertStore::empty();
-    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    // --- Handshake Phase ---
+    // 1. Generate Client Key
+    let (secret, client_public) = common::crypto::generate_ephemeral();
+    let client_pub_b64 = BASE64_STANDARD.encode(client_public.as_bytes());
+
+    // 2. Send ClientHello
+    let hello = Handshake::ClientHello { public_key: client_pub_b64 };
+    let hello_bytes = serde_json::to_vec(&hello).map_err(|e| e.to_string())?;
+    stream.write_u32(hello_bytes.len() as u32).await.map_err(|e| e.to_string())?;
+    stream.write_all(&hello_bytes).await.map_err(|e| e.to_string())?;
+
+    // 3. Read ServerHello
+    let len = stream.read_u32().await.map_err(|e| e.to_string())? as usize;
+    let mut buf = vec![0u8; len];
+    stream.read_exact(&mut buf).await.map_err(|e| e.to_string())?;
+    let server_hello: Handshake = serde_json::from_slice(&buf).map_err(|e| e.to_string())?;
     
-    // Allow invalid certs for now (self-signed) or use native certs
-    // For strict security, we should pin the cert or use a proper CA.
-    // Here we use native certs + webpki roots.
-    let certs = rustls_native_certs::load_native_certs();
-    for cert in certs.certs {
-        root_store.add(cert).ok();
-    }
+    let server_pub_bytes = match server_hello {
+        Handshake::ServerHello { public_key } => BASE64_STANDARD.decode(public_key).map_err(|e| e.to_string())?,
+        _ => return Err("Expected ServerHello".to_string()),
+    };
 
-    // Embed and trust the self-signed certificate
-    // This allows the client to connect to our server without installing the cert in the OS
-    const CERT_BYTES: &[u8] = include_bytes!("../../../cert.pem");
-    let mut reader = std::io::BufReader::new(std::io::Cursor::new(CERT_BYTES));
-    for cert in rustls_pemfile::certs(&mut reader) {
-        if let Ok(cert) = cert {
-            root_store.add(cert).ok();
-        }
-    }
+    // 4. Initialize Crypto Session
+    let server_public_key = PublicKey::from(TryInto::<[u8; 32]>::try_into(server_pub_bytes).unwrap());
+    let shared_secret = secret.diffie_hellman(&server_public_key);
+    let crypto = CryptoSession::new(shared_secret.to_bytes(), false); // is_server = false
 
-    let config = rustls::ClientConfig::builder()
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
-        
-    let connector = TlsConnector::from(Arc::new(config));
-    let domain = addr.split(':').next().unwrap_or("localhost");
-    let server_name = ServerName::try_from(domain)
-        .map_err(|_| "Invalid server name".to_string())?
-        .to_owned();
+    let mut conn = EncryptedConnection { stream, crypto };
 
-    let mut stream = connector.connect(server_name, stream).await
-        .map_err(|e| format!("TLS handshake failed: {}", e))?;
-
-    // 3. Perform Login Handshake
+    // --- Login Phase (Encrypted) ---
     // 3.1 Get Challenge
-    send_raw_request(&mut stream, Request::GetChallenge).await?;
-    let resp = read_raw_response(&mut stream).await?;
+    send_raw_request(&mut conn, Request::GetChallenge).await?;
+    let resp = read_raw_response(&mut conn).await?;
     let challenge = match resp {
         Response::Challenge(c) => c,
         Response::Error(e) => return Err(format!("Server error during handshake: {}", e)),
@@ -112,7 +108,7 @@ async fn connect_and_auth() -> Result<TlsStream<TcpStream>, String> {
 
     // 3.3 Send Login
     send_raw_request(
-        &mut stream,
+        &mut conn,
         Request::Login {
             public_key: pub_key,
             signature: signature_str,
@@ -120,9 +116,9 @@ async fn connect_and_auth() -> Result<TlsStream<TcpStream>, String> {
     )
     .await?;
 
-    let resp = read_raw_response(&mut stream).await?;
+    let resp = read_raw_response(&mut conn).await?;
     match resp {
-        Response::Ok => Ok(stream), // Login success
+        Response::Ok => Ok(conn), // Login success
         Response::Error(e) => Err(format!("Login failed: {}", e)),
         _ => return Err("Unexpected response during login".to_string()),
     }
@@ -136,14 +132,12 @@ async fn send_request(req: Request) -> Result<Response, String> {
     }
 
     // Try sending with current connection
-    let stream = guard.as_mut().ok_or("Connection not initialized".to_string())?;
+    let conn = guard.as_mut().ok_or("Connection not initialized".to_string())?;
     
-    // We need to handle the error here. If send or read fails, we reconnect.
     let result = async {
-        // Add timeout for the whole operation (send + receive)
         tokio::time::timeout(std::time::Duration::from_secs(5), async {
-            send_raw_request(stream, req.clone()).await?;
-            read_raw_response(stream).await
+            send_raw_request(conn, req.clone()).await?;
+            read_raw_response(conn).await
         })
         .await
         .map_err(|_| "Request timed out".to_string())?
@@ -152,18 +146,14 @@ async fn send_request(req: Request) -> Result<Response, String> {
     match result {
         Ok(resp) => Ok(resp),
         Err(e) => {
-            // Failed, assume broken connection. Reconnect.
-            // Only retry if it's not a logic error from server (which would be Ok(Response::Error))
-            // But here we catch network/timeout errors.
             log::warn!("Request failed ({}). Reconnecting...", e);
             *guard = None;
             *guard = Some(connect_and_auth().await?);
-            let stream = guard.as_mut().ok_or("Connection not initialized".to_string())?;
+            let conn = guard.as_mut().ok_or("Connection not initialized".to_string())?;
             
-            // Retry once with timeout
             let resp = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-                send_raw_request(stream, req).await?;
-                read_raw_response(stream).await
+                send_raw_request(conn, req).await?;
+                read_raw_response(conn).await
             })
             .await
             .map_err(|_| "Retry request timed out".to_string())??;
@@ -173,31 +163,39 @@ async fn send_request(req: Request) -> Result<Response, String> {
     }
 }
 
-async fn send_raw_request(stream: &mut TlsStream<TcpStream>, req: Request) -> Result<(), String> {
-    let req_bytes =
-        serde_json::to_vec(&req).map_err(|e| format!("Failed to serialize request: {}", e))?;
-    stream
-        .write_u32(req_bytes.len() as u32)
+async fn send_raw_request(conn: &mut EncryptedConnection, req: Request) -> Result<(), String> {
+    let req_bytes = serde_json::to_vec(&req).map_err(|e| format!("Failed to serialize request: {}", e))?;
+    
+    // Encrypt
+    let ciphertext = conn.crypto.encrypt(&req_bytes).map_err(|e| format!("Encryption failed: {}", e))?;
+
+    conn.stream
+        .write_u32(ciphertext.len() as u32)
         .await
         .map_err(|e| format!("Failed to write length: {}", e))?;
-    stream
-        .write_all(&req_bytes)
+    conn.stream
+        .write_all(&ciphertext)
         .await
         .map_err(|e| format!("Failed to write body: {}", e))?;
     Ok(())
 }
 
-async fn read_raw_response(stream: &mut TlsStream<TcpStream>) -> Result<Response, String> {
-    let len = stream
+async fn read_raw_response(conn: &mut EncryptedConnection) -> Result<Response, String> {
+    let len = conn.stream
         .read_u32()
         .await
         .map_err(|e| format!("Failed to read length: {}", e))? as usize;
+    
     let mut buf = vec![0u8; len];
-    stream
+    conn.stream
         .read_exact(&mut buf)
         .await
         .map_err(|e| format!("Failed to read body: {}", e))?;
-    serde_json::from_slice(&buf).map_err(|e| format!("Failed to deserialize: {}", e))
+    
+    // Decrypt
+    let plaintext = conn.crypto.decrypt(&buf).map_err(|e| format!("Decryption failed: {}", e))?;
+
+    serde_json::from_slice(&plaintext).map_err(|e| format!("Failed to deserialize: {}", e))
 }
 
 #[tauri::command]

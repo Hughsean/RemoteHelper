@@ -7,12 +7,14 @@
   <title>服务监控(Hughsean)</title>
 </head>
 
-<body class="bg-slate-950 text-slate-200 font-sans min-h-screen flex flex-col animate-fade-in selection:bg-indigo-500/30 selection:text-indigo-200">
+<body
+  class="bg-slate-950 text-slate-200 font-sans min-h-screen flex flex-col animate-fade-in selection:bg-indigo-500/30 selection:text-indigo-200">
   <!-- Header -->
   <header
     class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800/50 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
     <div class="flex items-center gap-3">
-      <div class="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20 transition-transform hover:scale-105 hover:rotate-3">
+      <div
+        class="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20 transition-transform hover:scale-105 hover:rotate-3">
         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
@@ -40,8 +42,8 @@
           class="absolute inset-0 w-full h-full opacity-0 cursor-pointer [&>option]:bg-slate-800 [&>option]:text-slate-200">
           <option value="100">0.1s</option>
           <option value="500">0.5s</option>
-          <option value="1000">1s</option>
-          <option value="3000" selected>3s</option>
+          <option value="1000" selected>1s</option>
+          <option value="3000">3s</option>
           <option value="10000">10s</option>
           <option value="custom">自定义...</option>
           <option value="0">暂停</option>
@@ -89,8 +91,11 @@
                   class="bg-slate-950/50 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 block w-48 pl-9 p-2 placeholder-slate-500 transition-all duration-300 hover:border-slate-600"
                   onchange="authenticate()" />
                 <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-400 transition-colors" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                    </path>
                   </svg>
                 </div>
               </div>
@@ -99,7 +104,8 @@
                   class="bg-slate-950/50 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 block w-64 pl-10 p-2 placeholder-slate-500 transition-all duration-300 hover:border-slate-600"
                   onchange="authenticate()" />
                 <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-400 transition-colors" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11.536 11l-.993.993a1 1 0 00-.293.707v1.414a1 1 0 00.293.707l1.414 1.414a1 1 0 00.707.293h1.414a1 1 0 00.707-.293l.993-.993A6 6 0 0121 9zM7 11V7a5 5 0 0110 0v4">
                     </path>
@@ -137,27 +143,28 @@
 
           <div class="p-5 border-t border-slate-800/50 bg-slate-900/30 flex flex-col gap-3">
             <div class="grid grid-cols-2 gap-4">
-            <button onclick="controlAll('start')"
-              class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg shadow-emerald-900/20 active:scale-95 active:shadow-none hover:shadow-emerald-500/20">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z">
-                </path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              全部启动
-            </button>
-            <button onclick="controlAll('stop')"
-              class="flex items-center justify-center gap-2 w-full bg-rose-600 hover:bg-rose-500 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg shadow-rose-900/20 active:scale-95 active:shadow-none hover:shadow-rose-500/20">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z">
-                </path>
-              </svg>
-              全部停止
-            </button>
+              <button onclick="controlAll('start')"
+                class="flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg shadow-emerald-900/20 active:scale-95 active:shadow-none hover:shadow-emerald-500/20">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z">
+                  </path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                全部启动
+              </button>
+              <button onclick="controlAll('stop')"
+                class="flex items-center justify-center gap-2 w-full bg-rose-600 hover:bg-rose-500 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-lg shadow-rose-900/20 active:scale-95 active:shadow-none hover:shadow-rose-500/20">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z">
+                  </path>
+                </svg>
+                全部停止
+              </button>
             </div>
             <button onclick="openAddServiceModal()"
               class="flex items-center justify-center gap-2 w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 border border-slate-600 hover:border-slate-500 active:scale-95">
@@ -193,7 +200,9 @@
                 <span id="cpu-val" class="text-sm font-bold text-white">--%</span>
               </div>
               <div class="w-full bg-slate-800/50 rounded-full h-2.5 overflow-hidden">
-                <div id="cpu-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]" style="width: 0%">
+                <div id="cpu-bar"
+                  class="bg-blue-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                  style="width: 0%">
                 </div>
               </div>
             </div>
@@ -205,7 +214,8 @@
                 <span id="mem-val" class="text-sm font-bold text-white">-- / --</span>
               </div>
               <div class="w-full bg-slate-800/50 rounded-full h-2.5 overflow-hidden">
-                <div id="mem-bar" class="bg-indigo-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                <div id="mem-bar"
+                  class="bg-indigo-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
                   style="width: 0%"></div>
               </div>
             </div>
@@ -220,7 +230,8 @@
                 <span id="gpu-val" class="text-sm font-bold text-white">N/A</span>
               </div>
               <div class="w-full bg-slate-800/50 rounded-full h-2.5 overflow-hidden">
-                <div id="gpu-bar" class="bg-purple-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+                <div id="gpu-bar"
+                  class="bg-purple-500 h-2.5 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(168,85,247,0.5)]"
                   style="width: 0%"></div>
               </div>
             </div>
@@ -243,8 +254,8 @@
               </svg>
               性能趋势
             </h2>
-            <svg id="chart-chevron" class="w-5 h-5 text-slate-500 transform transition-transform group-hover:text-white" fill="none"
-              stroke="currentColor" viewBox="0 0 24 24">
+            <svg id="chart-chevron" class="w-5 h-5 text-slate-500 transform transition-transform group-hover:text-white"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>
           </div>
@@ -258,33 +269,44 @@
 
   <!-- Add Service Modal -->
   <div id="add-service-modal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onclick="closeAddServiceModal()"></div>
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onclick="closeAddServiceModal()">
+    </div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform transition-all scale-100">
+      <div
+        class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-md transform transition-all scale-100">
         <div class="p-6 space-y-4">
           <h3 class="text-lg font-semibold text-white flex items-center gap-2">
             <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6">
+              </path>
             </svg>
             添加临时服务
           </h3>
           <div class="space-y-3">
             <div>
               <label class="block text-xs font-medium text-slate-400 mb-1">服务描述</label>
-              <input type="text" id="new-svc-desc" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" placeholder="例如: My Web Server">
+              <input type="text" id="new-svc-desc"
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                placeholder="例如: My Web Server">
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-400 mb-1">可执行文件路径</label>
-              <input type="text" id="new-svc-path" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" placeholder="C:\Path\To\app.exe">
+              <input type="text" id="new-svc-path"
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                placeholder="C:\Path\To\app.exe">
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-400 mb-1">参数 (可选, 空格分隔)</label>
-              <input type="text" id="new-svc-args" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" placeholder="-c config.json">
+              <input type="text" id="new-svc-args"
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                placeholder="-c config.json">
             </div>
           </div>
           <div class="flex justify-end gap-3 pt-2">
-            <button onclick="closeAddServiceModal()" class="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">取消</button>
-            <button onclick="confirmAddService()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-900/20 transition-all active:scale-95">添加</button>
+            <button onclick="closeAddServiceModal()"
+              class="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">取消</button>
+            <button onclick="confirmAddService()"
+              class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-900/20 transition-all active:scale-95">添加</button>
           </div>
         </div>
       </div>
