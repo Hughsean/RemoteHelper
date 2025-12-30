@@ -23,7 +23,7 @@ fn load_private_key(path: &str) -> std::io::Result<rustls::pki_types::PrivateKey
     rustls_pemfile::private_key(&mut reader)?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No private key found"))
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     let file_appender = tracing_appender::rolling::never("logs", "server.log");
@@ -48,10 +48,11 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    tracing::info!("\n\n================================================================================");
+    // tracing::info!("\n\n================================================================================");
     tracing::info!("Starting RemoteHelper Server Instance");
-    tracing::info!("================================================================================");
-
+    // tracing::info!("================================================================================");
+    tracing::info!("Waiting for Network Connection... 20 seconds");
+    tokio::time::sleep(Duration::from_secs(20)).await;
     // Load configuration
     let config = AppConfig::load()?;
     tracing::info!("Configuration loaded successfully.");
@@ -189,7 +190,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
-
+    tracing::info!("Shutdown complete\n\n\n\n");
     Ok(())
 }
 
