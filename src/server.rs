@@ -5,9 +5,10 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use rand::Rng;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio_rustls::server::TlsStream;
 use tracing::{error, info, warn};
 
-pub async fn handle_connection(mut socket: TcpStream, state: AppState) {
+pub async fn handle_connection(mut socket: TlsStream<TcpStream>, state: AppState) {
     let mut buf = [0; 5 * 1024]; // 5 KB buffer
     let mut authenticated = false;
     let mut current_challenge: Option<String> = None;
@@ -35,6 +36,11 @@ pub async fn handle_connection(mut socket: TcpStream, state: AppState) {
             Ok(r) => r,
             Err(e) => {
                 error!("Invalid JSON: {}", e);
+                let err_resp = Response::Error(format!("Invalid JSON request: {}", e));
+                if let Ok(bytes) = serde_json::to_vec(&err_resp) {
+                    let _ = socket.write_u32(bytes.len() as u32).await;
+                    let _ = socket.write_all(&bytes).await;
+                }
                 continue;
             }
         };
@@ -139,33 +145,38 @@ fn verify_login(state: &AppState, pub_key_b64: &str, sig_b64: &str, challenge: &
 
 async fn process_authenticated_request(req: Request, state: &AppState) -> Response {
     match req {
-        Request::GetStatus => {
-            let (cpu, mem, total, uptime) = {
+        Request::GetStatus { interval_ms } => {
+            // Update refresh interval if provided
+            if let Some(ms) = interval_ms {
+                if ms >= 100 {
+                    let mut lock = state.refresh_interval.write().await;
+                    if *lock != ms {
+                        *lock = ms;
+                        state.update_notify.notify_one();
+                    }
+                }
+            }
+
+            let (cpu, mem, total, uptime, cpu_model) = {
                 let sys = state.sys.read().await;
+                let cpu_model = sys.cpus().first().map(|c| c.brand().to_string()).unwrap_or_default();
                 (
                     sys.global_cpu_usage(),
                     sys.used_memory(),
                     sys.total_memory(),
                     sysinfo::System::uptime(),
+                    cpu_model,
                 )
             };
 
-            let (gpu_usage, gpu_memory_usage, gpu_total_memory) = {
-                let nvml_lock = state.nvml.read().await;
-                if let Some(nvml) = &*nvml_lock {
-                    if let Ok(device) = nvml.device_by_index(0) {
-                        let usage = device.utilization_rates().map(|r| r.gpu).ok();
-                        let (mem, total) = device
-                            .memory_info()
-                            .map(|i| (Some(i.used), Some(i.total)))
-                            .unwrap_or((None, None));
-                        (usage, mem, total)
-                    } else {
-                        (None, None, None)
-                    }
-                } else {
-                    (None, None, None)
-                }
+            let (gpu_usage, gpu_memory_usage, gpu_total_memory, gpu_model) = {
+                let cache = state.gpu_cache.read().await;
+                (
+                    cache.usage,
+                    cache.memory_used,
+                    cache.memory_total,
+                    cache.model.clone(),
+                )
             };
 
             Response::Status(StatusData {
@@ -176,12 +187,15 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 gpu_usage,
                 gpu_memory_usage,
                 gpu_total_memory,
+                cpu_model,
+                gpu_model,
             })
         }
         Request::ListServices => {
             let mut services = Vec::new();
             let processes = state.service_processes.read().await;
 
+            // Static services
             for (id, svc_config) in state.config.service.iter().enumerate() {
                 let running = processes.contains_key(&id);
                 let pid = processes.get(&id).map(|c| c.id()).flatten();
@@ -193,14 +207,40 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                     pid,
                 });
             }
+
+            // Dynamic services
+            let dynamic = state.dynamic_services.read().await;
+            let offset = state.config.service.len();
+            for (i, svc_config) in dynamic.iter().enumerate() {
+                let id = offset + i;
+                let running = processes.contains_key(&id);
+                let pid = processes.get(&id).map(|c| c.id()).flatten();
+
+                services.push(ServiceData {
+                    id,
+                    description: svc_config.description.clone(),
+                    running,
+                    pid,
+                });
+            }
+
             Response::Services(services)
         }
         Request::ControlService { id, action } => {
-            if id >= state.config.service.len() {
+            let static_count = state.config.service.len();
+            let dynamic_count = state.dynamic_services.read().await.len();
+
+            if id >= static_count + dynamic_count {
                 return Response::Error("Service ID out of range".to_string());
             }
 
-            if !state.config.service[id].allow_web_control {
+            let allowed = if id < static_count {
+                state.config.service[id].allow_web_control
+            } else {
+                true
+            };
+
+            if !allowed {
                 return Response::Error("Web control is disabled for this service".to_string());
             }
 
@@ -218,6 +258,22 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                     Err(e) => Response::Error(e.to_string()),
                 },
             }
+        }
+        Request::AddService {
+            description,
+            exe_path,
+            args,
+        } => {
+            let mut dynamic = state.dynamic_services.write().await;
+            let id = state.config.service.len() + dynamic.len();
+            dynamic.push(crate::config::ServiceConfig {
+                description,
+                exe_path,
+                args,
+                auto_start: false,
+                allow_web_control: true,
+            });
+            Response::ServiceAdded(id)
         }
         _ => Response::Error("Invalid request state".to_string()),
     }

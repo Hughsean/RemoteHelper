@@ -14,9 +14,22 @@ pub struct WebPanelConfig {
     pub enabled: bool,
     pub local_port: u16,
     pub frpc_exe_path: String,
-    pub frpc_arg: String,
+    #[serde(default)]
+    pub frpc_args: Vec<String>,
     #[serde(default)]
     pub authorized_keys: Vec<String>,
+    #[serde(default = "default_cert_path")]
+    pub cert_path: String,
+    #[serde(default = "default_key_path")]
+    pub key_path: String,
+}
+
+fn default_cert_path() -> String {
+    "cert.pem".to_string()
+}
+
+fn default_key_path() -> String {
+    "key.pem".to_string()
 }
 
 #[derive(Debug, Deserialize, Clone)]

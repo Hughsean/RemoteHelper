@@ -6,28 +6,65 @@ mod state;
 use crate::config::AppConfig;
 use crate::state::AppState;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio_rustls::TlsAcceptor;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+fn load_certs(path: &str) -> std::io::Result<Vec<rustls::pki_types::CertificateDer<'static>>> {
+    let certfile = std::fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(certfile);
+    rustls_pemfile::certs(&mut reader).collect()
+}
+
+fn load_private_key(path: &str) -> std::io::Result<rustls::pki_types::PrivateKeyDer<'static>> {
+    let keyfile = std::fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(keyfile);
+    rustls_pemfile::private_key(&mut reader)?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No private key found"))
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
+    let file_appender = tracing_appender::rolling::never("logs", "server.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::layer()
                 .with_file(true)
-                .with_line_number(true),
+                .with_line_number(true)
+                .with_writer(std::io::stdout)
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_file(true)
+                .with_line_number(true)
+                .with_ansi(false)
+                .with_writer(non_blocking)
         )
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
-    tracing::info!("Starting RemoteHelper...");
+    tracing::info!("\n\n================================================================================");
+    tracing::info!("Starting RemoteHelper Server Instance");
+    tracing::info!("================================================================================");
 
     // Load configuration
     let config = AppConfig::load()?;
     tracing::info!("Configuration loaded successfully.");
+
+    // Load TLS Config
+    let certs = load_certs(&config.web_panel.cert_path)?;
+    let key = load_private_key(&config.web_panel.key_path)?;
+
+    let tls_config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
+    let acceptor = TlsAcceptor::from(Arc::new(tls_config));
 
     // Initialize state
     let state = AppState::new(config.clone());
@@ -35,13 +72,41 @@ async fn main() -> anyhow::Result<()> {
     // Start background monitoring task
     let monitor_state = state.clone();
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_millis(500));
         loop {
-            interval.tick().await;
+            let interval_ms = *monitor_state.refresh_interval.read().await;
+            
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_millis(interval_ms)) => {
+                    // Timer expired, refresh
+                }
+                _ = monitor_state.update_notify.notified() => {
+                    // Config changed, wake up immediately (and refresh)
+                }
+            }
+
             {
                 let mut sys = monitor_state.sys.write().await;
                 sys.refresh_cpu_all();
                 sys.refresh_memory();
+            }
+
+            // Update GPU Cache
+            {
+                let nvml_lock = monitor_state.nvml.read().await;
+                let mut cache = monitor_state.gpu_cache.write().await;
+                
+                if let Some(nvml) = &*nvml_lock {
+                    if let Ok(device) = nvml.device_by_index(0) {
+                        cache.usage = device.utilization_rates().map(|r| r.gpu).ok();
+                        let (mem, total) = device
+                            .memory_info()
+                            .map(|i| (Some(i.used), Some(i.total)))
+                            .unwrap_or((None, None));
+                        cache.memory_used = mem;
+                        cache.memory_total = total;
+                        cache.model = device.name().ok();
+                    }
+                }
             }
         }
     });
@@ -78,9 +143,17 @@ async fn main() -> anyhow::Result<()> {
                 match listener.accept().await {
                     Ok((socket, addr)) => {
                         tracing::info!("New connection from {}", addr);
+                        let acceptor = acceptor.clone();
                         let state = server_state.clone();
                         tokio::spawn(async move {
-                            server::handle_connection(socket, state).await;
+                            match acceptor.accept(socket).await {
+                                Ok(tls_stream) => {
+                                    server::handle_connection(tls_stream, state).await;
+                                }
+                                Err(e) => {
+                                    tracing::error!("TLS handshake failed: {}", e);
+                                }
+                            }
                         });
                     }
                     Err(e) => {

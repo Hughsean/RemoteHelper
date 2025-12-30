@@ -11,14 +11,22 @@ use serde::Deserialize;
 use sha2::Sha256;
 use std::sync::LazyLock;
 use std::sync::Mutex;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-
-const SERVER_ADDR: &str = "frp-egg.com:28450";
+use tokio_rustls::client::TlsStream;
+use tokio_rustls::TlsConnector;
+use rustls::pki_types::ServerName;
 
 // Global state to hold the decrypted private key
 static SIGNING_KEY: LazyLock<Mutex<Option<(SigningKey, String)>>> =
     LazyLock::new(|| Mutex::new(None));
+
+static SERVER_ADDRESS: LazyLock<Mutex<String>> =
+    LazyLock::new(|| Mutex::new("frp-egg.com:28450".to_string()));
+
+static CONNECTION: LazyLock<tokio::sync::Mutex<Option<TlsStream<TcpStream>>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(None));
 
 #[derive(Deserialize)]
 struct KeyFile {
@@ -28,7 +36,7 @@ struct KeyFile {
     nonce: String,
 }
 
-async fn send_request(req: Request) -> Result<Response, String> {
+async fn connect_and_auth() -> Result<TlsStream<TcpStream>, String> {
     // 1. Check if we are authenticated (have a key)
     let (signing_key, pub_key) = {
         let guard = SIGNING_KEY
@@ -41,9 +49,49 @@ async fn send_request(req: Request) -> Result<Response, String> {
     };
 
     // 2. Connect
-    let mut stream = TcpStream::connect(SERVER_ADDR)
+    let addr = {
+        let guard = SERVER_ADDRESS.lock().map_err(|_| "Failed to lock server address".to_string())?;
+        guard.clone()
+    };
+    
+    let stream = TcpStream::connect(&addr)
         .await
         .map_err(|e| format!("Failed to connect to server: {}", e))?;
+
+    // TLS Handshake
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    
+    // Allow invalid certs for now (self-signed) or use native certs
+    // For strict security, we should pin the cert or use a proper CA.
+    // Here we use native certs + webpki roots.
+    let certs = rustls_native_certs::load_native_certs();
+    for cert in certs.certs {
+        root_store.add(cert).ok();
+    }
+
+    // Embed and trust the self-signed certificate
+    // This allows the client to connect to our server without installing the cert in the OS
+    const CERT_BYTES: &[u8] = include_bytes!("../../../cert.pem");
+    let mut reader = std::io::BufReader::new(std::io::Cursor::new(CERT_BYTES));
+    for cert in rustls_pemfile::certs(&mut reader) {
+        if let Ok(cert) = cert {
+            root_store.add(cert).ok();
+        }
+    }
+
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+        
+    let connector = TlsConnector::from(Arc::new(config));
+    let domain = addr.split(':').next().unwrap_or("localhost");
+    let server_name = ServerName::try_from(domain)
+        .map_err(|_| "Invalid server name".to_string())?
+        .to_owned();
+
+    let mut stream = connector.connect(server_name, stream).await
+        .map_err(|e| format!("TLS handshake failed: {}", e))?;
 
     // 3. Perform Login Handshake
     // 3.1 Get Challenge
@@ -74,17 +122,58 @@ async fn send_request(req: Request) -> Result<Response, String> {
 
     let resp = read_raw_response(&mut stream).await?;
     match resp {
-        Response::Ok => {} // Login success
-        Response::Error(e) => return Err(format!("Login failed: {}", e)),
+        Response::Ok => Ok(stream), // Login success
+        Response::Error(e) => Err(format!("Login failed: {}", e)),
         _ => return Err("Unexpected response during login".to_string()),
     }
-
-    // 4. Send Actual Request
-    send_raw_request(&mut stream, req).await?;
-    read_raw_response(&mut stream).await
 }
 
-async fn send_raw_request(stream: &mut TcpStream, req: Request) -> Result<(), String> {
+async fn send_request(req: Request) -> Result<Response, String> {
+    let mut guard = CONNECTION.lock().await;
+
+    if guard.is_none() {
+        *guard = Some(connect_and_auth().await?);
+    }
+
+    // Try sending with current connection
+    let stream = guard.as_mut().ok_or("Connection not initialized".to_string())?;
+    
+    // We need to handle the error here. If send or read fails, we reconnect.
+    let result = async {
+        // Add timeout for the whole operation (send + receive)
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            send_raw_request(stream, req.clone()).await?;
+            read_raw_response(stream).await
+        })
+        .await
+        .map_err(|_| "Request timed out".to_string())?
+    }.await;
+
+    match result {
+        Ok(resp) => Ok(resp),
+        Err(e) => {
+            // Failed, assume broken connection. Reconnect.
+            // Only retry if it's not a logic error from server (which would be Ok(Response::Error))
+            // But here we catch network/timeout errors.
+            log::warn!("Request failed ({}). Reconnecting...", e);
+            *guard = None;
+            *guard = Some(connect_and_auth().await?);
+            let stream = guard.as_mut().ok_or("Connection not initialized".to_string())?;
+            
+            // Retry once with timeout
+            let resp = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                send_raw_request(stream, req).await?;
+                read_raw_response(stream).await
+            })
+            .await
+            .map_err(|_| "Retry request timed out".to_string())??;
+            
+            Ok(resp)
+        }
+    }
+}
+
+async fn send_raw_request(stream: &mut TlsStream<TcpStream>, req: Request) -> Result<(), String> {
     let req_bytes =
         serde_json::to_vec(&req).map_err(|e| format!("Failed to serialize request: {}", e))?;
     stream
@@ -98,7 +187,7 @@ async fn send_raw_request(stream: &mut TcpStream, req: Request) -> Result<(), St
     Ok(())
 }
 
-async fn read_raw_response(stream: &mut TcpStream) -> Result<Response, String> {
+async fn read_raw_response(stream: &mut TlsStream<TcpStream>) -> Result<Response, String> {
     let len = stream
         .read_u32()
         .await
@@ -112,7 +201,13 @@ async fn read_raw_response(stream: &mut TcpStream) -> Result<Response, String> {
 }
 
 #[tauri::command]
-pub async fn authenticate(passphrase: String) -> Result<String, String> {
+pub async fn authenticate(passphrase: String, address: String) -> Result<String, String> {
+    // Update address
+    {
+        let mut guard = SERVER_ADDRESS.lock().map_err(|_| "Failed to lock server address".to_string())?;
+        *guard = address;
+    }
+
     // Hardcoded key data
     let key_file = KeyFile {
         pub_key: "cD4nEfSeBQF+aWZZzLusNAcUthuq2uw4kZRlCPhkgkQ=".to_string(),
@@ -143,7 +238,7 @@ pub async fn authenticate(passphrase: String) -> Result<String, String> {
         .decrypt(nonce, enc_bytes.as_ref())
         .map_err(|_| "Invalid passphrase or corrupted key file".to_string())?;
 
-    let signing_key = SigningKey::from_bytes(priv_key_bytes.as_slice().try_into().unwrap());
+    let signing_key = SigningKey::from_bytes(priv_key_bytes.as_slice().try_into().map_err(|_| "Invalid key length".to_string())?);
 
     // Store in global state
     {
@@ -157,8 +252,8 @@ pub async fn authenticate(passphrase: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn get_status() -> Result<common::StatusData, String> {
-    match send_request(Request::GetStatus).await? {
+pub async fn get_status(interval_ms: Option<u64>) -> Result<common::StatusData, String> {
+    match send_request(Request::GetStatus { interval_ms }).await? {
         Response::Status(data) => Ok(data),
         Response::Error(e) => Err(e),
         _ => Err("Unexpected response".to_string()),
@@ -190,6 +285,21 @@ pub async fn control_service(id: usize, action: String) -> Result<(), String> {
     .await?
     {
         Response::Ok => Ok(()),
+        Response::Error(e) => Err(e),
+        _ => Err("Unexpected response".to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn add_service(description: String, exe_path: String, args: Vec<String>) -> Result<usize, String> {
+    match send_request(Request::AddService {
+        description,
+        exe_path,
+        args,
+    })
+    .await?
+    {
+        Response::ServiceAdded(id) => Ok(id),
         Response::Error(e) => Err(e),
         _ => Err("Unexpected response".to_string()),
     }

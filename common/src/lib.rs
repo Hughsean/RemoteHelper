@@ -1,21 +1,28 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Request {
     GetChallenge,
     Login {
         public_key: String,
         signature: String,
     },
-    GetStatus,
+    GetStatus {
+        interval_ms: Option<u64>,
+    },
     ListServices,
     ControlService {
         id: usize,
         action: ServiceAction,
     },
+    AddService {
+        description: String,
+        exe_path: String,
+        args: Vec<String>,
+    },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ServiceAction {
     Start,
     Stop,
@@ -29,6 +36,7 @@ pub enum Response {
     Error(String),
     Status(StatusData),
     Services(Vec<ServiceData>),
+    ServiceAdded(usize),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,6 +48,8 @@ pub struct StatusData {
     pub gpu_usage: Option<u32>,
     pub gpu_memory_usage: Option<u64>,
     pub gpu_total_memory: Option<u64>,
+    pub cpu_model: String,
+    pub gpu_model: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

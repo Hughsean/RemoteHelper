@@ -1,6 +1,6 @@
-# Release v0.3.0
+# Release v1.0.0
 
-## 新增功能 (New Features)
+## 🚀 新增功能 (New Features)
 
 - **macOS 菜单栏常驻应用**:
   - 应用启动后默认隐藏 Dock 图标，仅在菜单栏显示托盘图标。
@@ -20,13 +20,19 @@
   - 界面右上角新增“退出应用”按钮。
   - 托盘菜单新增“退出”选项。
 
-## 构建与部署 (Build & CI)
+## 🔒 安全 (Security)
 
-- **macOS DMG 构建**:
-  - 新增 GitHub Actions 工作流，自动构建 macOS `.dmg` 安装包。
+- **客户端密钥加密**:
+  - 新增客户端密钥生成与加密存储功能。
+  - 增强了通信安全性。
+
+## 🛠 构建与部署 (Build & CI)
+
+- **自动化构建**:
+  - 新增 GitHub Actions 工作流，自动构建 Windows (`.exe`/`.msi`) 与 macOS (`.dmg`) 安装包。
   - 支持 Apple Silicon (M1/M2/M3) 和 Intel 架构。
 
-## 修复 (Fixes)
+## 🐛 修复 (Fixes)
 
 - 修复了应用启动时的白屏闪烁问题。
 - 修复了列表刷新时的闪烁问题。

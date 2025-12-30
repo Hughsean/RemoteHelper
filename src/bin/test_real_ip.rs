@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // 4. Get Status
-    send_request(&mut stream, Request::GetStatus).await?;
+    send_request(&mut stream, Request::GetStatus { interval_ms: None }).await?;
     let resp = read_response(&mut stream).await?;
 
     match resp {

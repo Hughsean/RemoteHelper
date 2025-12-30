@@ -14,6 +14,12 @@ fn quit_app(app: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .setup(|app| {
             // 设置 macOS 仅在菜单栏显示 (隐藏 Dock 图标)
             #[cfg(target_os = "macos")]
@@ -23,8 +29,9 @@ pub fn run() {
             let show_i = MenuItem::with_id(app, "show", "显示/隐藏", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
+            let icon = app.default_window_icon().cloned().ok_or_else(|| anyhow::anyhow!("No default window icon found"))?;
             let _tray = TrayIconBuilder::with_id("tray")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(icon)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -67,17 +74,22 @@ pub fn run() {
             // macOS 保持隐藏，等待用户点击菜单栏图标
             #[cfg(not(target_os = "macos"))]
             {
-                let main_window = app.get_webview_window("main").unwrap();
-                tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-                    main_window.show().unwrap();
-                });
+                if let Some(main_window) = app.get_webview_window("main") {
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                        if let Err(e) = main_window.show() {
+                            log::error!("Failed to show main window: {}", e);
+                        }
+                    });
+                }
             }
             Ok(())
         })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                window.hide().unwrap();
+                if let Err(e) = window.hide() {
+                    log::error!("Failed to hide window: {}", e);
+                }
                 api.prevent_close();
             }
             _ => {}
@@ -87,6 +99,7 @@ pub fn run() {
             client::get_status,
             client::list_services,
             client::control_service,
+            client::add_service,
             quit_app
         ])
         .run(tauri::generate_context!())

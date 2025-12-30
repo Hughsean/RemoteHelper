@@ -4,7 +4,7 @@ local_port = 8088
 # 可选：指定用于隧道的 frpc 可执行路径，缺省为 frpc.exe（需在 PATH 或工作目录）
 frpc_exe_path = "E:\\UserData\\.Exe\\frpc.exe"
 # 这里的 arg 是用于 Web 控制台的 frpc 隧道参数
-frpc_arg = "-f 84loylo19t7ut88mbr1afkyhynfbulg8:24958801"
+frpc_args = ["-f", "84loylo19t7ut88mbr1afkyhynfbulg8:24958801"]
 # Web 控制台访问密钥
 authorized_keys = [
     "cD4nEfSeBQF+aWZZzLusNAcUthuq2uw4kZRlCPhkgkQ="

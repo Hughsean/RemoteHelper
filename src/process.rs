@@ -1,14 +1,29 @@
 use crate::state::AppState;
 use anyhow::{Context, Result};
+use std::fs;
 use std::process::Stdio;
 use tokio::process::Command;
 
+fn get_log_file(name: &str) -> Result<std::fs::File> {
+    fs::create_dir_all("logs")?;
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(format!("logs/{}.log", name))?;
+    Ok(file)
+}
+
 pub async fn start_service(state: &AppState, id: usize) -> Result<()> {
-    let config = &state
-        .config
-        .service
-        .get(id)
-        .context("Service ID not found")?;
+    let static_count = state.config.service.len();
+    let config = if id < static_count {
+        state.config.service[id].clone()
+    } else {
+        let dynamic = state.dynamic_services.read().await;
+        dynamic
+            .get(id - static_count)
+            .cloned()
+            .context("Service ID not found")?
+    };
 
     if is_service_running(state, id).await {
         return Ok(()); // Already running
@@ -16,10 +31,15 @@ pub async fn start_service(state: &AppState, id: usize) -> Result<()> {
 
     tracing::info!("Starting service: {}", config.description);
 
+    let log_name = format!("service_{}", id);
+    // We need separate handles for stdout and stderr because Stdio::from consumes the file
+    let stdout_file = get_log_file(&log_name).context("Failed to create log file")?;
+    let stderr_file = get_log_file(&log_name).context("Failed to create log file")?;
+
     let mut cmd = Command::new(&config.exe_path);
     cmd.args(&config.args)
-        .stdout(Stdio::null()) // TODO: Redirect to log file?
-        .stderr(Stdio::null());
+        .stdout(Stdio::from(stdout_file))
+        .stderr(Stdio::from(stderr_file));
 
     // Windows specific: create no window if needed, but tokio::process usually handles this for background tasks
     // For now, simple spawn
@@ -85,11 +105,13 @@ pub async fn start_web_tunnel(state: &AppState) -> Result<()> {
     let config = &state.config.web_panel;
     tracing::info!("Starting Web Panel Tunnel...");
 
-    // Split args string into parts (simple split by space, might need better parsing for quotes)
-    let args: Vec<&str> = config.frpc_arg.split_whitespace().collect();
+    let stdout_file = get_log_file("web_tunnel").context("Failed to create log file")?;
+    let stderr_file = get_log_file("web_tunnel").context("Failed to create log file")?;
 
     let mut cmd = Command::new(&config.frpc_exe_path);
-    cmd.args(args).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.args(&config.frpc_args)
+        .stdout(Stdio::from(stdout_file))
+        .stderr(Stdio::from(stderr_file));
 
     let child = cmd.spawn().context("Failed to spawn Web Tunnel")?;
 

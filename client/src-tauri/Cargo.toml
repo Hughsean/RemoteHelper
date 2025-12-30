@@ -1,6 +1,6 @@
 [package]
 name = "RemoteHelper"
-version = "0.3.0"
+version = "1.0.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -25,6 +25,7 @@ serde = { version = "1", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-log = "2"
+tauri-plugin-single-instance = "2"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 rand = "0.8.5"
 base64 = "0.22.1"
@@ -32,3 +33,9 @@ aes-gcm = "0.10.3"
 pbkdf2 = "0.12.2"
 hmac = "0.12.1"
 sha2 = "0.10.9"
+tokio-rustls = "0.26.4"
+rustls = "0.23.35"
+rustls-native-certs = "0.8.3"
+webpki-roots = "1.0.4"
+rustls-pemfile = "2.2.0"
+anyhow = "1.0.100"

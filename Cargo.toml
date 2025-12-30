@@ -1,10 +1,9 @@
 [package]
 name = "RemoteHelperServer"
-version = "0.3.0"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.100"
 nvml-wrapper = "0.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.148"
@@ -21,8 +20,13 @@ aes-gcm = "0.10.3"
 pbkdf2 = "0.12.2"
 hmac = "0.12.1"
 sha2 = "0.10.9"
+tracing-appender = "0.2.4"
+tokio-rustls = "0.26.4"
+rustls = "0.23.35"
+rustls-pemfile = "2.2.0"
+rcgen = "0.14.6"
+anyhow = "1.0.100"
 
 
 [workspace]
-members = ["common","client/src-tauri"]
-
+members = ["common", "client/src-tauri"]
