@@ -1,7 +1,7 @@
 [workspace]
 members = ["common", "client/src-tauri"]
 [workspace.package]
-version = "1.0.4"
+version = "1.0.5"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
 edition = "2024"
 license = "MIT"
