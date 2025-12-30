@@ -1,6 +1,6 @@
 [package]
-name = "tauri-app"
-version = "0.2.1"
+name = "RemoteHelper"
+version = "0.3.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -23,7 +23,7 @@ tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-log = "2"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 rand = "0.8.5"

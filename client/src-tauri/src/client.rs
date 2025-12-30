@@ -9,7 +9,6 @@ use hmac::Hmac;
 use pbkdf2::pbkdf2;
 use serde::Deserialize;
 use sha2::Sha256;
-use std::fs::File;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
