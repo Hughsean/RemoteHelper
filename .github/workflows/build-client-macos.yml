@@ -16,12 +16,46 @@ jobs:
                 include:
                     - platform: "macos-latest" # ARM64
                       args: "--target aarch64-apple-darwin"
-                    - platform: "macos-13" # Intel
-                      args: "--target x86_64-apple-darwin"
 
         runs-on: ${{ matrix.platform }}
         steps:
             - uses: actions/checkout@v4
+
+            - name: Validate tag version and release uniqueness
+              if: startsWith(github.ref, 'refs/tags/')
+              uses: actions/github-script@v7
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const ref = context.ref;
+                      const tag = ref.replace('refs/tags/', '');
+                      const versionFromTag = tag.startsWith('v') ? tag.slice(1) : tag;
+
+                      const fs = require('fs');
+                      const path = require('path');
+                      const configPath = path.join(process.env.GITHUB_WORKSPACE, 'client', 'src-tauri', 'tauri.conf.json');
+                      const tauriConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                      const versionFromConfig = tauriConfig.version;
+
+                      if (versionFromConfig !== versionFromTag) {
+                          core.setFailed(`Tag version ${versionFromTag} does not match tauri.conf.json version ${versionFromConfig}`);
+                          return;
+                      }
+
+                      try {
+                          await github.rest.repos.getReleaseByTag({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              tag,
+                          });
+                          core.setFailed(`Release for tag ${tag} already exists; aborting.`);
+                      } catch (error) {
+                          if (error.status === 404) {
+                              core.info(`No existing release for ${tag}; continuing.`);
+                          } else {
+                              throw error;
+                          }
+                      }
 
             - name: Install pnpm
               uses: pnpm/action-setup@v4
@@ -48,33 +82,33 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   projectPath: client
-                  tagName: app-v__VERSION__
-                  releaseName: "App v__VERSION__"
+                  tagName: ${{ github.ref_name }}
+                  releaseName: "RemoteHelper v__VERSION__"
                   releaseBody: |
                     RemoteHelper 1.0.1 (macOS only)
 
-                    新增
-                    - TLS 全链路：支持自定义证书/私钥，客户端内置自签名 + 系统根证书双信任。
-                    - Ed25519 挑战-响应登录：服务器 `authorized_keys` 白名单，客户端私钥 PBKDF2 + AES-256-GCM 加密。
-                    - GPU 监控：占用率、显存占用/总量与型号；同步返回 CPU 型号。
-                    - 自定义刷新频率（≥100ms）与可折叠性能图表，末端标签显示当前曲线。
-                    - 本地自定义服务：在客户端填路径与参数，持久化本地，一键注册并启动到服务器。
+                    ✨ 新增
+                    - 🔒 TLS 全链路：支持自定义证书/私钥，客户端内置自签名 + 系统根证书双信任。
+                    - 🔑 Ed25519 挑战-响应登录：服务器 `authorized_keys` 白名单，客户端私钥 PBKDF2 + AES-256-GCM 加密。
+                    - 📊 GPU 监控：占用率、显存占用/总量与型号；同步返回 CPU 型号。
+                    - 📈 自定义刷新频率（≥100ms）与可折叠性能图表，末端标签显示当前曲线。
+                    - 🛠️ 本地自定义服务：在客户端填路径与参数，持久化本地，一键注册并启动到服务器。
 
-                    改进
-                    - 请求超时与自动重连，失败后透明重试。
-                    - 服务列表增量更新，操作按钮按运行态禁用，减少刷新闪烁。
-                    - 服务/隧道输出独立写入 logs/，便于排查。
-                    - 记忆地址与口令，启动即自动认证并刷新。
+                    🚀 改进
+                    - 🔄 请求超时与自动重连，失败后透明重试。
+                    - ⚡ 服务列表增量更新，操作按钮按运行态禁用，减少刷新闪烁。
+                    - 📝 服务/隧道输出独立写入 logs/，便于排查。
+                    - 💾 记忆地址与口令，启动即自动认证并刷新。
 
-                    修复
-                    - GPU 不可用时展示 N/A，避免占用条异常。
-                    - 刷新间隔最低 100ms，暂停态不再发送错误请求。
+                    🐛 修复
+                    - 🚫 GPU 不可用时展示 N/A，避免占用条异常。
+                    - ⏱️ 刷新间隔最低 100ms，暂停态不再发送错误请求。
 
-                    分发
-                    - 仅提供 macOS 安装包：Apple Silicon 与 Intel 双架构 .dmg，随发布附带。
+                    📦 分发
+                    - 🍎 仅提供 macOS 安装包：Apple Silicon 与 Intel 双架构 .dmg，随发布附带。
 
-                    使用提示
-                    - 服务器 config.toml 配置证书路径、authorized_keys 与 frpc 路径；客户端首登需输入解锁口令与服务器地址。
-                    releaseDraft: true
+                    💡 使用提示
+                    - ⚙️ 服务器 config.toml 配置证书路径、authorized_keys 与 frpc 路径；客户端首登需输入解锁口令与服务器地址。
+                    releaseDraft: false
                     prerelease: false
                     args: ${{ matrix.args }}
