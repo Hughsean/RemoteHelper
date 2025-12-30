@@ -131,20 +131,65 @@ function initChart() {
   const endLabelPlugin = {
     id: 'endLabel',
     afterDatasetsDraw(chart: any) {
-      const { ctx } = chart;
+      const { ctx, chartArea } = chart;
+      const labelsToDraw: { y: number, label: string, color: string, x: number }[] = [];
+
       chart.data.datasets.forEach((dataset: any, i: number) => {
         const meta = chart.getDatasetMeta(i);
         if (!meta.hidden && meta.data.length > 0) {
           const lastPoint = meta.data[meta.data.length - 1];
-          ctx.save();
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillStyle = dataset.borderColor;
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(dataset.label, lastPoint.x + 8, lastPoint.y);
-          ctx.restore();
+          labelsToDraw.push({
+            y: lastPoint.y,
+            x: lastPoint.x,
+            label: dataset.label,
+            color: dataset.borderColor
+          });
         }
       });
+
+      // Sort by Y position to handle overlap from top to bottom
+      labelsToDraw.sort((a, b) => a.y - b.y);
+
+      // Adjust positions to prevent overlap
+      const minSpacing = 14; // Minimum vertical spacing
+      
+      // 1. Forward pass: Push down
+      for (let i = 1; i < labelsToDraw.length; i++) {
+        const prev = labelsToDraw[i - 1];
+        const curr = labelsToDraw[i];
+        if (curr.y - prev.y < minSpacing) {
+          curr.y = prev.y + minSpacing;
+        }
+      }
+
+      // 2. Boundary check: Push up if overflowing bottom
+      if (chartArea && labelsToDraw.length > 0) {
+        const bottomLimit = chartArea.bottom - 6; // Keep 6px padding for text height
+        let last = labelsToDraw[labelsToDraw.length - 1];
+        
+        if (last.y > bottomLimit) {
+          last.y = bottomLimit;
+          // Backward pass: Push up previous labels if they now overlap
+          for (let i = labelsToDraw.length - 2; i >= 0; i--) {
+            const next = labelsToDraw[i + 1];
+            const curr = labelsToDraw[i];
+            if (next.y - curr.y < minSpacing) {
+              curr.y = next.y - minSpacing;
+            }
+          }
+        }
+      }
+
+      ctx.save();
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+
+      labelsToDraw.forEach(item => {
+        ctx.fillStyle = item.color;
+        ctx.fillText(item.label, item.x + 8, item.y);
+      });
+      ctx.restore();
     }
   };
 
@@ -408,44 +453,54 @@ function renderServices(services: ServiceInfo[]) {
 
     const svc = item.data;
     const statusBadge = svc.running
-      ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-400 rounded-full animate-pulse"></span>运行中 (PID: ${svc.pid})
-               </span>`
-      : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                ${item.type === 'local' ? '未注册' : '已停止'}
-               </span>`;
+      ? `<div class="flex flex-col items-start">
+           <span class="inline-flex items-center justify-center w-16 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-1">
+             <span class="w-1.5 h-1.5 mr-1 bg-emerald-400 rounded-full animate-pulse"></span>运行中
+           </span>
+           <span class="text-[10px] font-mono text-slate-500 pl-1">PID: ${svc.pid}</span>
+         </div>`
+      : `<div class="flex flex-col items-start">
+           <span class="inline-flex items-center justify-center w-16 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 mb-1">
+             <span class="w-1.5 h-1.5 mr-1 bg-rose-400 rounded-full"></span>${item.type === 'local' ? '未注册' : '已停止'}
+           </span>
+           <span class="text-[10px] font-mono text-slate-600 pl-1">NULL</span>
+         </div>`;
 
     let actions = '';
     if (item.type === 'server') {
         actions = `
+            <div class="flex gap-1 justify-end">
             <button onclick="controlService(${svc.id}, 'start')" 
-                class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+                class="text-[10px] px-2 py-1 rounded border border-slate-700 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 whitespace-nowrap"
                 ${svc.running ? "disabled" : ""}>启动</button>
             <button onclick="controlService(${svc.id}, 'stop')" 
-                class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-rose-900/30 hover:text-rose-400 hover:border-rose-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+                class="text-[10px] px-2 py-1 rounded border border-slate-700 hover:bg-rose-900/30 hover:text-rose-400 hover:border-rose-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 whitespace-nowrap"
                 ${!svc.running ? "disabled" : ""}>停止</button>
             <button onclick="controlService(${svc.id}, 'restart')" 
-                class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-indigo-900/30 hover:text-indigo-400 hover:border-indigo-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95"
+                class="text-[10px] px-2 py-1 rounded border border-slate-700 hover:bg-indigo-900/30 hover:text-indigo-400 hover:border-indigo-800 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 whitespace-nowrap"
                 ${!svc.running ? "disabled" : ""}>重启</button>
+            </div>
         `;
     } else {
         actions = `
+            <div class="flex gap-1 justify-end">
             <button onclick="registerAndStart(${item.index})" 
-                class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800 transition-all duration-200 active:scale-95">
+                class="text-[10px] px-2 py-1 rounded border border-slate-700 hover:bg-emerald-900/30 hover:text-emerald-400 hover:border-emerald-800 transition-all duration-200 active:scale-95 whitespace-nowrap">
                 启动
             </button>
             <button onclick="deleteCustomService(${item.index})" 
-                class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-rose-900/30 hover:text-rose-400 hover:border-rose-800 transition-all duration-200 active:scale-95">
+                class="text-[10px] px-2 py-1 rounded border border-slate-700 hover:bg-rose-900/30 hover:text-rose-400 hover:border-rose-800 transition-all duration-200 active:scale-95 whitespace-nowrap">
                 删除
             </button>
+            </div>
         `;
     }
 
     tr.innerHTML = `
-            <td class="px-6 py-4 font-mono text-slate-500 text-xs">${item.type === 'server' ? '#' + svc.id : 'Local'}</td>
-            <td class="px-6 py-4 font-medium text-slate-200">${svc.description}</td>
-            <td class="px-6 py-4">${statusBadge}</td>
-            <td class="px-6 py-4 text-right space-x-2">
+            <td class="px-4 py-3 font-mono text-slate-500 text-xs align-top pt-4">${item.type === 'server' ? '#' + svc.id : 'Local'}</td>
+            <td class="px-4 py-3 font-medium text-slate-200 align-top pt-4 truncate" title="${svc.description}">${svc.description}</td>
+            <td class="px-4 py-3 align-top">${statusBadge}</td>
+            <td class="px-4 py-3 text-right align-top pt-3">
                 ${actions}
             </td>
         `;

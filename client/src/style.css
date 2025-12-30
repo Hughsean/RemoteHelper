@@ -42,6 +42,6 @@
 }
 
 .hover-card {
-  @apply transition-all duration-300 hover:border-slate-600 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1;
+  @apply transition-all duration-300 hover:border-slate-600 hover:shadow-2xl hover:shadow-indigo-500/10;
 }
 
