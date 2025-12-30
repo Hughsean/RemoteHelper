@@ -1,10 +1,10 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit},
+    Aes256Gcm,
     aead::consts::U12,
     aead::generic_array::GenericArray,
-    Aes256Gcm,
+    aead::{Aead, KeyInit},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use rand_core::OsRng;
 use sha2::{Digest, Sha256};
 use x25519_dalek::{EphemeralSecret, PublicKey};
@@ -13,7 +13,7 @@ type AeadNonce = GenericArray<u8, U12>;
 
 pub struct CryptoSession {
     cipher: Aes256Gcm,
-    // We use a simple counter for nonce. 
+    // We use a simple counter for nonce.
     // AES-GCM nonce is 12 bytes (96 bits).
     // We'll use 4 bytes of fixed prefix (derived from handshake) + 8 bytes counter.
     // Or just 12 bytes counter if keys are unique.
@@ -50,19 +50,21 @@ impl CryptoSession {
         if is_server_sender {
             bytes[0] |= 0x80;
         }
-        
+
         // Put counter in last 8 bytes (big endian)
         let counter_bytes = counter.to_be_bytes();
         bytes[4..12].copy_from_slice(&counter_bytes);
-        
+
         GenericArray::clone_from_slice(&bytes)
     }
 
     pub fn encrypt(&mut self, plaintext: &[u8]) -> Result<Vec<u8>> {
         let nonce = Self::get_nonce(self.write_nonce, self.is_server);
         self.write_nonce += 1;
-        
-        let ciphertext = self.cipher.encrypt(&nonce, plaintext)
+
+        let ciphertext = self
+            .cipher
+            .encrypt(&nonce, plaintext)
             .map_err(|e| anyhow!("Encryption failed: {}", e))?;
         Ok(ciphertext)
     }
@@ -72,7 +74,9 @@ impl CryptoSession {
         let nonce = Self::get_nonce(self.read_nonce, !self.is_server);
         self.read_nonce += 1;
 
-        let plaintext = self.cipher.decrypt(&nonce, ciphertext)
+        let plaintext = self
+            .cipher
+            .decrypt(&nonce, ciphertext)
             .map_err(|e| anyhow!("Decryption failed: {}", e))?;
         Ok(plaintext)
     }

@@ -3,7 +3,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
 };
 use base64::prelude::*;
-use common::{Request, Response, ServiceAction, Handshake, crypto::CryptoSession};
+use common::{Handshake, Request, Response, ServiceAction, crypto::CryptoSession};
 use ed25519_dalek::{Signer, SigningKey};
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
@@ -52,10 +52,12 @@ async fn connect_and_auth() -> Result<EncryptedConnection, String> {
 
     // 2. Connect
     let addr = {
-        let guard = SERVER_ADDRESS.lock().map_err(|_| "Failed to lock server address".to_string())?;
+        let guard = SERVER_ADDRESS
+            .lock()
+            .map_err(|_| "Failed to lock server address".to_string())?;
         guard.clone()
     };
-    
+
     let mut stream = TcpStream::connect(&addr)
         .await
         .map_err(|e| format!("Failed to connect to server: {}", e))?;
@@ -66,24 +68,38 @@ async fn connect_and_auth() -> Result<EncryptedConnection, String> {
     let client_pub_b64 = BASE64_STANDARD.encode(client_public.as_bytes());
 
     // 2. Send ClientHello
-    let hello = Handshake::ClientHello { public_key: client_pub_b64 };
+    let hello = Handshake::ClientHello {
+        public_key: client_pub_b64,
+    };
     let hello_bytes = serde_json::to_vec(&hello).map_err(|e| e.to_string())?;
-    stream.write_u32(hello_bytes.len() as u32).await.map_err(|e| e.to_string())?;
-    stream.write_all(&hello_bytes).await.map_err(|e| e.to_string())?;
+    stream
+        .write_u32(hello_bytes.len() as u32)
+        .await
+        .map_err(|e| e.to_string())?;
+    stream
+        .write_all(&hello_bytes)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // 3. Read ServerHello
     let len = stream.read_u32().await.map_err(|e| e.to_string())? as usize;
     let mut buf = vec![0u8; len];
-    stream.read_exact(&mut buf).await.map_err(|e| e.to_string())?;
+    stream
+        .read_exact(&mut buf)
+        .await
+        .map_err(|e| e.to_string())?;
     let server_hello: Handshake = serde_json::from_slice(&buf).map_err(|e| e.to_string())?;
-    
+
     let server_pub_bytes = match server_hello {
-        Handshake::ServerHello { public_key } => BASE64_STANDARD.decode(public_key).map_err(|e| e.to_string())?,
+        Handshake::ServerHello { public_key } => BASE64_STANDARD
+            .decode(public_key)
+            .map_err(|e| e.to_string())?,
         _ => return Err("Expected ServerHello".to_string()),
     };
 
     // 4. Initialize Crypto Session
-    let server_public_key = PublicKey::from(TryInto::<[u8; 32]>::try_into(server_pub_bytes).unwrap());
+    let server_public_key =
+        PublicKey::from(TryInto::<[u8; 32]>::try_into(server_pub_bytes).unwrap());
     let shared_secret = secret.diffie_hellman(&server_public_key);
     let crypto = CryptoSession::new(shared_secret.to_bytes(), false); // is_server = false
 
@@ -132,8 +148,10 @@ async fn send_request(req: Request) -> Result<Response, String> {
     }
 
     // Try sending with current connection
-    let conn = guard.as_mut().ok_or("Connection not initialized".to_string())?;
-    
+    let conn = guard
+        .as_mut()
+        .ok_or("Connection not initialized".to_string())?;
+
     let result = async {
         tokio::time::timeout(std::time::Duration::from_secs(5), async {
             send_raw_request(conn, req.clone()).await?;
@@ -141,7 +159,8 @@ async fn send_request(req: Request) -> Result<Response, String> {
         })
         .await
         .map_err(|_| "Request timed out".to_string())?
-    }.await;
+    }
+    .await;
 
     match result {
         Ok(resp) => Ok(resp),
@@ -149,25 +168,31 @@ async fn send_request(req: Request) -> Result<Response, String> {
             log::warn!("Request failed ({}). Reconnecting...", e);
             *guard = None;
             *guard = Some(connect_and_auth().await?);
-            let conn = guard.as_mut().ok_or("Connection not initialized".to_string())?;
-            
+            let conn = guard
+                .as_mut()
+                .ok_or("Connection not initialized".to_string())?;
+
             let resp = tokio::time::timeout(std::time::Duration::from_secs(5), async {
                 send_raw_request(conn, req).await?;
                 read_raw_response(conn).await
             })
             .await
             .map_err(|_| "Retry request timed out".to_string())??;
-            
+
             Ok(resp)
         }
     }
 }
 
 async fn send_raw_request(conn: &mut EncryptedConnection, req: Request) -> Result<(), String> {
-    let req_bytes = serde_json::to_vec(&req).map_err(|e| format!("Failed to serialize request: {}", e))?;
-    
+    let req_bytes =
+        serde_json::to_vec(&req).map_err(|e| format!("Failed to serialize request: {}", e))?;
+
     // Encrypt
-    let ciphertext = conn.crypto.encrypt(&req_bytes).map_err(|e| format!("Encryption failed: {}", e))?;
+    let ciphertext = conn
+        .crypto
+        .encrypt(&req_bytes)
+        .map_err(|e| format!("Encryption failed: {}", e))?;
 
     conn.stream
         .write_u32(ciphertext.len() as u32)
@@ -181,19 +206,23 @@ async fn send_raw_request(conn: &mut EncryptedConnection, req: Request) -> Resul
 }
 
 async fn read_raw_response(conn: &mut EncryptedConnection) -> Result<Response, String> {
-    let len = conn.stream
+    let len = conn
+        .stream
         .read_u32()
         .await
         .map_err(|e| format!("Failed to read length: {}", e))? as usize;
-    
+
     let mut buf = vec![0u8; len];
     conn.stream
         .read_exact(&mut buf)
         .await
         .map_err(|e| format!("Failed to read body: {}", e))?;
-    
+
     // Decrypt
-    let plaintext = conn.crypto.decrypt(&buf).map_err(|e| format!("Decryption failed: {}", e))?;
+    let plaintext = conn
+        .crypto
+        .decrypt(&buf)
+        .map_err(|e| format!("Decryption failed: {}", e))?;
 
     serde_json::from_slice(&plaintext).map_err(|e| format!("Failed to deserialize: {}", e))
 }
@@ -202,7 +231,9 @@ async fn read_raw_response(conn: &mut EncryptedConnection) -> Result<Response, S
 pub async fn authenticate(passphrase: String, address: String) -> Result<String, String> {
     // Update address
     {
-        let mut guard = SERVER_ADDRESS.lock().map_err(|_| "Failed to lock server address".to_string())?;
+        let mut guard = SERVER_ADDRESS
+            .lock()
+            .map_err(|_| "Failed to lock server address".to_string())?;
         *guard = address;
     }
 
@@ -236,7 +267,12 @@ pub async fn authenticate(passphrase: String, address: String) -> Result<String,
         .decrypt(nonce, enc_bytes.as_ref())
         .map_err(|_| "Invalid passphrase or corrupted key file".to_string())?;
 
-    let signing_key = SigningKey::from_bytes(priv_key_bytes.as_slice().try_into().map_err(|_| "Invalid key length".to_string())?);
+    let signing_key = SigningKey::from_bytes(
+        priv_key_bytes
+            .as_slice()
+            .try_into()
+            .map_err(|_| "Invalid key length".to_string())?,
+    );
 
     // Store in global state
     {
@@ -289,7 +325,11 @@ pub async fn control_service(id: usize, action: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn add_service(description: String, exe_path: String, args: Vec<String>) -> Result<usize, String> {
+pub async fn add_service(
+    description: String,
+    exe_path: String,
+    args: Vec<String>,
+) -> Result<usize, String> {
     match send_request(Request::AddService {
         description,
         exe_path,

@@ -1,8 +1,8 @@
 mod client;
 use tauri::{
+    Manager,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
 };
 
 #[tauri::command]
@@ -29,7 +29,10 @@ pub fn run() {
             let show_i = MenuItem::with_id(app, "show", "显示/隐藏", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
-            let icon = app.default_window_icon().cloned().ok_or_else(|| anyhow::anyhow!("No default window icon found"))?;
+            let icon = app
+                .default_window_icon()
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("No default window icon found"))?;
             let _tray = TrayIconBuilder::with_id("tray")
                 .icon(icon)
                 .menu(&menu)

@@ -20,14 +20,14 @@ async fn main() -> anyhow::Result<()> {
             tracing_subscriber::fmt::layer()
                 .with_file(true)
                 .with_line_number(true)
-                .with_writer(std::io::stdout)
+                .with_writer(std::io::stdout),
         )
         .with(
             tracing_subscriber::fmt::layer()
                 .with_file(true)
                 .with_line_number(true)
                 .with_ansi(false)
-                .with_writer(non_blocking)
+                .with_writer(non_blocking),
         )
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async move {
         loop {
             let interval_ms = *monitor_state.refresh_interval.read().await;
-            
+
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_millis(interval_ms)) => {
                     // Timer expired, refresh
@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
             {
                 let nvml_lock = monitor_state.nvml.read().await;
                 let mut cache = monitor_state.gpu_cache.write().await;
-                
+
                 if let Some(nvml) = &*nvml_lock {
                     if let Ok(device) = nvml.device_by_index(0) {
                         cache.usage = device.utilization_rates().map(|r| r.gpu).ok();
