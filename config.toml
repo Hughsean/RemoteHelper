@@ -6,8 +6,9 @@ frpc_exe_path = "E:\\UserData\\.Exe\\frpc.exe"
 # 这里的 arg 是用于 Web 控制台的 frpc 隧道参数
 frpc_arg = "-f 84loylo19t7ut88mbr1afkyhynfbulg8:24958801"
 # Web 控制台访问密钥
-auth_secret = "Fxs.2211"
-
+authorized_keys = [
+    "cD4nEfSeBQF+aWZZzLusNAcUthuq2uw4kZRlCPhkgkQ="
+]
 [[service]]
 description = "Remote Desktop Access"
 exe_path = "E:\\UserData\\.Exe\\frpc.exe"

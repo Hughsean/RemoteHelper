@@ -14,6 +14,13 @@ toml = "0.9.10"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 common = { path = "common" }
+ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
+rand = "0.8.5"
+base64 = "0.22.1"
+aes-gcm = "0.10.3"
+pbkdf2 = "0.12.2"
+hmac = "0.12.1"
+sha2 = "0.10.9"
 
 
 [workspace]

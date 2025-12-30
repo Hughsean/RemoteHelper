@@ -1,15 +1,15 @@
 mod config;
-mod state;
-mod server;
 mod process;
+mod server;
+mod state;
 
+use crate::config::AppConfig;
+use crate::state::AppState;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use crate::config::AppConfig;
-use crate::state::AppState;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     tracing_subscriber::registry()
@@ -18,7 +18,9 @@ async fn main() -> anyhow::Result<()> {
                 .with_file(true)
                 .with_line_number(true),
         )
-        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
         .init();
 
     tracing::info!("Starting RemoteHelper...");
@@ -33,11 +35,11 @@ async fn main() -> anyhow::Result<()> {
     // Start background monitoring task
     let monitor_state = state.clone();
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(2));
+        let mut interval = tokio::time::interval(Duration::from_millis(500));
         loop {
             interval.tick().await;
             {
-                let mut sys = monitor_state.sys.lock().unwrap();
+                let mut sys = monitor_state.sys.write().await;
                 sys.refresh_cpu_all();
                 sys.refresh_memory();
             }
@@ -57,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
     if let Err(e) = process::start_web_tunnel(&state).await {
         tracing::error!("Failed to start web tunnel: {}", e);
     }
-    
+
     // Keep a clone for cleanup
     let cleanup_state = state.clone();
 
@@ -65,9 +67,9 @@ async fn main() -> anyhow::Result<()> {
     let port = config.web_panel.local_port;
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Listening on {}", addr);
-    
+
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    
+
     // Accept loop
     let server_state = state.clone();
     tokio::select! {
@@ -92,10 +94,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Cleanup logic
     tracing::info!("Shutting down, killing child processes...");
-    
+
     // Kill service processes
     {
-        let mut processes = cleanup_state.service_processes.lock().unwrap();
+        let mut processes = cleanup_state.service_processes.write().await;
         for (id, child) in processes.iter_mut() {
             tracing::info!("Killing service process {}", id);
             if let Err(e) = child.start_kill() {
@@ -106,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Kill web tunnel
     {
-        let mut tunnel = cleanup_state.web_tunnel_process.lock().unwrap();
+        let mut tunnel = cleanup_state.web_tunnel_process.lock().await;
         if let Some(child) = tunnel.as_mut() {
             tracing::info!("Killing web tunnel process");
             if let Err(e) = child.start_kill() {
