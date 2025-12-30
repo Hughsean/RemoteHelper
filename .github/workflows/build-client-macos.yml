@@ -50,7 +50,31 @@ jobs:
                   projectPath: client
                   tagName: app-v__VERSION__
                   releaseName: "App v__VERSION__"
-                  releaseBody: "See the assets to download this version and install."
-                  releaseDraft: true
-                  prerelease: false
-                  args: ${{ matrix.args }}
+                  releaseBody: |
+                    RemoteHelper 1.0.1 (macOS only)
+
+                    新增
+                    - TLS 全链路：支持自定义证书/私钥，客户端内置自签名 + 系统根证书双信任。
+                    - Ed25519 挑战-响应登录：服务器 `authorized_keys` 白名单，客户端私钥 PBKDF2 + AES-256-GCM 加密。
+                    - GPU 监控：占用率、显存占用/总量与型号；同步返回 CPU 型号。
+                    - 自定义刷新频率（≥100ms）与可折叠性能图表，末端标签显示当前曲线。
+                    - 本地自定义服务：在客户端填路径与参数，持久化本地，一键注册并启动到服务器。
+
+                    改进
+                    - 请求超时与自动重连，失败后透明重试。
+                    - 服务列表增量更新，操作按钮按运行态禁用，减少刷新闪烁。
+                    - 服务/隧道输出独立写入 logs/，便于排查。
+                    - 记忆地址与口令，启动即自动认证并刷新。
+
+                    修复
+                    - GPU 不可用时展示 N/A，避免占用条异常。
+                    - 刷新间隔最低 100ms，暂停态不再发送错误请求。
+
+                    分发
+                    - 仅提供 macOS 安装包：Apple Silicon 与 Intel 双架构 .dmg，随发布附带。
+
+                    使用提示
+                    - 服务器 config.toml 配置证书路径、authorized_keys 与 frpc 路径；客户端首登需输入解锁口令与服务器地址。
+                    releaseDraft: true
+                    prerelease: false
+                    args: ${{ matrix.args }}
