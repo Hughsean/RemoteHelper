@@ -60,6 +60,14 @@ pub struct SystemInfo {
     pub gpu_total_memory: Option<u64>,
     pub cpu_model: String,
     pub gpu_model: Option<String>,
+    #[serde(default)]
+    pub network_tx_bytes: u64,
+    #[serde(default)]
+    pub network_rx_bytes: u64,
+    #[serde(default)]
+    pub network_tx_speed: u64,
+    #[serde(default)]
+    pub network_rx_speed: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]

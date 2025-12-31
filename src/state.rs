@@ -2,7 +2,7 @@ use crate::config::{AppConfig, ServiceConfig};
 use nvml_wrapper::Nvml;
 use std::collections::HashMap;
 use std::sync::Arc;
-use sysinfo::System;
+use sysinfo::{Networks, System};
 use tokio::process::Child;
 use tokio::sync::{Mutex, Notify, RwLock};
 
@@ -19,6 +19,7 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub dynamic_services: Arc<RwLock<Vec<ServiceConfig>>>,
     pub sys: Arc<RwLock<System>>,
+    pub networks: Arc<RwLock<Networks>>,
     pub nvml: Arc<RwLock<Option<Nvml>>>,
     pub gpu_cache: Arc<RwLock<GpuCache>>,
     pub refresh_interval: Arc<RwLock<u64>>,
@@ -34,6 +35,7 @@ impl AppState {
             config: Arc::new(config),
             dynamic_services: Arc::new(RwLock::new(Vec::new())),
             sys: Arc::new(RwLock::new(System::new_all())),
+            networks: Arc::new(RwLock::new(Networks::new_with_refreshed_list())),
             nvml: Arc::new(RwLock::new(Nvml::init().ok())),
             gpu_cache: Arc::new(RwLock::new(GpuCache::default())),
             refresh_interval: Arc::new(RwLock::new(1000)), // Default 1s

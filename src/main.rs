@@ -88,6 +88,10 @@ async fn main() -> anyhow::Result<()> {
                 sys.refresh_cpu_all();
                 sys.refresh_memory();
             }
+            {
+                let mut networks = monitor_state.networks.write().await;
+                networks.refresh(true);
+            }
 
             // Update GPU Cache
             {

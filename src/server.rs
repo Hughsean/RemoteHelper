@@ -210,19 +210,37 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 }
             }
 
-            let (cpu, mem, total, uptime, cpu_model) = {
+            let (cpu, mem, total, uptime, cpu_model, net_tx, net_rx, net_tx_spd, net_rx_spd) = {
                 let sys = state.sys.read().await;
+                let networks = state.networks.read().await;
                 let cpu_model = sys
                     .cpus()
                     .first()
                     .map(|c| c.brand().to_string())
                     .unwrap_or_default();
+
+                let mut tx = 0;
+                let mut rx = 0;
+                let mut tx_spd = 0;
+                let mut rx_spd = 0;
+
+                for (_name, data) in networks.iter() {
+                    tx += data.total_transmitted();
+                    rx += data.total_received();
+                    tx_spd += data.transmitted();
+                    rx_spd += data.received();
+                }
+
                 (
                     sys.global_cpu_usage(),
                     sys.used_memory(),
                     sys.total_memory(),
                     sysinfo::System::uptime(),
                     cpu_model,
+                    tx,
+                    rx,
+                    tx_spd,
+                    rx_spd,
                 )
             };
 
@@ -247,6 +265,10 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 gpu_total_memory,
                 cpu_model,
                 gpu_model,
+                network_tx_bytes: net_tx,
+                network_rx_bytes: net_rx,
+                network_tx_speed: net_tx_spd,
+                network_rx_speed: net_rx_spd,
             })
         }
         Request::ListServices => {
