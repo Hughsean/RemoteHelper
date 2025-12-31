@@ -2,15 +2,15 @@
 members = [
     "common",
     "client",
-    "app-rust",
-    "app-rust/src-tauri",
+    "app",
+    "app/src-tauri",
 ]
 [workspace.package]
 version = "2.0.0"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
 edition = "2024"
 license = "MIT"
-publish = false                                # 默认不发布，需要的子模块再覆盖
+publish = false
 
 [workspace.dependencies]
 nvml-wrapper = "0.11"
