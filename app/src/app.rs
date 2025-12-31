@@ -15,6 +15,7 @@ static LOGIN_CSS: Asset = asset!("/assets/css/login.css");
 static STATUS_CSS: Asset = asset!("/assets/css/status.css");
 static SERVICES_CSS: Asset = asset!("/assets/css/services.css");
 static CHART_CSS: Asset = asset!("/assets/css/chart.css");
+static FONT_MONO: Asset = asset!("/assets/fonts/LXGWWenKaiMono-Regular.woff2");
 
 pub fn App() -> Element {
     let mut authenticated = use_signal(|| false);
@@ -110,6 +111,17 @@ pub fn App() -> Element {
     };
 
     rsx! {
+        style {
+            "
+            @font-face {{
+                font-family: 'LXGW WenKai Mono';
+                src: url('{FONT_MONO}') format('woff2');
+                font-weight: normal;
+                font-style: normal;
+                font-display: swap;
+            }}
+            "
+        }
         link { rel: "stylesheet", href: BASE_CSS }
         link { rel: "stylesheet", href: HEADER_CSS }
         link { rel: "stylesheet", href: LOGIN_CSS }

@@ -8,7 +8,7 @@
 
 @media (min-width: 768px) {
   .status-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -20,6 +20,8 @@
   border: 1px solid rgba(255, 255, 255, 0.05);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .status-card:hover {

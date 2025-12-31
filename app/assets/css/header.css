@@ -90,6 +90,7 @@
   height: 2.25rem;
   box-sizing: border-box;
   transition: all 0.3s;
+  cursor: pointer;
 }
 
 .refresh-control:hover {
@@ -123,11 +124,47 @@
   font-weight: 500;
 }
 
-.refresh-select {
+.refresh-dropdown-menu {
   position: absolute;
-  inset: 0;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background-color: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--bg-slate-700);
+  border-radius: 0.5rem;
+  padding: 0.25rem;
   width: 100%;
-  height: 100%;
-  opacity: 0;
+  box-sizing: border-box;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  overflow: hidden;
+  animation: slideDown 0.2s ease-out;
+}
+
+.refresh-option {
+  padding: 0.5rem 0.75rem;
+  color: var(--text-slate-400);
+  font-size: 0.875rem;
   cursor: pointer;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.refresh-option:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-white);
+}
+
+.refresh-option.active {
+  background-color: var(--color-indigo-500);
+  color: white;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }

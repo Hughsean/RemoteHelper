@@ -5,23 +5,11 @@ use dioxus::prelude::*;
 pub fn SystemStatusDisplay(status: SystemInfo) -> Element {
     rsx! {
         div { class: "status-grid",
-            StatusCard {
-                title: "CPU 使用率",
-                value: format!("{:.1}%", status.cpu_usage),
-                subtext: status.cpu_model.clone(),
-                percent: status.cpu_usage,
-                color: "status-bar-red",
-            }
-            StatusCard {
-                title: "内存使用率",
-                value: if status.total_memory > 0 { format!("{:.1}%", (status.memory_usage as f32 / status.total_memory as f32) * 100.0) } else { "0.0%".to_string() },
-                subtext: format!(
-                    "{}/{} GB",
-                    status.memory_usage / 1024 / 1024 / 1024,
-                    status.total_memory / 1024 / 1024 / 1024,
-                ),
-                percent: if status.total_memory > 0 { (status.memory_usage as f32 / status.total_memory as f32) * 100.0 } else { 0.0 },
-                color: "status-bar-blue",
+            CpuCard {
+                cpu_usage: status.cpu_usage,
+                cpu_model: status.cpu_model.clone(),
+                memory_usage: status.memory_usage,
+                total_memory: status.total_memory,
             }
             if let Some(gpu_usage) = status.gpu_usage {
                 GpuStatusCard {
@@ -31,28 +19,57 @@ pub fn SystemStatusDisplay(status: SystemInfo) -> Element {
                     model: status.gpu_model.clone().unwrap_or_default(),
                 }
             }
-        
         }
     }
 }
 
 #[component]
-fn StatusCard(title: String, value: String, subtext: String, percent: f32, color: String) -> Element {
+fn CpuCard(
+    cpu_usage: f32,
+    cpu_model: String,
+    memory_usage: u64,
+    total_memory: u64
+) -> Element {
+    let mem_percent = if total_memory > 0 { (memory_usage as f32 / total_memory as f32) * 100.0 } else { 0.0 };
+    let used_gb = memory_usage as f64 / 1024.0 / 1024.0 / 1024.0;
+    let total_gb = total_memory as f64 / 1024.0 / 1024.0 / 1024.0;
+
     rsx! {
         div { class: "status-card",
             div { class: "status-header",
                 div {
-                    h3 { class: "status-title", "{title}" }
-                    div { class: "status-value", "{value}" }
+                    h3 { class: "status-title", "CPU & 内存" }
+                    div { class: "status-value", "{cpu_usage:.1}%" }
                 }
             }
-            div { class: "progress-track",
-                div {
-                    class: "progress-fill {color}",
-                    style: "width: {percent}%",
+
+            div { class: "mb-2",
+                div { class: "flex justify-between text-xs text-gray-400 mb-1",
+                    span { "CPU 利用率" }
+                    span { "{cpu_usage:.1}%" }
+                }
+                div { class: "progress-track",
+                    div {
+                        class: "progress-fill status-bar-red",
+                        style: "width: {cpu_usage}%",
+                    }
                 }
             }
-            div { class: "status-subtext", "{subtext}" }
+
+            div {
+                div { class: "flex justify-between text-xs text-gray-400 mb-1",
+                    span { "内存使用" }
+                    span { "{used_gb:.1}/{total_gb:.1} GB" }
+                }
+                div { class: "progress-track",
+                    div {
+                        class: "progress-fill status-bar-blue",
+                        style: "width: {mem_percent}%",
+                    }
+                }
+            }
+
+            div { class: "status-subtext mt-auto pt-2", "{cpu_model}" }
         }
     }
 }
@@ -115,7 +132,7 @@ fn GpuStatusCard(
                 }
             }
 
-            div { class: "status-subtext mt-2", "{model}" }
+            div { class: "status-subtext mt-auto", "{model}" }
         }
     }
 }

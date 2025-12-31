@@ -2,6 +2,8 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandler<u64>) -> Element {
+    let mut is_open = use_signal(|| false);
+
     let display_text = match refresh_interval {
         0 => "暂停",
         100 => "0.1s",
@@ -28,6 +30,15 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
             format!("{}s", secs)
         }
     };
+
+    let options = vec![
+        (100, "0.1s"),
+        (500, "0.5s"),
+        (1000, "1s"),
+        (3000, "3s"),
+        (10000, "5s"),
+        (0, "暂停"),
+    ];
 
     rsx! {
         header { class: "app-header",
@@ -66,30 +77,59 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
                 }
             }
             div { class: "header-right",
-                div { class: "refresh-control",
+                div {
+                    class: "refresh-control",
+                    onclick: move |_| is_open.set(!is_open()),
                     div { class: "refresh-display",
                         span { class: "refresh-label", "刷新间隔" }
                         div { class: "refresh-value-box",
                             span { class: "refresh-value", "{display_text}" }
+                            svg {
+                                class: "icon-xs",
+                                style: "width: 1rem; height: 1rem; color: #94a3b8; transition: transform 0.2s;",
+                                transform: if is_open() { "rotate(180)" } else { "rotate(0)" },
+                                fill: "none",
+                                stroke: "currentColor",
+                                view_box: "0 0 24 24",
+                                path {
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    stroke_width: "2",
+                                    d: "M19 9l-7 7-7-7",
+                                }
+                            }
                         }
                     }
-                    select {
-                        class: "refresh-select",
-                        onchange: move |evt| {
-                            if let Ok(val) = evt.value().parse::<u64>() {
-                                on_refresh_change.call(val);
+
+                    if is_open() {
+                        div { class: "refresh-dropdown-menu",
+                            for (val , label) in options {
+                                div {
+                                    class: if refresh_interval == val { "refresh-option active" } else { "refresh-option" },
+                                    onclick: move |evt| {
+                                        evt.stop_propagation();
+                                        on_refresh_change.call(val);
+                                        is_open.set(false);
+                                    },
+                                    span { "{label}" }
+                                    if refresh_interval == val {
+                                        svg {
+                                            class: "icon-xs",
+                                            style: "width: 1rem; height: 1rem;",
+                                            fill: "none",
+                                            stroke: "currentColor",
+                                            view_box: "0 0 24 24",
+                                            path {
+                                                stroke_linecap: "round",
+                                                stroke_linejoin: "round",
+                                                stroke_width: "2",
+                                                d: "M5 13l4 4L19 7",
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        },
-                        option { value: "100", selected: refresh_interval == 100, "0.1s" }
-                        option { value: "500", selected: refresh_interval == 500, "0.5s" }
-                        option { value: "1000", selected: refresh_interval == 1000, "1s" }
-                        option { value: "3000", selected: refresh_interval == 3000, "3s" }
-                        option {
-                            value: "10000",
-                            selected: refresh_interval == 10000,
-                            "5s"
                         }
-                        option { value: "0", selected: refresh_interval == 0, "暂停" }
                     }
                 }
 

@@ -1,4 +1,7 @@
-@import url("https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-web/style.css");
+/* @import url("https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-web/style.css"); */
+/* 移除以优化启动速度。如需使用该字体，请下载字体文件到本地并使用 @font-face 引入 */
+
+/* 字体定义已移至 app.rs 以确保正确打包 */
 
 :root {
   --bg-slate-950: #0b0e14; /* 更深的背景 */
@@ -27,7 +30,7 @@
   --chart-mem: #3b82f6;
   --chart-gpu: #d946ef;
 
-  --font-sans: "LXGW WenKai Screen", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "LXGW WenKai Mono", "LXGW WenKai Screen", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
