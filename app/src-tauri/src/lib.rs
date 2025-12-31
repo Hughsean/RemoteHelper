@@ -1,14 +1,10 @@
-mod client;
+mod command;
+
 use tauri::{
     Manager,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
-
-#[tauri::command]
-fn quit_app(app: tauri::AppHandle) {
-    app.exit(0);
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -55,14 +51,16 @@ pub fn run() {
                                 // Hide: switch back to Accessory so Dock stays hidden
                                 #[cfg(target_os = "macos")]
                                 {
-                                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                                    let _ = app
+                                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
                                 }
                                 let _ = window.hide();
                             } else {
                                 // Showing window: make app Regular so native full-screen works
                                 #[cfg(target_os = "macos")]
                                 {
-                                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                                    let _ =
+                                        app.set_activation_policy(tauri::ActivationPolicy::Regular);
                                 }
                                 let _ = window.show();
                                 let _ = window.set_focus();
@@ -83,14 +81,16 @@ pub fn run() {
                                 // Hide: switch back to Accessory so Dock stays hidden
                                 #[cfg(target_os = "macos")]
                                 {
-                                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                                    let _ = app
+                                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
                                 }
                                 let _ = window.hide();
                             } else {
                                 // Showing window: make app Regular so native full-screen works
                                 #[cfg(target_os = "macos")]
                                 {
-                                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                                    let _ =
+                                        app.set_activation_policy(tauri::ActivationPolicy::Regular);
                                 }
                                 let _ = window.show();
                                 let _ = window.set_focus();
@@ -133,12 +133,12 @@ pub fn run() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            client::authenticate,
-            client::get_status,
-            client::list_services,
-            client::control_service,
-            client::add_service,
-            quit_app
+            command::authenticate,
+            command::get_status,
+            command::list_services,
+            command::control_service,
+            command::add_service,
+            command::quit_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

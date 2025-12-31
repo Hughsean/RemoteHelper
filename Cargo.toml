@@ -1,26 +1,13 @@
 [workspace]
-members = ["common", "client/src-tauri"]
+members = ["common", "app/src-tauri", "client"]
 [workspace.package]
 version = "1.0.5"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
 edition = "2024"
 license = "MIT"
-# repository = "https://github.com/your/repo"
-publish = false # 默认不发布，需要的子模块再覆盖
+publish = false                                # 默认不发布，需要的子模块再覆盖
 
-
-
-[package]
-name = "RemoteHelperServer"
-# version = "1.0.4"
-# edition = "2024"
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
-license.workspace = true
-
-
-[dependencies]
+[workspace.dependencies]
 nvml-wrapper = "0.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.148"
@@ -29,7 +16,6 @@ tokio = { version = "1.48.0", features = ["full"] }
 toml = "0.9.10"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-common = { path = "common" }
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 rand = "0.8"
 base64 = "0.22.1"
@@ -38,8 +24,43 @@ pbkdf2 = "0.12.2"
 hmac = "0.12.1"
 sha2 = "0.10.9"
 tracing-appender = "0.2.4"
-# tokio-rustls = "0.26.4"
-# rustls = "0.23.35"
 rcgen = "0.14.6"
 anyhow = "1.0.100"
 x25519-dalek = "2.0.1"
+rand_core = "0.6"
+log = "0.4"
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+# workspace members
+common = { path = "common" }
+client = { path = "client" }
+
+
+[package]
+name = "RemoteHelperServer"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+
+[dependencies]
+common = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+nvml-wrapper = { workspace = true }
+sysinfo = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+pbkdf2 = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+aes-gcm = { workspace = true }
+x25519-dalek = { workspace = true }
+rcgen = { workspace = true }
