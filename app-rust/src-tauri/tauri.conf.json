@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Remote Helper",
+  "version": "0.1.0",
+  "identifier": "dev.hughsean",
+  "build": {
+    "beforeDevCommand": "dx serve --port 1420",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "dx bundle --release",
+    "frontendDist": "../dist/public"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Remote Helper",
+        "width": 800,
+        "height": 600,
+        "additionalBrowserArgs": "--disable-features=Autofill,PasswordManager"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

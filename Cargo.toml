@@ -1,32 +1,38 @@
 [workspace]
-members = ["common", "app/src-tauri", "client"]
+members = [
+    "common",
+    "app/src-tauri",
+    "client",
+    "app-rust",
+    "app-rust/src-tauri",
+]
 [workspace.package]
-version = "1.0.5"
+version = "2.0.0"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
 edition = "2024"
 license = "MIT"
 publish = false                                # 默认不发布，需要的子模块再覆盖
 
 [workspace.dependencies]
-nvml-wrapper = "0.11.0"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.148"
-sysinfo = "0.37.2"
-tokio = { version = "1.48.0", features = ["full"] }
-toml = "0.9.10"
-tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
+nvml-wrapper = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sysinfo = "0.37"
+tokio = { version = "1", features = ["full"] }
+toml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ed25519-dalek = { version = "2.2", features = ["rand_core"] }
 rand = "0.8"
-base64 = "0.22.1"
-aes-gcm = "0.10.3"
-pbkdf2 = "0.12.2"
-hmac = "0.12.1"
-sha2 = "0.10.9"
-tracing-appender = "0.2.4"
-rcgen = "0.14.6"
-anyhow = "1.0.100"
-x25519-dalek = "2.0.1"
+base64 = "0.22"
+aes-gcm = "0.10"
+pbkdf2 = "0.12"
+hmac = "0.12"
+sha2 = "0.10"
+tracing-appender = "0.2"
+rcgen = "0.14"
+anyhow = "1"
+x25519-dalek = "2.0"
 rand_core = "0.6"
 log = "0.4"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
