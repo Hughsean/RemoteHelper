@@ -1,4 +1,4 @@
-use crate::models::ServiceInfo;
+use common::ServiceInfo;
 use dioxus::prelude::*;
 
 #[component]

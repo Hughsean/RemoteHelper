@@ -1,6 +1,6 @@
 mod app;
-mod models;
-mod services;
+// mod models;
+mod command;
 mod components;
 
 use app::App;

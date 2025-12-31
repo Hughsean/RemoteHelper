@@ -1,11 +1,11 @@
 #![allow(non_snake_case)]
 
+use crate::command;
 use crate::components::{
     add_service_modal::AddServiceModal, header::Header, login::Login, service_list::ServiceList,
     system_status::SystemStatusDisplay,
 };
-use crate::models::{ServiceInfo, SystemInfo};
-use crate::services;
+// use crate::models::{ServiceInfo, SystemInfo};
 use dioxus::prelude::*;
 use std::time::Duration;
 
@@ -13,8 +13,8 @@ static CSS: Asset = asset!("/assets/styles.css");
 
 pub fn App() -> Element {
     let mut authenticated = use_signal(|| false);
-    let mut system_status = use_signal(|| SystemInfo::default());
-    let mut services = use_signal(|| Vec::<ServiceInfo>::new());
+    let mut system_status = use_signal(|| common::SystemInfo::default());
+    let mut services = use_signal(|| Vec::<common::ServiceInfo>::new());
     let mut refresh_interval = use_signal(|| 1000u64);
     let mut show_add_modal = use_signal(|| false);
     let mut error_msg = use_signal(|| Option::<String>::None);
@@ -25,11 +25,11 @@ pub fn App() -> Element {
             if authenticated() {
                 let interval = refresh_interval();
                 if interval > 0 {
-                    match services::get_status(Some(interval)).await {
+                    match command::get_status(Some(interval)).await {
                         Ok(status) => system_status.set(status),
                         Err(e) => log::error!("Failed to get status: {}", e),
                     }
-                    match services::list_services().await {
+                    match command::list_services().await {
                         Ok(list) => services.set(list),
                         Err(e) => log::error!("Failed to list services: {}", e),
                     }
@@ -46,7 +46,7 @@ pub fn App() -> Element {
     let handle_login = move |(pass, addr): (String, String)| {
         spawn(async move {
             gloo_console::log!("Logging in with address: {}", &addr);
-            match services::authenticate(pass, addr).await {
+            match command::authenticate(pass, addr).await {
                 Ok(_) => {
                     authenticated.set(true);
                     error_msg.set(None);
@@ -58,11 +58,11 @@ pub fn App() -> Element {
 
     let handle_control = move |(id, action): (usize, String)| {
         spawn(async move {
-            if let Err(e) = services::control_service(id, action).await {
+            if let Err(e) = command::control_service(id, action).await {
                 log::error!("Failed to control service: {}", e);
             } else {
                 // Refresh immediately
-                if let Ok(list) = services::list_services().await {
+                if let Ok(list) = command::list_services().await {
                     services.set(list);
                 }
             }
@@ -71,10 +71,10 @@ pub fn App() -> Element {
 
     let handle_add_service = move |(desc, exe, args): (String, String, Vec<String>)| {
         spawn(async move {
-            match services::add_service(desc, exe, args).await {
+            match command::add_service(desc, exe, args).await {
                 Ok(_) => {
                     show_add_modal.set(false);
-                    if let Ok(list) = services::list_services().await {
+                    if let Ok(list) = command::list_services().await {
                         services.set(list);
                     }
                 }

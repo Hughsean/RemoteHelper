@@ -1,5 +1,5 @@
-use crate::models::{ServiceInfo, SystemInfo};
-use serde::{Deserialize, Serialize};
+use common::{ServiceInfo, SystemInfo};
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]

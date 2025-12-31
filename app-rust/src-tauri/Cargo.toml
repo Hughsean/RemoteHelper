@@ -1,5 +1,5 @@
 [package]
-name = "app-rust"
+name = "RemoteHelper-Faster"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
