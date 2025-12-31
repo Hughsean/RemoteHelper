@@ -1,8 +1,69 @@
+# Rust
 /target
+**/*.rs.bk
+Cargo.lock
+
+# Node.js
 **/node_modules
-.DS_Store
-dist
-*.lock
-yd*
+package-lock.json
 pnpm-lock.yaml
-logs
+yarn.lock
+
+# Build outputs
+dist
+build
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# Keys and certificates
+*.key
+*.pem
+*.crt
+keypair.json
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.old
+
+# Dioxus
+.dx/
+
+# Tauri
+app/src-tauri/target/
+app/src-tauri/WixTools/
+
+# Config (use example instead)
+config.toml
+!config.example.toml
+
+# Legacy
+yd*
+*.lock
+
+config.toml

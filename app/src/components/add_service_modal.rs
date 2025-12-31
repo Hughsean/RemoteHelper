@@ -5,9 +5,9 @@ pub fn AddServiceModal(
     on_close: EventHandler<()>,
     on_add: EventHandler<(String, String, Vec<String>)>,
 ) -> Element {
-    let mut description = use_signal(|| String::new());
-    let mut exe_path = use_signal(|| String::new());
-    let mut args = use_signal(|| String::new());
+    let mut description = use_signal(String::new);
+    let mut exe_path = use_signal(String::new);
+    let mut args = use_signal(String::new);
 
     let handle_submit = move |evt: FormEvent| {
         evt.stop_propagation();

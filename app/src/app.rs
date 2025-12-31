@@ -20,9 +20,9 @@ static FONT_MONO: Asset = asset!("/assets/fonts/LXGWWenKaiMono-Regular.woff2");
 pub fn App() -> Element {
     let mut authenticated = use_signal(|| false);
     let mut connected = use_signal(|| false);
-    let mut system_status = use_signal(|| common::SystemInfo::default());
-    let mut history = use_signal(|| Vec::<(u64, common::SystemInfo)>::new());
-    let mut services = use_signal(|| Vec::<common::ServiceInfo>::new());
+    let mut system_status = use_signal(common::SystemInfo::default);
+    let mut history = use_signal(Vec::<(u64, common::SystemInfo)>::new);
+    let mut services = use_signal(Vec::<common::ServiceInfo>::new);
     let mut refresh_interval = use_signal(|| 1000u64);
     let mut show_add_modal = use_signal(|| false);
     let mut error_msg = use_signal(|| Option::<String>::None);
@@ -36,7 +36,7 @@ pub fn App() -> Element {
                     match command::get_status(Some(interval)).await {
                         Ok(status) => {
                             system_status.set(status.clone());
-                            
+
                             let mut current_history = history();
                             let now = js_sys::Date::now() as u64;
                             current_history.push((now, status));

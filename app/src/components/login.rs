@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Login(on_login: EventHandler<(String, String)>) -> Element {
-    let mut passphrase = use_signal(|| String::new());
+    let mut passphrase = use_signal(String::new);
     let mut address = use_signal(|| "frp-try.com:53460".to_string());
     let error = use_signal(|| Option::<String>::None);
 

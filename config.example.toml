@@ -1,0 +1,81 @@
+# RemoteHelper 配置文件示例
+# 复制此文件为 config.toml 并修改相应配置
+
+[web_panel]
+# 是否启用 Web 控制面板
+enabled = true
+
+# TCP 监听端口
+local_port = 9999
+
+# frpc 可执行文件路径（绝对路径或相对路径）
+frpc_exe_path = "frpc.exe"
+
+# frpc 参数（用于 Web 隧道）
+# 示例：["-f", "your_token:port"]
+frpc_args = ["-f", "YOUR_FRPC_TOKEN"]
+
+# 授权的 Ed25519 公钥列表（Base64 编码）
+# 使用 keygen.exe 生成密钥对，将公钥添加到此处
+authorized_keys = ["YOUR_BASE64_ENCODED_PUBLIC_KEY_HERE"]
+
+# 可选：服务器启动延迟（秒），等待网络初始化
+# 默认: 0（无延迟）
+startup_delay_secs = 0
+
+# 可选：最大并发连接数
+# 默认: 100
+max_connections = 100
+
+# 可选：每个连接的超时时间（秒）
+# 默认: 300（5分钟）
+connection_timeout_secs = 300
+
+# 服务配置示例 1：远程桌面访问
+[[service]]
+description = "Remote Desktop Access"
+exe_path = "frpc.exe"
+args = ["-f", "token:port"]
+# 是否在服务器启动时自动启动
+auto_start = false
+# 是否允许通过 Web 控制
+allow_web_control = true
+
+# 服务配置示例 2：SSH 访问
+[[service]]
+description = "SSH Access"
+exe_path = "frpc.exe"
+args = ["-f", "token:port"]
+auto_start = true
+allow_web_control = true
+
+# 服务配置示例 3：自定义程序
+# [[service]]
+# description = "Custom Application"
+# exe_path = "C:/path/to/your/application.exe"
+# args = ["--arg1", "value1", "--arg2", "value2"]
+# auto_start = false
+# allow_web_control = true
+
+# 配置说明：
+# 
+# [web_panel] 部分：
+# - enabled: 控制是否启动 Web 控制面板隧道
+# - local_port: 本地 TCP 服务器监听端口
+# - frpc_exe_path: frp 客户端可执行文件路径
+# - frpc_args: frpc 启动参数，通常包含 token 和端口
+# - authorized_keys: 授权客户端的公钥列表，支持多个客户端
+#
+# [[service]] 部分（可以有多个）：
+# - description: 服务描述（显示名称）
+# - exe_path: 可执行文件路径
+# - args: 启动参数列表
+# - auto_start: 服务器启动时自动启动该服务
+# - allow_web_control: 是否允许通过 Web 控制该服务
+#
+# 安全建议：
+# 1. 定期更换密钥对
+# 2. 不要在公共仓库中提交包含实际 token 的配置文件
+# 3. 使用强密码保护私钥文件
+# 4. 限制 authorized_keys 中的公钥数量
+# 5. 根据需要调整 max_connections 和 connection_timeout_secs

@@ -37,10 +37,18 @@ async fn main() -> anyhow::Result<()> {
     // tracing::info!("\n\n================================================================================");
     tracing::info!("Starting RemoteHelper Server Instance");
     // tracing::info!("================================================================================");
-    tracing::info!("Waiting for Network Connection... 20 seconds");
-    tokio::time::sleep(Duration::from_secs(20)).await;
+
     // Load configuration
     let config = AppConfig::load()?;
+
+    // Optional startup delay (configurable)
+    if config.web_panel.startup_delay_secs > 0 {
+        tracing::info!(
+            "Waiting for network initialization... {} seconds",
+            config.web_panel.startup_delay_secs
+        );
+        tokio::time::sleep(Duration::from_secs(config.web_panel.startup_delay_secs)).await;
+    }
     tracing::info!("Configuration loaded successfully.");
 
     // Initialize state
@@ -55,11 +63,7 @@ async fn main() -> anyhow::Result<()> {
             // Check if we should pause updates (no reads for 10s)
             let should_pause = {
                 let last_read = *monitor_state.last_read_time.read().await;
-                if last_read.elapsed() > Duration::from_secs(10) {
-                    true
-                } else {
-                    false
-                }
+                last_read.elapsed() > Duration::from_secs(10)
             };
 
             let timeout = tokio::select! {
@@ -98,17 +102,17 @@ async fn main() -> anyhow::Result<()> {
                 let nvml_lock = monitor_state.nvml.read().await;
                 let mut cache = monitor_state.gpu_cache.write().await;
 
-                if let Some(nvml) = &*nvml_lock {
-                    if let Ok(device) = nvml.device_by_index(0) {
-                        cache.usage = device.utilization_rates().map(|r| r.gpu).ok();
-                        let (mem, total) = device
-                            .memory_info()
-                            .map(|i| (Some(i.used), Some(i.total)))
-                            .unwrap_or((None, None));
-                        cache.memory_used = mem;
-                        cache.memory_total = total;
-                        cache.model = device.name().ok();
-                    }
+                if let Some(nvml) = &*nvml_lock
+                    && let Ok(device) = nvml.device_by_index(0)
+                {
+                    cache.usage = device.utilization_rates().map(|r| r.gpu).ok();
+                    let (mem, total) = device
+                        .memory_info()
+                        .map(|i| (Some(i.used), Some(i.total)))
+                        .unwrap_or((None, None));
+                    cache.memory_used = mem;
+                    cache.memory_total = total;
+                    cache.model = device.name().ok();
                 }
             }
         }
@@ -116,10 +120,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Auto-start services
     for (id, svc) in state.config.service.iter().enumerate() {
-        if svc.auto_start {
-            if let Err(e) = process::start_service(&state, id).await {
-                tracing::error!("Failed to auto-start service {}: {}", svc.description, e);
-            }
+        if svc.auto_start
+            && let Err(e) = process::start_service(&state, id).await
+        {
+            tracing::error!("Failed to auto-start service {}: {}", svc.description, e);
         }
     }
 
@@ -140,12 +144,23 @@ async fn main() -> anyhow::Result<()> {
 
     // Accept loop
     let server_state = state.clone();
+    let max_connections = config.web_panel.max_connections;
     tokio::select! {
         _ = async {
             loop {
                 match listener.accept().await {
                     Ok((socket, addr)) => {
-                        tracing::info!("New connection from {}", addr);
+                        // Check connection limit
+                        let current = server_state.active_connections.load(std::sync::atomic::Ordering::Relaxed);
+                        if current >= max_connections {
+                            tracing::warn!("Connection limit reached ({}), rejecting connection from {}", max_connections, addr);
+                            drop(socket);
+                            continue;
+                        }
+
+                        tracing::info!("New connection from {} ({}/{})", addr, current + 1, max_connections);
+                        server_state.active_connections.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
                         let state = server_state.clone();
                         tokio::spawn(async move {
                             server::handle_connection(socket, state).await;
@@ -163,24 +178,43 @@ async fn main() -> anyhow::Result<()> {
     // Cleanup logic
     tracing::info!("Shutting down, killing child processes...");
 
-    // Kill service processes
+    // Kill service processes with timeout
     {
         let mut processes = cleanup_state.service_processes.write().await;
         for (id, child) in processes.iter_mut() {
             tracing::info!("Killing service process {}", id);
             if let Err(e) = child.start_kill() {
                 tracing::error!("Failed to kill service process {}: {}", id, e);
+                continue;
+            }
+            // Wait for process to exit with 5 second timeout
+            match tokio::time::timeout(Duration::from_secs(5), child.wait()).await {
+                Ok(Ok(status)) => tracing::info!("Service {} exited with status: {:?}", id, status),
+                Ok(Err(e)) => tracing::error!("Error waiting for service {}: {}", id, e),
+                Err(_) => {
+                    tracing::warn!("Service {} did not exit within timeout, force killing", id);
+                    let _ = child.kill().await;
+                }
             }
         }
     }
 
-    // Kill web tunnel
+    // Kill web tunnel with timeout
     {
         let mut tunnel = cleanup_state.web_tunnel_process.lock().await;
         if let Some(child) = tunnel.as_mut() {
             tracing::info!("Killing web tunnel process");
             if let Err(e) = child.start_kill() {
                 tracing::error!("Failed to kill web tunnel: {}", e);
+            } else {
+                match tokio::time::timeout(Duration::from_secs(5), child.wait()).await {
+                    Ok(Ok(status)) => tracing::info!("Web tunnel exited with status: {:?}", status),
+                    Ok(Err(e)) => tracing::error!("Error waiting for web tunnel: {}", e),
+                    Err(_) => {
+                        tracing::warn!("Web tunnel did not exit within timeout, force killing");
+                        let _ = child.kill().await;
+                    }
+                }
             }
         }
     }

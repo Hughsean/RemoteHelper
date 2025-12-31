@@ -1,3 +1,4 @@
+
 [web_panel]
 enabled = true
 local_port = 9999
@@ -6,20 +7,24 @@ frpc_exe_path = "E:\\UserData\\.Exe\\frpc.exe"
 # 这里的 arg 是用于 Web 控制台的 frpc 隧道参数
 frpc_args = ["-f", "84loylo19t7ut88mbr1afkyhynfbulg8:24983644"]
 # Web 控制台访问密钥
-authorized_keys = [
-    "cD4nEfSeBQF+aWZZzLusNAcUthuq2uw4kZRlCPhkgkQ="
-]
+authorized_keys = ["cD4nEfSeBQF+aWZZzLusNAcUthuq2uw4kZRlCPhkgkQ="]
+# 可选：启动延迟秒数（默认0，无延迟）
+startup_delay_secs = 0
+# 可选：最大连接数限制（默认100）
+max_connections = 10
+# 可选：连接超时秒数（默认300秒=5分钟）
+connection_timeout_secs = 30
+
 [[service]]
 description = "Remote Desktop Access"
 exe_path = "E:\\UserData\\.Exe\\frpc.exe"
-args = ["-f", "84loylo19t7ut88mbr1afkyhynfbulg8:24539947"]
+args = ["-f", ""]
 auto_start = false
-allow_web_control = true
+allow_web_control = false
 
 [[service]]
 description = "SSH Access"
 exe_path = "E:\\UserData\\.Exe\\frpc.exe"
-args = ["-f", "84loylo19t7ut88mbr1afkyhynfbulg8:23371163"]
+args = ["-f", ""]
 auto_start = false
-allow_web_control = true
-
+allow_web_control = false

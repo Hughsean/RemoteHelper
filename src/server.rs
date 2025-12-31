@@ -7,14 +7,27 @@ use common::{
 };
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use rand::Rng;
+use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{error, info, warn};
 use x25519_dalek::PublicKey;
 
 pub async fn handle_connection(mut socket: TcpStream, state: AppState) {
-    if let Err(e) = handle_connection_inner(&mut socket, state).await {
-        error!("Connection error: {}", e);
+    let result = tokio::time::timeout(
+        Duration::from_secs(state.config.web_panel.connection_timeout_secs),
+        handle_connection_inner(&mut socket, state.clone()),
+    )
+    .await;
+
+    // Decrement connection counter
+    state.active_connections.fetch_sub(1, Ordering::Relaxed);
+
+    match result {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => error!("Connection error: {}", e),
+        Err(_) => error!("Connection timeout"),
     }
 }
 
@@ -48,8 +61,10 @@ async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Res
     socket.write_all(&resp_bytes).await?;
 
     // 4. Initialize Crypto Session
-    let client_public_key =
-        PublicKey::from(TryInto::<[u8; 32]>::try_into(client_pub_bytes).unwrap());
+    let client_pub_array: [u8; 32] = client_pub_bytes
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("Invalid client public key length"))?;
+    let client_public_key = PublicKey::from(client_pub_array);
     let shared_secret = secret.diffie_hellman(&client_public_key);
     let mut crypto = CryptoSession::new(shared_secret.to_bytes(), true);
 
@@ -57,16 +72,14 @@ async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Res
 
     // --- Encrypted Loop ---
     let mut authenticated = false;
-    let mut current_challenge: Option<String> = None;
+    let mut current_challenge: Option<(String, Instant)> = None;
     let mut read_buf = [0u8; 10 * 1024]; // 10 KB buffer for encrypted frames
+    const CHALLENGE_TIMEOUT: Duration = Duration::from_secs(30);
 
-    loop {
+    while let Ok(n) = socket.read_u32().await {
         // Read encrypted length (4 bytes)
         // Note: This length is the length of the CIPHERTEXT (including tag)
-        let len = match socket.read_u32().await {
-            Ok(n) => n as usize,
-            Err(_) => break, // Connection closed
-        };
+        let len = n as usize;
 
         if len > read_buf.len() {
             return Err(anyhow::anyhow!("Request too large: {} bytes", len));
@@ -102,15 +115,19 @@ async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Res
             Request::GetChallenge => {
                 let nonce: [u8; 32] = rand::thread_rng().r#gen();
                 let nonce_str = BASE64_STANDARD.encode(nonce);
-                current_challenge = Some(nonce_str.clone());
+                current_challenge = Some((nonce_str.clone(), Instant::now()));
                 Response::Challenge(nonce_str)
             }
             Request::Login {
                 public_key,
                 signature,
             } => {
-                if let Some(challenge) = &current_challenge {
-                    if verify_login(&state, &public_key, &signature, challenge) {
+                if let Some((challenge, timestamp)) = &current_challenge {
+                    // Check if challenge has expired
+                    if timestamp.elapsed() > CHALLENGE_TIMEOUT {
+                        current_challenge = None;
+                        Response::Error("Challenge expired".to_string())
+                    } else if verify_login(&state, &public_key, &signature, challenge) {
                         authenticated = true;
                         current_challenge = None; // Clear challenge after use
                         info!("Client authenticated successfully with key: {}", public_key);
@@ -200,13 +217,13 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             }
 
             // Update refresh interval if provided
-            if let Some(ms) = interval_ms {
-                if ms >= 100 {
-                    let mut lock = state.refresh_interval.write().await;
-                    if *lock != ms {
-                        *lock = ms;
-                        state.update_notify.notify_one();
-                    }
+            if let Some(ms) = interval_ms
+                && ms >= 100
+            {
+                let mut lock = state.refresh_interval.write().await;
+                if *lock != ms {
+                    *lock = ms;
+                    state.update_notify.notify_one();
                 }
             }
 
@@ -278,7 +295,7 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             // Static services
             for (id, svc_config) in state.config.service.iter().enumerate() {
                 let running = processes.contains_key(&id);
-                let pid = processes.get(&id).map(|c| c.id()).flatten();
+                let pid = processes.get(&id).and_then(|c| c.id());
 
                 services.push(ServiceInfo {
                     nanoid: func::nanoid_gen(),
@@ -295,7 +312,7 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             for (i, svc_config) in dynamic.iter().enumerate() {
                 let id = offset + i;
                 let running = processes.contains_key(&id);
-                let pid = processes.get(&id).map(|c| c.id()).flatten();
+                let pid = processes.get(&id).and_then(|c| c.id());
 
                 services.push(ServiceInfo {
                     nanoid: func::nanoid_gen(),
@@ -347,7 +364,6 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             args,
         } => {
             let mut dynamic = state.dynamic_services.write().await;
-            let id = state.config.service.len() + dynamic.len();
             dynamic.push(crate::config::ServiceConfig {
                 description,
                 exe_path,
@@ -355,6 +371,9 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 auto_start: false,
                 allow_web_control: true,
             });
+
+            // Return actual service ID: static count + new dynamic index
+            let id = state.config.service.len() + dynamic.len() - 1;
             Response::ServiceAdded(id)
         }
         _ => Response::Error("Invalid request state".to_string()),

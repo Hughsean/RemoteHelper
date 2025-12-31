@@ -31,9 +31,13 @@ impl CryptoSession {
     pub fn new(shared_secret: [u8; 32], is_server: bool) -> Self {
         // Derive session key from shared secret
         // Simple: SHA256(secret) -> 32 bytes
-        let key_bytes = Sha256::digest(&shared_secret);
+        let key_bytes = Sha256::digest(shared_secret);
         let cipher = Aes256Gcm::new(&key_bytes);
 
+        // Start nonce at 0. Each session has unique shared_secret from X25519 ECDH,
+        // so nonce reuse across different connections is not a concern.
+        // We use direction-aware nonce generation (MSB bit) to separate
+        // server/client streams, preventing collisions within same session.
         Self {
             cipher,
             write_nonce: 0,

@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: RemoteHelper ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+          body: |
+            ## RemoteHelper ${{ steps.get_version.outputs.version }}
+
+            ### 下载
+
+            - **Windows 服务器**: `RemoteHelperServer-x86_64-pc-windows-msvc.zip`
+            - **Windows 桌面客户端**: `RemoteHelper-Tauri-Windows.msi`
+            - **工具集**: 包含在服务器压缩包中
+
+            ### 安装说明
+
+            1. 下载对应平台的安装包
+            2. 解压到目标目录
+            3. 运行 `keygen.exe` 生成密钥对
+            4. 编辑 `config.toml` 配置文件
+            5. 运行 `RemoteHelperServer.exe` 启动服务器
+
+            详细说明请查看 [README.md](https://github.com/Hughsean/RemoteHelper/blob/main/README.md)
+
+  build-release:
+    name: Build Release
+    needs: create-release
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x86_64-pc-windows-msvc]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build server
+        run: cargo build --release --bin RemoteHelperServer
+
+      - name: Build utilities
+        run: |
+          cargo build --release --bin keygen
+          cargo build --release --bin gen_cert
+          cargo build --release --bin test_real_ip
+
+      - name: Package release
+        run: |
+          mkdir RemoteHelperServer-${{ matrix.target }}
+          cp target/release/RemoteHelperServer.exe RemoteHelperServer-${{ matrix.target }}/
+          cp target/release/keygen.exe RemoteHelperServer-${{ matrix.target }}/
+          cp target/release/gen_cert.exe RemoteHelperServer-${{ matrix.target }}/
+          cp target/release/test_real_ip.exe RemoteHelperServer-${{ matrix.target }}/
+          cp config.toml RemoteHelperServer-${{ matrix.target }}/config.example.toml
+          cp README.md RemoteHelperServer-${{ matrix.target }}/
+          cp LICENSE RemoteHelperServer-${{ matrix.target }}/
+          Compress-Archive -Path RemoteHelperServer-${{ matrix.target }} -DestinationPath RemoteHelperServer-${{ matrix.target }}.zip
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./RemoteHelperServer-${{ matrix.target }}.zip
+          asset_name: RemoteHelperServer-${{ matrix.target }}.zip
+          asset_content_type: application/zip
+
+  build-tauri-release:
+    name: Build Tauri Release
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli
+
+      - name: Build Dioxus app
+        working-directory: app
+        run: dx build --release
+
+      - name: Build Tauri app
+        working-directory: app
+        run: cargo tauri build
+
+      - name: Find MSI installer
+        id: find_msi
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path app/src-tauri/target/release/bundle/msi -Filter "*.msi" | Select-Object -First 1
+          echo "msi_path=$($msi.FullName)" >> $env:GITHUB_OUTPUT
+          echo "msi_name=$($msi.Name)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Tauri MSI
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.find_msi.outputs.msi_path }}
+          asset_name: ${{ steps.find_msi.outputs.msi_name }}
+          asset_content_type: application/x-msi
+
+  publish-crate:
+    name: Publish to crates.io
+    needs: build-release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish common
+        run: cargo publish -p common --token ${{ secrets.CARGO_TOKEN }}
+        continue-on-error: true
+
+      - name: Wait for common to be available
+        run: sleep 30
+
+      - name: Publish client
+        run: cargo publish -p client --token ${{ secrets.CARGO_TOKEN }}
+        continue-on-error: true

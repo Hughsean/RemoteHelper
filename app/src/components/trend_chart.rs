@@ -39,34 +39,94 @@ pub fn TrendChart(history: Vec<(u64, SystemInfo)>) -> Element {
 
     let width = 100.0;
     let height = 100.0;
+    let margin_top = 5.0; // 顶部留白
+    let margin_bottom = 5.0; // 底部留白
+    let chart_height = height - margin_top - margin_bottom;
 
-    // 辅助函数：将数据转换为 SVG polyline points 字符串
-    let make_points = |extractor: fn(&SystemInfo) -> f32| -> String {
+    // 辅助函数：自适应缩放数据并转换为平滑 SVG path 字符串
+    let make_smooth_path = |extractor: fn(&SystemInfo) -> f32| -> String {
         if filtered_history.is_empty() {
             return String::new();
         }
-        filtered_history
+
+        // 收集所有数据点
+        let values: Vec<f32> = filtered_history
+            .iter()
+            .map(|info| extractor(info).clamp(0.0, 100.0))
+            .collect();
+
+        if values.is_empty() || values.len() < 2 {
+            return String::new();
+        }
+
+        // 找到最小值和最大值
+        let min_val = values.iter().cloned().fold(f32::INFINITY, f32::min);
+        let max_val = values.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+
+        // 计算动态范围，最小范围为10%以保证可见变化
+        let range = (max_val - min_val).max(10.0);
+        let center = (max_val + min_val) / 2.0;
+        let scale_min = (center - range / 2.0).max(0.0);
+        let scale_max = (center + range / 2.0).min(100.0);
+
+        // 生成坐标点
+        let points: Vec<(f32, f32)> = values
             .iter()
             .enumerate()
-            .map(|(i, info)| {
-                let x = (i as f32 / (filtered_history.len().max(2) - 1) as f32) * width;
-                let val = extractor(info).clamp(0.0, 100.0);
-                let y = height - (val / 100.0 * height);
-                format!("{:.1},{:.1}", x, y)
+            .map(|(i, &val)| {
+                let x = (i as f32 / (values.len().max(2) - 1) as f32) * width;
+                let normalized = if scale_max > scale_min {
+                    (val - scale_min) / (scale_max - scale_min)
+                } else {
+                    0.5
+                };
+                let y = margin_top + (1.0 - normalized) * chart_height;
+                (x, y)
             })
-            .collect::<Vec<_>>()
-            .join(" ")
+            .collect();
+
+        if points.len() < 2 {
+            return String::new();
+        }
+
+        // 使用 Catmull-Rom 样条生成平滑曲线
+        let mut path = format!("M {:.1},{:.1}", points[0].0, points[0].1);
+
+        for i in 0..points.len() - 1 {
+            let p0 = if i > 0 { points[i - 1] } else { points[i] };
+            let p1 = points[i];
+            let p2 = points[i + 1];
+            let p3 = if i < points.len() - 2 {
+                points[i + 2]
+            } else {
+                points[i + 1]
+            };
+
+            // 计算控制点（使用 Catmull-Rom 转 Bezier 公式）
+            let tension = 0.3; // 张力系数，越小越平滑
+            let cp1x = p1.0 + (p2.0 - p0.0) * tension;
+            let cp1y = p1.1 + (p2.1 - p0.1) * tension;
+            let cp2x = p2.0 - (p3.0 - p1.0) * tension;
+            let cp2y = p2.1 - (p3.1 - p1.1) * tension;
+
+            path.push_str(&format!(
+                " C {:.1},{:.1} {:.1},{:.1} {:.1},{:.1}",
+                cp1x, cp1y, cp2x, cp2y, p2.0, p2.1
+            ));
+        }
+
+        path
     };
 
-    let cpu_points = make_points(|s| s.cpu_usage);
-    let mem_points = make_points(|s| {
+    let cpu_path = make_smooth_path(|s| s.cpu_usage);
+    let mem_path = make_smooth_path(|s| {
         if s.total_memory > 0 {
             (s.memory_usage as f32 / s.total_memory as f32) * 100.0
         } else {
             0.0
         }
     });
-    let gpu_points = make_points(|s| s.gpu_usage.map(|v| v as f32).unwrap_or(0.0));
+    let gpu_path = make_smooth_path(|s| s.gpu_usage.map(|v| v as f32).unwrap_or(0.0));
 
     rsx! {
         div { class: "chart-container",
@@ -128,22 +188,22 @@ pub fn TrendChart(history: Vec<(u64, SystemInfo)>) -> Element {
                     }
 
                     // 数据线
-                    polyline {
-                        points: "{gpu_points}",
+                    path {
+                        d: "{gpu_path}",
                         class: "chart-line line-gpu",
                         fill: "none",
                         stroke_width: "3",
                         vector_effect: "non-scaling-stroke",
                     }
-                    polyline {
-                        points: "{mem_points}",
+                    path {
+                        d: "{mem_path}",
                         class: "chart-line line-mem",
                         fill: "none",
                         stroke_width: "3",
                         vector_effect: "non-scaling-stroke",
                     }
-                    polyline {
-                        points: "{cpu_points}",
+                    path {
+                        d: "{cpu_path}",
                         class: "chart-line line-cpu",
                         fill: "none",
                         stroke_width: "3",

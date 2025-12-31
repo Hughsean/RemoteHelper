@@ -1,5 +1,5 @@
 [package]
-name = "RemoteHelper-Faster"
+name = "RemoteHelper-NT"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -37,4 +37,3 @@ sha2 = { workspace = true }
 anyhow = { workspace = true }
 x25519-dalek = { workspace = true }
 client = { workspace = true }
-

@@ -2,6 +2,7 @@ use crate::config::{AppConfig, ServiceConfig};
 use nvml_wrapper::Nvml;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use sysinfo::{Networks, System};
 use tokio::process::Child;
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -27,6 +28,7 @@ pub struct AppState {
     pub update_notify: Arc<Notify>,
     pub service_processes: Arc<RwLock<HashMap<usize, Child>>>,
     pub web_tunnel_process: Arc<Mutex<Option<Child>>>,
+    pub active_connections: Arc<AtomicUsize>,
 }
 
 impl AppState {
@@ -43,6 +45,7 @@ impl AppState {
             update_notify: Arc::new(Notify::new()),
             service_processes: Arc::new(RwLock::new(HashMap::new())),
             web_tunnel_process: Arc::new(Mutex::new(None)),
+            active_connections: Arc::new(AtomicUsize::new(0)),
         }
     }
 }

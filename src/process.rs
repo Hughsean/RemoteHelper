@@ -6,10 +6,25 @@ use tokio::process::Command;
 
 fn get_log_file(name: &str) -> Result<std::fs::File> {
     fs::create_dir_all("logs")?;
+
+    // Implement simple log rotation: if file > 10MB, rotate it
+    let log_path = format!("logs/{}.log", name);
+    if let Ok(metadata) = fs::metadata(&log_path)
+        && metadata.len() > 10 * 1024 * 1024
+    {
+        // 10MB
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or(std::time::Duration::from_secs(0))
+            .as_millis();
+        let backup_path = format!("logs/{}.{}.log", name, timestamp);
+        let _ = fs::rename(&log_path, backup_path);
+    }
+
     let file = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(format!("logs/{}.log", name))?;
+        .open(log_path)?;
     Ok(file)
 }
 
@@ -75,14 +90,29 @@ pub async fn stop_service(state: &AppState, id: usize) -> Result<()> {
 
 pub async fn restart_service(state: &AppState, id: usize) -> Result<()> {
     stop_service(state, id).await?;
+
+    // Wait for process to fully terminate to avoid port conflicts
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
     start_service(state, id).await?;
     Ok(())
 }
 
 pub async fn is_service_running(state: &AppState, id: usize) -> bool {
+    // First check if process exists with a read lock
+    let has_process = {
+        let processes = state.service_processes.read().await;
+        processes.contains_key(&id)
+    };
+
+    if !has_process {
+        return false;
+    }
+
+    // Only acquire write lock if we need to check/clean up
     let mut processes = state.service_processes.write().await;
     if let Some(child) = processes.get_mut(&id) {
-        // try_wait() returns Ok(Some(status)) if exited, Ok(None) if running
+        // try_wait() is non-blocking and fast
         match child.try_wait() {
             Ok(None) => true,
             Ok(Some(_)) => {

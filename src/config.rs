@@ -18,10 +18,28 @@ pub struct WebPanelConfig {
     pub frpc_args: Vec<String>,
     #[serde(default)]
     pub authorized_keys: Vec<String>,
+    #[serde(default = "default_startup_delay")]
+    pub startup_delay_secs: u64,
+    #[serde(default = "default_max_connections")]
+    pub max_connections: usize,
+    #[serde(default = "default_connection_timeout")]
+    pub connection_timeout_secs: u64,
     // #[serde(default = "default_cert_path")]
     // pub cert_path: String,
     // #[serde(default = "default_key_path")]
     // pub key_path: String,
+}
+
+fn default_startup_delay() -> u64 {
+    0 // No delay by default
+}
+
+fn default_max_connections() -> usize {
+    100 // Reasonable default
+}
+
+fn default_connection_timeout() -> u64 {
+    300 // 5 minutes
 }
 
 // fn default_cert_path() -> String {

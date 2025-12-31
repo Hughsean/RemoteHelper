@@ -19,7 +19,7 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
         let hours = (seconds % 86400) / 3600;
         let minutes = (seconds % 3600) / 60;
         let secs = seconds % 60;
-        
+
         if days > 0 {
             format!("{}d {}h {}m {}s", days, hours, minutes, secs)
         } else if hours > 0 {

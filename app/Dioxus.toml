@@ -13,3 +13,6 @@ watch_path = ["src", "assets"]
 
 [bundle]
 identifier = "dev.hughsean"
+
+[web.wasm-opt]
+path = "D:\\Trusted\\.Apps\\apps\\Binaryen\\current\\bin\\wasm-opt.exe"

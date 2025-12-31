@@ -24,13 +24,12 @@ pub fn SystemStatusDisplay(status: SystemInfo) -> Element {
 }
 
 #[component]
-fn CpuCard(
-    cpu_usage: f32,
-    cpu_model: String,
-    memory_usage: u64,
-    total_memory: u64
-) -> Element {
-    let mem_percent = if total_memory > 0 { (memory_usage as f32 / total_memory as f32) * 100.0 } else { 0.0 };
+fn CpuCard(cpu_usage: f32, cpu_model: String, memory_usage: u64, total_memory: u64) -> Element {
+    let mem_percent = if total_memory > 0 {
+        (memory_usage as f32 / total_memory as f32) * 100.0
+    } else {
+        0.0
+    };
     let used_gb = memory_usage as f64 / 1024.0 / 1024.0 / 1024.0;
     let total_gb = total_memory as f64 / 1024.0 / 1024.0 / 1024.0;
 
@@ -79,7 +78,7 @@ fn GpuStatusCard(
     usage: u32,
     memory_usage: Option<u64>,
     total_memory: Option<u64>,
-    model: String
+    model: String,
 ) -> Element {
     let mem_percent = if let (Some(used), Some(total)) = (memory_usage, total_memory) {
         if total > 0 {
@@ -92,7 +91,11 @@ fn GpuStatusCard(
     };
 
     let mem_text = if let (Some(used), Some(total)) = (memory_usage, total_memory) {
-        format!("{:.1}/{:.1} GB", used as f64 / 1024.0 / 1024.0 / 1024.0, total as f64 / 1024.0 / 1024.0 / 1024.0)
+        format!(
+            "{:.1}/{:.1} GB",
+            used as f64 / 1024.0 / 1024.0 / 1024.0,
+            total as f64 / 1024.0 / 1024.0 / 1024.0
+        )
     } else {
         "N/A".to_string()
     };

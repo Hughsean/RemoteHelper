@@ -91,8 +91,10 @@ pub async fn connect_and_auth() -> Result<EncryptedConnection, String> {
     };
 
     // 4. Initialize Crypto Session
-    let server_public_key =
-        PublicKey::from(TryInto::<[u8; 32]>::try_into(server_pub_bytes).unwrap());
+    let server_pub_array: [u8; 32] = server_pub_bytes
+        .try_into()
+        .map_err(|_| "Invalid server public key length".to_string())?;
+    let server_public_key = PublicKey::from(server_pub_array);
     let shared_secret = secret.diffie_hellman(&server_public_key);
     let crypto = CryptoSession::new(shared_secret.to_bytes(), false); // is_server = false
 
@@ -129,7 +131,7 @@ pub async fn connect_and_auth() -> Result<EncryptedConnection, String> {
     match resp {
         Response::Ok => Ok(conn), // Login success
         Response::Error(e) => Err(format!("Login failed: {}", e)),
-        _ => return Err("Unexpected response during login".to_string()),
+        _ => Err("Unexpected response during login".to_string()),
     }
 }
 

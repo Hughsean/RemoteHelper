@@ -32,9 +32,21 @@ pub fn ServiceList(
 
 #[component]
 fn ServiceItem(service: ServiceInfo, on_control: EventHandler<(usize, String)>) -> Element {
-    let status_class = if service.running { "status-running" } else { "status-stopped" };
-    let status_text = if service.running { "运行中" } else { "已停止" };
-    let icon_class = if service.running { "icon-running" } else { "icon-stopped" };
+    let status_class = if service.running {
+        "status-running"
+    } else {
+        "status-stopped"
+    };
+    let status_text = if service.running {
+        "运行中"
+    } else {
+        "已停止"
+    };
+    let icon_class = if service.running {
+        "icon-running"
+    } else {
+        "icon-stopped"
+    };
 
     rsx! {
         div { class: "service-item",
