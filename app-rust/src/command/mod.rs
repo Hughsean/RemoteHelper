@@ -9,8 +9,8 @@ extern "C" {
     async fn invoke_without_args(cmd: &str) -> JsValue;
 
     // invoke with arguments (default)
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
+    #[wasm_bindgen(catch, js_namespace = ["window", "__TAURI__", "core"])]
+    async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
 
     // They need to have different names!
 }
@@ -46,30 +46,36 @@ pub async fn authenticate(passphrase: String, address: String) -> Result<String,
         address,
     })
     .unwrap();
-    match invoke("authenticate", args).await.as_string() {
-        Some(s) => Ok(s),
-        None => Err("Failed to authenticate".to_string()),
+    match invoke("authenticate", args).await {
+        Ok(val) => match val.as_string() {
+            Some(s) => Ok(s),
+            None => Err("Failed to authenticate".to_string()),
+        },
+        Err(e) => Err(e.as_string().unwrap_or("Unknown error".to_string())),
     }
 }
 
 pub async fn get_status(interval_ms: Option<u64>) -> Result<SystemInfo, String> {
     let args = serde_wasm_bindgen::to_value(&GetStatusArgs { interval_ms }).unwrap();
-    let result = invoke("get_status", args).await;
-    serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string())
+    match invoke("get_status", args).await {
+        Ok(result) => serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string()),
+        Err(e) => Err(e.as_string().unwrap_or("Unknown error".to_string())),
+    }
 }
 
 pub async fn list_services() -> Result<Vec<ServiceInfo>, String> {
-    let result = invoke("list_services", JsValue::NULL).await;
-    // Note: The backend returns common::ServiceData, which maps to ServiceInfo
-    // We need to ensure ServiceInfo matches common::ServiceData structure.
-    // common::ServiceData likely has id, description, running, pid.
-    serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string())
+    match invoke("list_services", JsValue::NULL).await {
+        Ok(result) => serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string()),
+        Err(e) => Err(e.as_string().unwrap_or("Unknown error".to_string())),
+    }
 }
 
 pub async fn control_service(id: usize, action: String) -> Result<(), String> {
     let args = serde_wasm_bindgen::to_value(&ControlServiceArgs { id, action }).unwrap();
-    invoke("control_service", args).await;
-    Ok(())
+    match invoke("control_service", args).await {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.as_string().unwrap_or("Unknown error".to_string())),
+    }
 }
 
 pub async fn add_service(
@@ -83,10 +89,12 @@ pub async fn add_service(
         args,
     })
     .unwrap();
-    let result = invoke("add_service", args).await;
-    serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string())
+    match invoke("add_service", args).await {
+        Ok(result) => serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string()),
+        Err(e) => Err(e.as_string().unwrap_or("Unknown error".to_string())),
+    }
 }
 
 pub async fn quit_app() {
-    invoke("quit_app", JsValue::NULL).await;
+    let _ = invoke("quit_app", JsValue::NULL).await;
 }

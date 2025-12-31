@@ -1,13 +1,40 @@
 use dioxus::prelude::*;
 
 #[component]
-pub fn Header(on_refresh_change: EventHandler<u64>) -> Element {
+pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandler<u64>) -> Element {
+    let display_text = match refresh_interval {
+        0 => "暂停",
+        100 => "0.1s",
+        500 => "0.5s",
+        1000 => "1s",
+        3000 => "3s",
+        10000 => "5s",
+        _ => "自定义",
+    };
+
+    let format_uptime = |seconds: u64| -> String {
+        let days = seconds / 86400;
+        let hours = (seconds % 86400) / 3600;
+        let minutes = (seconds % 3600) / 60;
+        let secs = seconds % 60;
+        
+        if days > 0 {
+            format!("{}d {}h {}m {}s", days, hours, minutes, secs)
+        } else if hours > 0 {
+            format!("{}h {}m {}s", hours, minutes, secs)
+        } else if minutes > 0 {
+            format!("{}m {}s", minutes, secs)
+        } else {
+            format!("{}s", secs)
+        }
+    };
+
     rsx! {
-        header { class: "bg-slate-900/80 backdrop-blur-md border-b border-slate-800/50 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm",
-            div { class: "flex items-center gap-3",
-                div { class: "w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20 transition-transform hover:scale-105 hover:rotate-3",
+        header { class: "app-header",
+            div { class: "header-left",
+                div { class: "logo-box",
                     svg {
-                        class: "w-5 h-5 text-white",
+                        class: "icon-md",
                         fill: "none",
                         stroke: "currentColor",
                         view_box: "0 0 24 24",
@@ -19,19 +46,33 @@ pub fn Header(on_refresh_change: EventHandler<u64>) -> Element {
                         }
                     }
                 }
-                h1 { class: "text-xl font-bold text-white tracking-tight", "服务监控(Hughsean)" }
-            }
-            div { class: "flex items-center gap-3",
-                div { class: "relative bg-slate-800/50 rounded-lg border border-slate-700 hover:border-slate-600 transition-all duration-300 group w-40 hover:bg-slate-800",
-                    div { class: "flex items-center justify-between px-3 py-1.5 pointer-events-none h-full",
-                        span { class: "text-xs text-slate-400 group-hover:text-slate-300 transition-colors",
-                            "刷新间隔"
+                h1 { class: "header-title", "服务监控(Hughsean)" }
+                if uptime > 0 {
+                    div { class: "uptime-badge",
+                        svg {
+                            class: "icon-sm mr-1",
+                            fill: "none",
+                            stroke: "currentColor",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+                            }
                         }
-                        div { class: "flex items-center gap-1",
-                            // TODO: Display current interval
-                            span { class: "text-sm text-white font-medium", "1s" }
+                        span { "上线时间: {format_uptime(uptime)}" }
+                    }
+                }
+            }
+            div { class: "header-right",
+                div { class: "refresh-control",
+                    div { class: "refresh-display",
+                        span { class: "refresh-label", "刷新间隔" }
+                        div { class: "refresh-value-box",
+                            span { class: "refresh-value", "{display_text}" }
                             svg {
-                                class: "w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors",
+                                class: "icon-sm",
                                 fill: "none",
                                 stroke: "currentColor",
                                 view_box: "0 0 24 24",
@@ -45,18 +86,44 @@ pub fn Header(on_refresh_change: EventHandler<u64>) -> Element {
                         }
                     }
                     select {
-                        class: "absolute inset-0 w-full h-full opacity-0 cursor-pointer [&>option]:bg-slate-800 [&>option]:text-slate-200",
+                        class: "refresh-select",
                         onchange: move |evt| {
                             if let Ok(val) = evt.value().parse::<u64>() {
                                 on_refresh_change.call(val);
                             }
                         },
-                        option { value: "100", "0.1s" }
-                        option { value: "500", "0.5s" }
-                        option { value: "1000", selected: true, "1s" }
-                        option { value: "3000", "3s" }
-                        option { value: "10000", "5s" }
-                        option { value: "0", "暂停" }
+                        option { value: "100", selected: refresh_interval == 100, "0.1s" }
+                        option { value: "500", selected: refresh_interval == 500, "0.5s" }
+                        option { value: "1000", selected: refresh_interval == 1000, "1s" }
+                        option { value: "3000", selected: refresh_interval == 3000, "3s" }
+                        option {
+                            value: "10000",
+                            selected: refresh_interval == 10000,
+                            "5s"
+                        }
+                        option { value: "0", selected: refresh_interval == 0, "暂停" }
+                    }
+                }
+
+                button {
+                    class: "icon-btn ml-4 text-red-500 hover:bg-red-500/10",
+                    title: "退出程序",
+                    onclick: move |_| {
+                        spawn(async move {
+                            crate::command::quit_app().await;
+                        });
+                    },
+                    svg {
+                        class: "icon-md",
+                        fill: "none",
+                        stroke: "currentColor",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            stroke_width: "2",
+                            d: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
+                        }
                     }
                 }
             }

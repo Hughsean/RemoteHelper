@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Remote Helper",
+        "title": "Remote Helper NT",
         "width": 800,
         "height": 600,
         "additionalBrowserArgs": "--disable-features=Autofill,PasswordManager"

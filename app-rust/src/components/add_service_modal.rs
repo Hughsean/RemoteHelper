@@ -17,15 +17,15 @@ pub fn AddServiceModal(
     };
 
     rsx! {
-        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm",
-            div { class: "bg-slate-900 p-6 rounded-xl shadow-2xl border border-slate-800 w-full max-w-lg",
-                div { class: "flex justify-between items-center mb-6",
-                    h3 { class: "text-xl font-bold text-white", "Add Custom Service" }
+        div { class: "modal-overlay",
+            div { class: "modal-box",
+                div { class: "modal-header",
+                    h3 { class: "modal-title", "添加自定义服务" }
                     button {
-                        class: "text-slate-400 hover:text-white transition-colors",
+                        class: "btn-close",
                         onclick: move |_| on_close.call(()),
                         svg {
-                            class: "w-6 h-6",
+                            class: "icon-md",
                             fill: "none",
                             stroke: "currentColor",
                             view_box: "0 0 24 24",
@@ -38,52 +38,42 @@ pub fn AddServiceModal(
                         }
                     }
                 }
-                form { onsubmit: handle_submit, class: "space-y-4",
-                    div {
-                        label { class: "block text-sm font-medium text-slate-400 mb-1",
-                            "Description"
-                        }
+                form { onsubmit: handle_submit, class: "modal-form",
+                    div { class: "form-group",
+                        label { class: "form-label", "描述" }
                         input {
                             r#type: "text",
-                            class: "w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none",
+                            class: "form-input",
                             value: "{description}",
                             oninput: move |e| description.set(e.value()),
                         }
                     }
-                    div {
-                        label { class: "block text-sm font-medium text-slate-400 mb-1",
-                            "Executable Path"
-                        }
+                    div { class: "form-group",
+                        label { class: "form-label", "可执行文件路径" }
                         input {
                             r#type: "text",
-                            class: "w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none",
+                            class: "form-input",
                             value: "{exe_path}",
                             oninput: move |e| exe_path.set(e.value()),
                         }
                     }
-                    div {
-                        label { class: "block text-sm font-medium text-slate-400 mb-1",
-                            "Arguments (space separated)"
-                        }
+                    div { class: "form-group",
+                        label { class: "form-label", "参数 (空格分隔)" }
                         input {
                             r#type: "text",
-                            class: "w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 outline-none",
+                            class: "form-input",
                             value: "{args}",
                             oninput: move |e| args.set(e.value()),
                         }
                     }
-                    div { class: "flex justify-end gap-3 mt-6",
+                    div { class: "modal-actions",
                         button {
                             r#type: "button",
-                            class: "px-4 py-2 text-slate-400 hover:text-white transition-colors",
+                            class: "btn-cancel",
                             onclick: move |_| on_close.call(()),
-                            "Cancel"
+                            "取消"
                         }
-                        button {
-                            r#type: "submit",
-                            class: "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors",
-                            "Add Service"
-                        }
+                        button { r#type: "submit", class: "btn-primary", "添加服务" }
                     }
                 }
             }

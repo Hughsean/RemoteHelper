@@ -13,12 +13,12 @@ pub fn Login(on_login: EventHandler<(String, String)>) -> Element {
     };
 
     rsx! {
-        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm",
-            div { class: "bg-slate-900 p-8 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md",
-                div { class: "text-center mb-8",
-                    div { class: "w-16 h-16 bg-indigo-500 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-4",
+        div { class: "modal-overlay",
+            div { class: "login-card",
+                div { class: "login-header",
+                    div { class: "login-icon",
                         svg {
-                            class: "w-8 h-8 text-white",
+                            class: "icon-lg",
                             fill: "none",
                             stroke: "currentColor",
                             view_box: "0 0 24 24",
@@ -30,41 +30,33 @@ pub fn Login(on_login: EventHandler<(String, String)>) -> Element {
                             }
                         }
                     }
-                    h2 { class: "text-2xl font-bold text-white", "Authentication Required" }
-                    p { class: "text-slate-400 mt-2", "Please enter your credentials to continue" }
+                    h2 { class: "login-title", "需要身份验证" }
+                    p { class: "login-subtitle", "请输入凭据以继续" }
                 }
 
-                form { onsubmit: handle_submit, class: "space-y-4",
-                    div {
-                        label { class: "block text-sm font-medium text-slate-400 mb-1",
-                            "Server Address"
-                        }
+                form { onsubmit: handle_submit, class: "login-form",
+                    div { class: "form-group",
+                        label { class: "form-label", "服务器地址" }
                         input {
                             r#type: "text",
-                            class: "w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all",
+                            class: "form-input",
                             value: "{address}",
                             oninput: move |e| address.set(e.value()),
                         }
                     }
-                    div {
-                        label { class: "block text-sm font-medium text-slate-400 mb-1",
-                            "Passphrase"
-                        }
+                    div { class: "form-group",
+                        label { class: "form-label", "访问密钥" }
                         input {
                             r#type: "password",
-                            class: "w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all",
+                            class: "form-input",
                             value: "{passphrase}",
                             oninput: move |e| passphrase.set(e.value()),
                         }
                     }
                     if let Some(err) = error() {
-                        div { class: "text-red-500 text-sm text-center", "{err}" }
+                        div { class: "error-message", "{err}" }
                     }
-                    button {
-                        r#type: "submit",
-                        class: "w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-lg transition-colors shadow-lg shadow-indigo-500/20",
-                        "Connect"
-                    }
+                    button { r#type: "submit", class: "btn-primary w-full", "连接" }
                 }
             }
         }

@@ -3,7 +3,7 @@
 use crate::command;
 use crate::components::{
     add_service_modal::AddServiceModal, header::Header, login::Login, service_list::ServiceList,
-    system_status::SystemStatusDisplay,
+    system_status::SystemStatusDisplay, trend_chart::TrendChart,
 };
 // use crate::models::{ServiceInfo, SystemInfo};
 use dioxus::prelude::*;
@@ -13,7 +13,9 @@ static CSS: Asset = asset!("/assets/styles.css");
 
 pub fn App() -> Element {
     let mut authenticated = use_signal(|| false);
+    let mut connected = use_signal(|| false);
     let mut system_status = use_signal(|| common::SystemInfo::default());
+    let mut history = use_signal(|| Vec::<(u64, common::SystemInfo)>::new());
     let mut services = use_signal(|| Vec::<common::ServiceInfo>::new());
     let mut refresh_interval = use_signal(|| 1000u64);
     let mut show_add_modal = use_signal(|| false);
@@ -26,8 +28,27 @@ pub fn App() -> Element {
                 let interval = refresh_interval();
                 if interval > 0 {
                     match command::get_status(Some(interval)).await {
-                        Ok(status) => system_status.set(status),
-                        Err(e) => log::error!("Failed to get status: {}", e),
+                        Ok(status) => {
+                            system_status.set(status.clone());
+                            
+                            let mut current_history = history();
+                            let now = js_sys::Date::now() as u64;
+                            current_history.push((now, status));
+                            if current_history.len() > 10240 {
+                                current_history.remove(0);
+                            }
+                            history.set(current_history);
+
+                            connected.set(true);
+                            if error_msg().is_some() {
+                                error_msg.set(None);
+                            }
+                        }
+                        Err(e) => {
+                            connected.set(false);
+                            error_msg.set(Some(format!("Connection Error: {}", e)));
+                            log::error!("Failed to get status: {}", e);
+                        }
                     }
                     match command::list_services().await {
                         Ok(list) => services.set(list),
@@ -85,19 +106,41 @@ pub fn App() -> Element {
 
     rsx! {
         link { rel: "stylesheet", href: CSS }
-        // Tailwind CDN for development if local build not set up
-        script { src: "https://cdn.tailwindcss.com" }
 
-        div { class: "bg-slate-950 text-slate-200 font-sans min-h-screen flex flex-col selection:bg-indigo-500/30 selection:text-indigo-200",
+        div { class: "app-root",
 
             if !authenticated() {
                 Login { on_login: handle_login }
             } else {
-                Header { on_refresh_change: move |val| refresh_interval.set(val) }
+                Header {
+                    refresh_interval: refresh_interval(),
+                    uptime: system_status().uptime,
+                    on_refresh_change: move |val| refresh_interval.set(val),
+                }
 
-                main { class: "flex-1 p-6 max-w-7xl mx-auto w-full",
+                if let Some(err) = error_msg() {
+                    div { class: "error-banner",
+                        svg {
+                            class: "icon-sm",
+                            fill: "none",
+                            stroke: "currentColor",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
+                            }
+                        }
+                        span { "{err}" }
+                    }
+                }
+
+                main { class: "app-main",
 
                     SystemStatusDisplay { status: system_status() }
+
+                    TrendChart { history: history() }
 
                     ServiceList {
                         services: services(),

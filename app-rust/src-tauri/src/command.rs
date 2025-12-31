@@ -76,7 +76,12 @@ pub async fn authenticate(passphrase: String, address: String) -> Result<String,
 #[tauri::command]
 pub async fn get_status(interval_ms: Option<u64>) -> Result<common::SystemInfo, String> {
     match client::send_request(Request::GetStatus { interval_ms }).await? {
-        Response::Status(data) => Ok(data),
+        Response::Status(mut data) => {
+            if data.nanoid.is_empty() {
+                data.nanoid = common::func::nanoid_gen();
+            }
+            Ok(data)
+        }
         Response::Error(e) => Err(e),
         _ => Err("Unexpected response".to_string()),
     }
@@ -85,7 +90,14 @@ pub async fn get_status(interval_ms: Option<u64>) -> Result<common::SystemInfo, 
 #[tauri::command]
 pub async fn list_services() -> Result<Vec<common::ServiceInfo>, String> {
     match client::send_request(Request::ListServices).await? {
-        Response::Services(data) => Ok(data),
+        Response::Services(mut data) => {
+            for svc in &mut data {
+                if svc.nanoid.is_empty() {
+                    svc.nanoid = common::func::nanoid_gen();
+                }
+            }
+            Ok(data)
+        }
         Response::Error(e) => Err(e),
         _ => Err("Unexpected response".to_string()),
     }
