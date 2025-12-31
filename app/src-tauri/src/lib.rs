@@ -101,19 +101,15 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // 仅在非 macOS 平台（如 Windows）启动时自动显示窗口
-            // macOS 保持隐藏，等待用户点击菜单栏图标
-            #[cfg(not(target_os = "macos"))]
-            {
-                if let Some(main_window) = app.get_webview_window("main") {
-                    tauri::async_runtime::spawn(async move {
-                        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-                        if let Err(e) = main_window.show() {
-                            log::error!("Failed to show main window: {}", e);
-                        }
-                    });
-                }
+            if let Some(main_window) = app.get_webview_window("main") {
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                    if let Err(e) = main_window.show() {
+                        log::error!("Failed to show main window: {}", e);
+                    }
+                });
             }
+
             Ok(())
         })
         .on_window_event(|window, event| match event {
