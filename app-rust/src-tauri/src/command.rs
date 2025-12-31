@@ -16,6 +16,7 @@ pub fn quit_app(app: tauri::AppHandle) {
 
 #[tauri::command]
 pub async fn authenticate(passphrase: String, address: String) -> Result<String, String> {
+    println!("Authenticating to address: {}", address);
     // Update address
     {
         let mut guard = client::SERVER_ADDRESS

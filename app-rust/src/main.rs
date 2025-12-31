@@ -1,4 +1,7 @@
 mod app;
+mod models;
+mod services;
+mod components;
 
 use app::App;
 use dioxus::prelude::*;

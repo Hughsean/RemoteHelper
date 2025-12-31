@@ -1,5 +1,5 @@
 pub mod crypto;
-
+pub mod func;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,13 +42,14 @@ pub enum Response {
     Ok,
     Challenge(String),
     Error(String),
-    Status(StatusData),
-    Services(Vec<ServiceData>),
+    Status(SystemInfo),
+    Services(Vec<ServiceInfo>),
     ServiceAdded(usize),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct StatusData {
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct SystemInfo {
+    pub nanoid: String,
     pub cpu_usage: f32,
     pub memory_usage: u64,
     pub total_memory: u64,
@@ -60,10 +61,23 @@ pub struct StatusData {
     pub gpu_model: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ServiceData {
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct ServiceInfo {
+    pub nanoid: String,
     pub id: usize,
     pub description: String,
     pub running: bool,
     pub pid: Option<u32>,
+}
+
+impl PartialEq for SystemInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.nanoid == other.nanoid
+    }
+}
+
+impl PartialEq for ServiceInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.nanoid == other.nanoid
+    }
 }

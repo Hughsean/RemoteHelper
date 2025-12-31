@@ -15,6 +15,8 @@ web-sys = "0.3"
 js-sys = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
-
-# [workspace]
-# members = ["src-tauri"]
+common.workspace = true
+gloo-timers.workspace = true
+gloo-console.workspace = true
+getrandom = { version = "0.2", features = ["js"] }
+log.workspace = true

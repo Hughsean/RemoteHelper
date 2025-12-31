@@ -1,7 +1,10 @@
 use crate::state::AppState;
 use anyhow::Result;
 use base64::prelude::*;
-use common::{crypto::CryptoSession, Handshake, Request, Response, ServiceAction, ServiceData, StatusData};
+use common::func;
+use common::{
+    Handshake, Request, Response, ServiceAction, ServiceInfo, SystemInfo, crypto::CryptoSession,
+};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use rand::Rng;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -25,7 +28,7 @@ async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Res
         return Err(anyhow::anyhow!("Handshake message too large"));
     }
     socket.read_exact(&mut buf[..len]).await?;
-    
+
     let client_hello: Handshake = serde_json::from_slice(&buf[..len])?;
     let client_pub_bytes = match client_hello {
         Handshake::ClientHello { public_key } => BASE64_STANDARD.decode(public_key)?,
@@ -37,13 +40,16 @@ async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Res
     let server_pub_b64 = BASE64_STANDARD.encode(server_public.as_bytes());
 
     // 3. Send ServerHello
-    let resp = Handshake::ServerHello { public_key: server_pub_b64 };
+    let resp = Handshake::ServerHello {
+        public_key: server_pub_b64,
+    };
     let resp_bytes = serde_json::to_vec(&resp)?;
     socket.write_u32(resp_bytes.len() as u32).await?;
     socket.write_all(&resp_bytes).await?;
 
     // 4. Initialize Crypto Session
-    let client_public_key = PublicKey::from(TryInto::<[u8; 32]>::try_into(client_pub_bytes).unwrap());
+    let client_public_key =
+        PublicKey::from(TryInto::<[u8; 32]>::try_into(client_pub_bytes).unwrap());
     let shared_secret = secret.diffie_hellman(&client_public_key);
     let mut crypto = CryptoSession::new(shared_secret.to_bytes(), true);
 
@@ -131,10 +137,14 @@ async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Res
     Ok(())
 }
 
-async fn send_response(socket: &mut TcpStream, crypto: &mut CryptoSession, response: &Response) -> Result<()> {
+async fn send_response(
+    socket: &mut TcpStream,
+    crypto: &mut CryptoSession,
+    response: &Response,
+) -> Result<()> {
     let resp_bytes = serde_json::to_vec(response)?;
     let ciphertext = crypto.encrypt(&resp_bytes)?;
-    
+
     socket.write_u32(ciphertext.len() as u32).await?;
     socket.write_all(&ciphertext).await?;
     Ok(())
@@ -202,7 +212,11 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
 
             let (cpu, mem, total, uptime, cpu_model) = {
                 let sys = state.sys.read().await;
-                let cpu_model = sys.cpus().first().map(|c| c.brand().to_string()).unwrap_or_default();
+                let cpu_model = sys
+                    .cpus()
+                    .first()
+                    .map(|c| c.brand().to_string())
+                    .unwrap_or_default();
                 (
                     sys.global_cpu_usage(),
                     sys.used_memory(),
@@ -222,7 +236,8 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 )
             };
 
-            Response::Status(StatusData {
+            Response::Status(SystemInfo {
+                nanoid: func::nanoid_gen(),
                 cpu_usage: cpu,
                 memory_usage: mem,
                 total_memory: total,
@@ -243,7 +258,8 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 let running = processes.contains_key(&id);
                 let pid = processes.get(&id).map(|c| c.id()).flatten();
 
-                services.push(ServiceData {
+                services.push(ServiceInfo {
+                    nanoid: func::nanoid_gen(),
                     id,
                     description: svc_config.description.clone(),
                     running,
@@ -259,7 +275,8 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 let running = processes.contains_key(&id);
                 let pid = processes.get(&id).map(|c| c.id()).flatten();
 
-                services.push(ServiceData {
+                services.push(ServiceInfo {
+                    nanoid: func::nanoid_gen(),
                     id,
                     description: svc_config.description.clone(),
                     running,
