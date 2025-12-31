@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "common",
-    "app/src-tauri",
     "client",
     "app-rust",
     "app-rust/src-tauri",

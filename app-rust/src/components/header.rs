@@ -71,18 +71,6 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
                         span { class: "refresh-label", "刷新间隔" }
                         div { class: "refresh-value-box",
                             span { class: "refresh-value", "{display_text}" }
-                            svg {
-                                class: "icon-sm",
-                                fill: "none",
-                                stroke: "currentColor",
-                                view_box: "0 0 24 24",
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    stroke_width: "2",
-                                    d: "M19 9l-7 7-7-7",
-                                }
-                            }
                         }
                     }
                     select {
