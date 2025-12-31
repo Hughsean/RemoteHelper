@@ -46,11 +46,11 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
                         }
                     }
                 }
-                h1 { class: "header-title", "服务监控(Hughsean)" }
+                h1 { class: "header-title", "服务监控" }
                 if uptime > 0 {
                     div { class: "uptime-badge",
                         svg {
-                            class: "icon-sm mr-1",
+                            class: "icon-sm",
                             fill: "none",
                             stroke: "currentColor",
                             view_box: "0 0 24 24",
@@ -61,7 +61,7 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
                                 d: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
                             }
                         }
-                        span { "上线时间: {format_uptime(uptime)}" }
+                        span { "服务器已上线: {format_uptime(uptime)}" }
                     }
                 }
             }
@@ -106,7 +106,7 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
                 }
 
                 button {
-                    class: "icon-btn ml-4 text-red-500 hover:bg-red-500/10",
+                    class: "header-btn ml-4",
                     title: "退出程序",
                     onclick: move |_| {
                         spawn(async move {

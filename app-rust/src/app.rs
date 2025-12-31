@@ -9,7 +9,12 @@ use crate::components::{
 use dioxus::prelude::*;
 use std::time::Duration;
 
-static CSS: Asset = asset!("/assets/styles.css");
+static BASE_CSS: Asset = asset!("/assets/css/base.css");
+static HEADER_CSS: Asset = asset!("/assets/css/header.css");
+static LOGIN_CSS: Asset = asset!("/assets/css/login.css");
+static STATUS_CSS: Asset = asset!("/assets/css/status.css");
+static SERVICES_CSS: Asset = asset!("/assets/css/services.css");
+static CHART_CSS: Asset = asset!("/assets/css/chart.css");
 
 pub fn App() -> Element {
     let mut authenticated = use_signal(|| false);
@@ -105,7 +110,12 @@ pub fn App() -> Element {
     };
 
     rsx! {
-        link { rel: "stylesheet", href: CSS }
+        link { rel: "stylesheet", href: BASE_CSS }
+        link { rel: "stylesheet", href: HEADER_CSS }
+        link { rel: "stylesheet", href: LOGIN_CSS }
+        link { rel: "stylesheet", href: STATUS_CSS }
+        link { rel: "stylesheet", href: SERVICES_CSS }
+        link { rel: "stylesheet", href: CHART_CSS }
 
         div { class: "app-root",
 
