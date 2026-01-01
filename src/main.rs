@@ -2,6 +2,7 @@ mod config;
 mod process;
 mod server;
 mod state;
+mod utils;
 
 use crate::config::AppConfig;
 use crate::state::AppState;
@@ -42,14 +43,37 @@ async fn main() -> anyhow::Result<()> {
     let config = AppConfig::load()?;
 
     // Optional startup delay (configurable)
-    if config.web_panel.startup_delay_secs > 0 {
+    if config.web_panel.health_check_url.is_some() {
         tracing::info!(
             "Waiting for network initialization... {} seconds",
             config.web_panel.startup_delay_secs
         );
-        tokio::time::sleep(Duration::from_secs(config.web_panel.startup_delay_secs)).await;
+
+        let delay = config.web_panel.startup_delay_secs;
+
+        if config.web_panel.startup_delay_secs > 0 {
+            tokio::time::sleep(Duration::from_secs(delay)).await;
+        } else {
+            let timeout = delay.max(10);
+            let mut sleep_time = 1;
+            loop {
+                let connected = utils::test_http_503(
+                    config.web_panel.health_check_url.as_ref().unwrap(),
+                    timeout,
+                )
+                .await
+                .unwrap_or(false);
+
+                if connected {
+                    tracing::info!("Network initialization detected");
+                    break;
+                };
+                tokio::time::sleep(Duration::from_secs(sleep_time)).await;
+                sleep_time = (sleep_time * 2).min(timeout * 6);
+            }
+        }
     }
-    tracing::info!("Configuration loaded successfully.");
+    tracing::info!("Configuration loaded successfully");
 
     // Initialize state
     let state = AppState::new(config.clone());

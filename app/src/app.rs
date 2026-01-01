@@ -99,7 +99,10 @@ pub fn App() -> Element {
     let handle_add_service = move |(desc, exe, args): (String, String, Vec<String>)| {
         gloo_console::log!("handle_add_service 被调用");
         spawn(async move {
-            gloo_console::log!(format!("准备添加服务: desc='{}', exe='{}', args={:?}", desc, exe, args));
+            gloo_console::log!(format!(
+                "准备添加服务: desc='{}', exe='{}', args={:?}",
+                desc, exe, args
+            ));
             match command::add_service(desc.clone(), exe.clone(), args.clone()).await {
                 Ok(id) => {
                     gloo_console::log!(format!("服务添加成功, ID: {}", id));

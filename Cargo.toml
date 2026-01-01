@@ -74,4 +74,5 @@ x25519-dalek.workspace = true
 rcgen.workspace = true
 nanoid.workspace = true
 dirs.workspace = true
+reqwest = "0.13.1"
 # wasm-bindgen-futures.workspace = true

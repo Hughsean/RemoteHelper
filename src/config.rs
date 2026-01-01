@@ -24,6 +24,8 @@ pub struct WebPanelConfig {
     pub max_connections: usize,
     #[serde(default = "default_connection_timeout")]
     pub connection_timeout_secs: u64,
+    #[serde(default)]
+    pub health_check_url: Option<String>,
     // #[serde(default = "default_cert_path")]
     // pub cert_path: String,
     // #[serde(default = "default_key_path")]

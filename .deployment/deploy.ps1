@@ -223,7 +223,7 @@ function Install-Service {
     & nssm set $ServiceName Description "RemoteHelper 远程系统监控与进程管理服务"
 
     # 设置服务显示名称
-    & nssm set $ServiceName DisplayName "RemoteHelper Server"
+    & nssm set $ServiceName DisplayName "$ServiceName"
 
     # 设置启动类型为自动
     & nssm set $ServiceName Start SERVICE_AUTO_START
