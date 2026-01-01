@@ -61,6 +61,9 @@ pub fn run() {
                                 {
                                     let _ =
                                         app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                                    // Reset window size and position on macOS
+                                    let _ = window.set_size(tauri::PhysicalSize::new(880, 700));
+                                    let _ = window.center();
                                 }
                                 let _ = window.show();
                                 let _ = window.set_focus();
@@ -92,6 +95,9 @@ pub fn run() {
                                 {
                                     let _ =
                                         app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                                    // Reset window size and position on macOS
+                                    let _ = window.set_size(tauri::PhysicalSize::new(880, 600));
+                                    let _ = window.center();
                                 }
                                 let _ = window.show();
                                 let _ = window.set_focus();

@@ -37,44 +37,32 @@ jobs:
           body: |
             ## RemoteHelper ${{ steps.get_version.outputs.version }}
 
-            🔄 RemoteHelper v2.0.1 - 密钥管理优化更新
+            � RemoteHelper v2.0.2 - macOS 窗口管理优化
 
-            ### 🔑 重要变更（需要迁移）
+            ### 🪟 修复与改进
 
-            **密钥文件位置标准化**
-            - 客户端私钥现在统一从 `~/id_ed25519.json` 自动加载
-            - 不再需要在代码中硬编码密钥
-            - `keygen` 工具现在直接保存到标准位置
+            **macOS 窗口管理优化**
+            - 点击托盘图标或菜单"显示/隐藏"时，窗口大小自动重置为 880x600
+            - 窗口位置自动居中，防止窗口移出屏幕或位置异常
+            - 优化用户体验，确保每次显示窗口时位置和大小一致
 
-            ### 🎨 界面优化
+            ### 📝 技术细节
 
-            - 优化应用标题布局，提升视觉层次感
-
-            ### 📦 迁移指南
-
-            如果你有现有的 `client_key.json`，请迁移到新位置：
-
-            **Windows:**
-            ```powershell
-            Move-Item client_key.json $env:USERPROFILE\id_ed25519.json
-            ```
-
-            **Linux/macOS:**
-            ```bash
-            mv client_key.json ~/id_ed25519.json
-            ```
-
-            或生成新密钥对：
-            ```bash
-            cargo run --bin keygen
-            ```
+            - 在 macOS 上显示窗口时自动调用 `set_size()` 和 `center()`
+            - 仅影响从隐藏状态恢复显示的场景
+            - 不影响 Windows 和 Linux 平台
 
             ### 🚀 快速开始
 
-            1. **生成密钥**: 运行 keygen 生成 ~/id_ed25519.json
-            2. **配置**: 将公钥填入 config.toml 的 authorized_keys
-            3. **启动**: 运行 RemoteHelperServer
-            4. **连接**: 使用客户端连接
+            **首次使用**
+            1. **生成密钥**: `cargo run --bin keygen`
+            2. **配置**: 将公钥填入 `config.toml` 的 `authorized_keys`
+            3. **启动服务端**: `cargo run --bin RemoteHelperServer`
+            4. **启动客户端**: `cd app && cargo tauri dev`
+
+            **升级用户**
+            - 直接替换可执行文件即可
+            - 无需配置变更，完全向后兼容
 
   build-tauri:
     name: Build Tauri Client

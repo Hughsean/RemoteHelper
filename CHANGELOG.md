@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-01-01
+
+### Fixed
+
+- **macOS**: Tray icon click and menu "Show/Hide" now automatically reset window size (880x600) and center position
+- Window geometry is now restored to default settings when showing from hidden state on macOS
+
+### Improved
+
+- Better window management on macOS: prevents off-screen windows and inconsistent sizing
+- Enhanced user experience with predictable window positioning
+
 ## [2.0.1] - 2026-01-01
 
 ### Changed
@@ -114,5 +126,6 @@ The following features are planned for future releases:
 
 ---
 
+[2.0.2]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.2
 [2.0.1]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.1
 [2.0.0]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.0
