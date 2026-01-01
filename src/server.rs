@@ -379,6 +379,95 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             let id = state.config.service.len() + dynamic.len() - 1;
             Response::ServiceAdded(id)
         }
+        Request::QueryPath { path } => query_path_suggestions(&path),
         _ => Response::Error("Invalid request state".to_string()),
     }
+}
+
+fn query_path_suggestions(path: &str) -> Response {
+    use std::path::{Path, PathBuf};
+
+    // 处理路径：如果是空的，使用当前目录
+    let input_path = if path.is_empty() {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else {
+        PathBuf::from(path)
+    };
+
+    // 确定要搜索的目录和前缀
+    let (search_dir, prefix) = if input_path.exists() && input_path.is_dir() {
+        // 如果是一个存在的目录，搜索该目录
+        (input_path.clone(), String::new())
+    } else {
+        // 否则，搜索父目录，并使用文件名作为前缀
+        let parent = input_path.parent().unwrap_or(Path::new("."));
+        let file_name = input_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        (parent.to_path_buf(), file_name)
+    };
+
+    // 读取目录并过滤
+    let mut suggestions = Vec::new();
+
+    if let Ok(entries) = std::fs::read_dir(&search_dir) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                let file_name = entry.file_name();
+                let name_str = file_name.to_string_lossy();
+
+                // 如果有前缀，进行过滤（不区分大小写）
+                if !prefix.is_empty()
+                    && !name_str.to_lowercase().starts_with(&prefix.to_lowercase())
+                {
+                    continue;
+                }
+
+                let is_dir = metadata.is_dir();
+                let full_path = entry.path();
+                let path_str = full_path.to_string_lossy().to_string();
+
+                // 检查是否可执行（Windows下检查.exe扩展名）
+                let is_executable = if cfg!(windows) {
+                    path_str.to_lowercase().ends_with(".exe")
+                } else {
+                    // Unix系统检查执行权限
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        metadata.permissions().mode() & 0o111 != 0
+                    }
+                    #[cfg(not(unix))]
+                    false
+                };
+
+                suggestions.push(common::PathItem {
+                    path: path_str,
+                    is_dir,
+                    is_executable,
+                });
+            }
+        }
+    }
+
+    // 按类型和名称排序：目录优先，然后是可执行文件，最后是其他文件
+    suggestions.sort_by(|a, b| {
+        use std::cmp::Ordering;
+        match (a.is_dir, b.is_dir) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => match (a.is_executable, b.is_executable) {
+                (true, false) => Ordering::Less,
+                (false, true) => Ordering::Greater,
+                _ => a.path.to_lowercase().cmp(&b.path.to_lowercase()),
+            },
+        }
+    });
+
+    // 限制返回数量，避免过多结果
+    suggestions.truncate(50);
+
+    Response::PathSuggestions(suggestions)
 }

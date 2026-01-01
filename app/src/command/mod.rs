@@ -33,6 +33,7 @@ struct ControlServiceArgs {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AddServiceArgs {
     description: String,
     exe_path: String,
@@ -40,7 +41,7 @@ struct AddServiceArgs {
 }
 
 pub async fn authenticate(passphrase: String, address: String) -> Result<String, String> {
-    gloo_console::log!("Calling authenticate with args: {:?}", 1221);
+    gloo_console::log!("正在认证...", &address);
     let args = serde_wasm_bindgen::to_value(&AuthenticateArgs {
         passphrase,
         address,
@@ -90,6 +91,19 @@ pub async fn add_service(
     })
     .unwrap();
     match invoke("add_service", args).await {
+        Ok(result) => serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string()),
+        Err(e) => Err(e.as_string().unwrap_or("Unknown error".to_string())),
+    }
+}
+
+#[derive(Serialize)]
+struct QueryPathArgs {
+    path: String,
+}
+
+pub async fn query_path(path: String) -> Result<Vec<common::PathItem>, String> {
+    let args = serde_wasm_bindgen::to_value(&QueryPathArgs { path }).unwrap();
+    match invoke("query_path", args).await {
         Ok(result) => serde_wasm_bindgen::from_value(result).map_err(|e| e.to_string()),
         Err(e) => Err(e.as_string().unwrap_or("Unknown error".to_string())),
     }

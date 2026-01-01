@@ -97,15 +97,22 @@ pub fn App() -> Element {
     };
 
     let handle_add_service = move |(desc, exe, args): (String, String, Vec<String>)| {
+        gloo_console::log!("handle_add_service 被调用");
         spawn(async move {
-            match command::add_service(desc, exe, args).await {
-                Ok(_) => {
+            gloo_console::log!(format!("准备添加服务: desc='{}', exe='{}', args={:?}", desc, exe, args));
+            match command::add_service(desc.clone(), exe.clone(), args.clone()).await {
+                Ok(id) => {
+                    gloo_console::log!(format!("服务添加成功, ID: {}", id));
                     show_add_modal.set(false);
                     if let Ok(list) = command::list_services().await {
+                        gloo_console::log!(format!("刷新服务列表, 共 {} 个服务", list.len()));
                         services.set(list);
                     }
                 }
-                Err(e) => log::error!("Failed to add service: {}", e),
+                Err(e) => {
+                    gloo_console::log!(format!("添加服务失败: {}", e));
+                    log::error!("Failed to add service: {}", e);
+                }
             }
         });
     };

@@ -13,7 +13,7 @@ app 项目使用 Vite + TypeScript + TailwindCSS。
 app-rust 项目使用 Dioxus + Rust，需替换前端框架相关代码。
 Dioxus 组件化：
 
-使用最新的 Dioxus 组件库和文档（参考：https://dioxuslabs.com/components）。
+使用最新的 Dioxus 组件库和文档（参考：<https://dioxuslabs.com/components）。>
 将页面拆分为多个可复用的组件（如导航栏、表单、数据展示等）。
 迁移：
 替换 @tauri-apps/api 的调用逻辑，使用 Dioxus 和 Tauri 的 Rust API。

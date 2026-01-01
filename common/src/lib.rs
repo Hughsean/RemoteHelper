@@ -28,6 +28,9 @@ pub enum Request {
         exe_path: String,
         args: Vec<String>,
     },
+    QueryPath {
+        path: String,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,6 +48,7 @@ pub enum Response {
     Status(SystemInfo),
     Services(Vec<ServiceInfo>),
     ServiceAdded(usize),
+    PathSuggestions(Vec<PathItem>),
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -90,4 +94,11 @@ impl PartialEq for ServiceInfo {
     fn eq(&self, other: &Self) -> bool {
         self.nanoid == other.nanoid
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PathItem {
+    pub path: String,
+    pub is_dir: bool,
+    pub is_executable: bool,
 }

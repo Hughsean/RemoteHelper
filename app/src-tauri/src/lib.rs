@@ -133,6 +133,7 @@ pub fn run() {
             command::list_services,
             command::control_service,
             command::add_service,
+            command::query_path,
             command::quit_app
         ])
         .run(tauri::generate_context!())

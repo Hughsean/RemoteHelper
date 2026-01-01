@@ -13,7 +13,7 @@ startup_delay_secs = 0
 # 可选：最大连接数限制（默认100）
 max_connections = 10
 # 可选：连接超时秒数（默认300秒=5分钟）
-connection_timeout_secs = 30
+connection_timeout_secs = 3000
 
 [[service]]
 description = "Remote Desktop Access"

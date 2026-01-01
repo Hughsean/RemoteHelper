@@ -142,3 +142,8 @@ pub async fn add_service(
         _ => Err("Unexpected response".to_string()),
     }
 }
+
+#[tauri::command]
+pub async fn query_path(path: String) -> Result<Vec<common::PathItem>, String> {
+    client::query_path(path).await
+}

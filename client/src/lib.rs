@@ -221,3 +221,14 @@ pub async fn read_raw_response(conn: &mut EncryptedConnection) -> Result<Respons
 
     serde_json::from_slice(&plaintext).map_err(|e| format!("Failed to deserialize: {}", e))
 }
+
+pub async fn query_path(path: String) -> Result<Vec<common::PathItem>, String> {
+    let req = Request::QueryPath { path };
+    let resp = send_request(req).await?;
+
+    match resp {
+        Response::PathSuggestions(items) => Ok(items),
+        Response::Error(e) => Err(e),
+        _ => Err("Unexpected response".to_string()),
+    }
+}
