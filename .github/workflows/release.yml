@@ -31,7 +31,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: RemoteHelper ${{ steps.get_version.outputs.version }}
-          draft: true
+          draft: false
           prerelease: false
           generate_release_notes: true
           body: |
@@ -70,8 +70,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
+          - platform: "macos-26"
+            args: ""
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -79,8 +79,6 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
