@@ -24,11 +24,11 @@
 
 .chart-line {
   fill: none;
-  stroke-width: 3;
+  stroke-width: 1;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 4px rgba(0,0,0,0.3));
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.3));
 }
 
 .line-cpu {
@@ -56,6 +56,20 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.legend-item:hover {
+  opacity: 0.8;
+}
+
+.legend-item-disabled {
+  opacity: 0.3;
+}
+
+.legend-item-disabled .legend-dot {
+  box-shadow: none;
 }
 
 .legend-color {
@@ -133,7 +147,7 @@
   background: var(--color-indigo-600);
   color: white;
   font-weight: 500;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .legend-gpu {

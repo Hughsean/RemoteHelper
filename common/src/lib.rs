@@ -49,7 +49,7 @@ pub enum Response {
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct SystemInfo {
-    #[serde(default)]
+    // #[serde(default)]
     pub nanoid: String,
     pub cpu_usage: f32,
     pub memory_usage: u64,

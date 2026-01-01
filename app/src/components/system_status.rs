@@ -11,13 +11,11 @@ pub fn SystemStatusDisplay(status: SystemInfo) -> Element {
                 memory_usage: status.memory_usage,
                 total_memory: status.total_memory,
             }
-            if let Some(gpu_usage) = status.gpu_usage {
-                GpuStatusCard {
-                    usage: gpu_usage,
-                    memory_usage: status.gpu_memory_usage,
-                    total_memory: status.gpu_total_memory,
-                    model: status.gpu_model.clone().unwrap_or_default(),
-                }
+            GpuStatusCard {
+                usage: status.gpu_usage,
+                memory_usage: status.gpu_memory_usage,
+                total_memory: status.gpu_total_memory,
+                model: status.gpu_model.clone().unwrap_or_else(|| "N/A".to_string()),
             }
         }
     }
@@ -75,11 +73,18 @@ fn CpuCard(cpu_usage: f32, cpu_model: String, memory_usage: u64, total_memory: u
 
 #[component]
 fn GpuStatusCard(
-    usage: u32,
+    usage: Option<u32>,
     memory_usage: Option<u64>,
     total_memory: Option<u64>,
     model: String,
 ) -> Element {
+    let usage_value = usage.unwrap_or(0);
+    let usage_text = if usage.is_some() {
+        format!("{usage_value}%")
+    } else {
+        "N/A".to_string()
+    };
+
     let mem_percent = if let (Some(used), Some(total)) = (memory_usage, total_memory) {
         if total > 0 {
             (used as f32 / total as f32) * 100.0
@@ -105,19 +110,19 @@ fn GpuStatusCard(
             div { class: "status-header",
                 div {
                     h3 { class: "status-title", "GPU 状态" }
-                    div { class: "status-value", "{usage}%" }
+                    div { class: "status-value", "{usage_text}" }
                 }
             }
 
             div { class: "mb-2",
                 div { class: "flex justify-between text-xs text-gray-400 mb-1",
                     span { "利用率" }
-                    span { "{usage}%" }
+                    span { "{usage_text}" }
                 }
                 div { class: "progress-track",
                     div {
-                        class: "progress-fill status-bar-purple",
-                        style: "width: {usage}%",
+                        class: "progress-fill status-bar-emerald",
+                        style: "width: {usage_value}%",
                     }
                 }
             }

@@ -13,7 +13,8 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
-.header-left, .header-right {
+.header-left,
+.header-right {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -86,7 +87,7 @@
   background-color: rgba(30, 41, 59, 0.5);
   border-radius: 0.5rem;
   border: 1px solid var(--bg-slate-700);
-  width: 7rem;
+  min-width: 9rem;
   height: 2.25rem;
   box-sizing: border-box;
   transition: all 0.3s;
@@ -133,7 +134,7 @@
   border: 1px solid var(--bg-slate-700);
   border-radius: 0.5rem;
   padding: 0.25rem;
-  width: 100%;
+  min-width: 100%;
   box-sizing: border-box;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
   z-index: 100;
@@ -165,6 +166,13 @@
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
