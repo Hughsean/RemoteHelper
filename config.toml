@@ -7,7 +7,10 @@ frpc_exe_path = "E:\\UserData\\.Exe\\frpc.exe"
 # 这里的 arg 是用于 Web 控制台的 frpc 隧道参数
 frpc_args = ["-f", "84loylo19t7ut88mbr1afkyhynfbulg8:24983644"]
 # Web 控制台访问密钥
-authorized_keys = ["cD4nEfSeBQF+aWZZzLusNAcUthuq2uw4kZRlCPhkgkQ="]
+authorized_keys = [
+  "cD4nEfSeBQF+aWZZzLusNAcUthuq2uw4kZRlCPhkgkQ=",
+  "NNo8KHy8HqJa6+pqkKt+DU5MFMV2E7RqZuPR21JhvnU=",
+]
 # 可选：启动延迟秒数（默认0，无延迟）
 startup_delay_secs = 0
 # 可选：最大连接数限制（默认100）
