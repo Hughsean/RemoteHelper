@@ -31,107 +31,104 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
         return rsx! {};
     }
 
-    // Use the latest timestamp from data instead of client time to avoid clock skew
-    let latest_timestamp = history.back().map(|(t, _)| *t).unwrap_or(0);
-    let filtered_history: Vec<(u64, &SystemInfo)> = history
-        .iter()
-        .filter(|(t, _)| match time_window() {
-            TimeWindow::OneMin => *t > latest_timestamp.saturating_sub(60 * 1000),
-            TimeWindow::FiveMin => *t > latest_timestamp.saturating_sub(5 * 60 * 1000),
-            TimeWindow::All => true,
-        })
-        .map(|(t, s)| (*t, s))
-        .collect();
+    // 使用 use_memo 缓存过滤后的数据，只在 history 或 time_window 变化时重新计算
+    let chart_data = use_memo(move || {
+        let latest_timestamp = history.back().map(|(t, _)| *t).unwrap_or(0);
+        let time_cutoff = match time_window() {
+            TimeWindow::OneMin => latest_timestamp.saturating_sub(60 * 1000),
+            TimeWindow::FiveMin => latest_timestamp.saturating_sub(5 * 60 * 1000),
+            TimeWindow::All => 0,
+        };
 
-    let width = 100.0;
-    let height = 100.0;
-    let margin_top = 5.0;
-    let margin_bottom = 5.0;
-    let chart_height = height - margin_top - margin_bottom;
+        // 直接使用迭代器而不是 collect，减少分配
+        let filtered: Vec<_> = history.iter().filter(|(t, _)| *t > time_cutoff).collect();
 
-    // 收集所有启用的数据线的数值，用于统一缩放
-    let mut all_values: Vec<f32> = Vec::new();
-    if show_cpu() {
-        all_values.extend(
-            filtered_history
-                .iter()
-                .map(|(_, info)| info.cpu_usage.clamp(0.0, 100.0)),
-        );
-    }
-    if show_mem() {
-        all_values.extend(filtered_history.iter().map(|(_, info)| {
-            if info.total_memory > 0 {
+        if filtered.is_empty() {
+            return (String::new(), String::new(), String::new(), 0.0, 100.0);
+        }
+
+        let oldest_timestamp = filtered.first().map(|(t, _)| *t).unwrap_or(0);
+        let time_range = latest_timestamp.saturating_sub(oldest_timestamp).max(1);
+
+        // 一次遍历收集所有数据和计算缩放范围
+        let mut cpu_values = Vec::with_capacity(filtered.len());
+        let mut mem_values = Vec::with_capacity(filtered.len());
+        let mut gpu_values = Vec::with_capacity(filtered.len());
+        let mut all_values = Vec::with_capacity(filtered.len() * 3);
+
+        for (timestamp, info) in &filtered {
+            let cpu_val = info.cpu_usage.clamp(0.0, 100.0);
+            let mem_val = if info.total_memory > 0 {
                 ((info.memory_usage as f32 / info.total_memory as f32) * 100.0).clamp(0.0, 100.0)
             } else {
                 0.0
-            }
-        }));
-    }
-    if show_gpu() {
-        all_values.extend(
-            filtered_history
-                .iter()
-                .filter_map(|(_, info)| info.gpu_usage.map(|v| (v as f32).clamp(0.0, 100.0))),
-        );
-    }
-
-    // 计算统一的缩放范围（类似 Windows 任务管理器的动态缩放）
-    let (scale_min, scale_max) = if !all_values.is_empty() {
-        let min_val = all_values.iter().cloned().fold(f32::INFINITY, f32::min);
-        let max_val = all_values.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-
-        // 动态范围，最小10%以保证可见变化
-        let range = (max_val - min_val).max(10.0);
-        let center = (max_val + min_val) / 2.0;
-        let calc_min = (center - range / 2.0).max(0.0);
-        let calc_max = (center + range / 2.0).min(100.0);
-
-        (calc_min, calc_max)
-    } else {
-        (0.0, 100.0)
-    };
-
-    // 辅助函数：生成折线 SVG path 字符串（基于时间戳）
-    let make_line_path = |extractor: fn(&SystemInfo) -> f32| -> String {
-        if filtered_history.is_empty() {
-            return String::new();
-        }
-
-        let oldest_timestamp = filtered_history.first().map(|(t, _)| *t).unwrap_or(0);
-        let time_range = latest_timestamp.saturating_sub(oldest_timestamp).max(1);
-
-        let mut path = String::new();
-        for (timestamp, info) in &filtered_history {
-            let val = extractor(info).clamp(0.0, 100.0);
-
-            // 基于时间戳计算 x 坐标，而不是索引
-            let x = ((*timestamp - oldest_timestamp) as f32 / time_range as f32) * width;
-            let normalized = if scale_max > scale_min {
-                (val - scale_min) / (scale_max - scale_min)
-            } else {
-                0.5
             };
-            let y = margin_top + (1.0 - normalized) * chart_height;
+            let gpu_val = info.gpu_usage.map(|v| (v as f32).clamp(0.0, 100.0));
 
-            if path.is_empty() {
-                path.push_str(&format!("M {:.1},{:.1}", x, y));
-            } else {
-                path.push_str(&format!(" L {:.1},{:.1}", x, y));
+            cpu_values.push((*timestamp, cpu_val));
+            mem_values.push((*timestamp, mem_val));
+            if let Some(gv) = gpu_val {
+                gpu_values.push((*timestamp, gv));
+                all_values.push(gv);
             }
+
+            all_values.push(cpu_val);
+            all_values.push(mem_val);
         }
 
-        path
-    };
-
-    let cpu_path = make_line_path(|s| s.cpu_usage);
-    let mem_path = make_line_path(|s| {
-        if s.total_memory > 0 {
-            (s.memory_usage as f32 / s.total_memory as f32) * 100.0
+        // 计算统一的缩放范围
+        let (scale_min, scale_max) = if !all_values.is_empty() {
+            let min_val = all_values.iter().cloned().fold(f32::INFINITY, f32::min);
+            let max_val = all_values.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+            let range = (max_val - min_val).max(10.0);
+            let center = (max_val + min_val) / 2.0;
+            let calc_min = (center - range / 2.0).max(0.0);
+            let calc_max = (center + range / 2.0).min(100.0);
+            (calc_min, calc_max)
         } else {
-            0.0
-        }
+            (0.0, 100.0)
+        };
+
+        const WIDTH: f32 = 100.0;
+        const HEIGHT: f32 = 100.0;
+        const MARGIN_TOP: f32 = 5.0;
+        const MARGIN_BOTTOM: f32 = 5.0;
+        const CHART_HEIGHT: f32 = HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
+
+        // 生成 SVG 路径的辅助函数
+        let make_path = |values: &[(u64, f32)]| -> String {
+            if values.is_empty() {
+                return String::new();
+            }
+
+            // 预估路径长度以减少重新分配
+            let mut path = String::with_capacity(values.len() * 20);
+            for (i, &(timestamp, val)) in values.iter().enumerate() {
+                let x = ((timestamp - oldest_timestamp) as f32 / time_range as f32) * WIDTH;
+                let normalized = if scale_max > scale_min {
+                    (val - scale_min) / (scale_max - scale_min)
+                } else {
+                    0.5
+                };
+                let y = MARGIN_TOP + (1.0 - normalized) * CHART_HEIGHT;
+
+                if i == 0 {
+                    path.push_str(&format!("M {:.1},{:.1}", x, y));
+                } else {
+                    path.push_str(&format!(" L {:.1},{:.1}", x, y));
+                }
+            }
+            path
+        };
+
+        let cpu_path = make_path(&cpu_values);
+        let mem_path = make_path(&mem_values);
+        let gpu_path = make_path(&gpu_values);
+
+        (cpu_path, mem_path, gpu_path, scale_min, scale_max)
     });
-    let gpu_path = make_line_path(|s| s.gpu_usage.map(|v| v as f32).unwrap_or(0.0));
+
+    let (cpu_path, mem_path, gpu_path, _scale_min, _scale_max) = chart_data();
 
     rsx! {
         div { class: "chart-container",
