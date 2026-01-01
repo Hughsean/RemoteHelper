@@ -33,14 +33,14 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
 
     // Use the latest timestamp from data instead of client time to avoid clock skew
     let latest_timestamp = history.back().map(|(t, _)| *t).unwrap_or(0);
-    let filtered_history: Vec<&SystemInfo> = history
+    let filtered_history: Vec<(u64, &SystemInfo)> = history
         .iter()
         .filter(|(t, _)| match time_window() {
             TimeWindow::OneMin => *t > latest_timestamp.saturating_sub(60 * 1000),
             TimeWindow::FiveMin => *t > latest_timestamp.saturating_sub(5 * 60 * 1000),
             TimeWindow::All => true,
         })
-        .map(|(_, s)| s)
+        .map(|(t, s)| (*t, s))
         .collect();
 
     let width = 100.0;
@@ -55,11 +55,11 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
         all_values.extend(
             filtered_history
                 .iter()
-                .map(|info| info.cpu_usage.clamp(0.0, 100.0)),
+                .map(|(_, info)| info.cpu_usage.clamp(0.0, 100.0)),
         );
     }
     if show_mem() {
-        all_values.extend(filtered_history.iter().map(|info| {
+        all_values.extend(filtered_history.iter().map(|(_, info)| {
             if info.total_memory > 0 {
                 ((info.memory_usage as f32 / info.total_memory as f32) * 100.0).clamp(0.0, 100.0)
             } else {
@@ -71,7 +71,7 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
         all_values.extend(
             filtered_history
                 .iter()
-                .filter_map(|info| info.gpu_usage.map(|v| (v as f32).clamp(0.0, 100.0))),
+                .filter_map(|(_, info)| info.gpu_usage.map(|v| (v as f32).clamp(0.0, 100.0))),
         );
     }
 
@@ -91,24 +91,21 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
         (0.0, 100.0)
     };
 
-    // 辅助函数：生成折线 SVG path 字符串（使用统一缩放）
+    // 辅助函数：生成折线 SVG path 字符串（基于时间戳）
     let make_line_path = |extractor: fn(&SystemInfo) -> f32| -> String {
         if filtered_history.is_empty() {
             return String::new();
         }
 
-        let values: Vec<f32> = filtered_history
-            .iter()
-            .map(|info| extractor(info).clamp(0.0, 100.0))
-            .collect();
-
-        if values.is_empty() {
-            return String::new();
-        }
+        let oldest_timestamp = filtered_history.first().map(|(t, _)| *t).unwrap_or(0);
+        let time_range = latest_timestamp.saturating_sub(oldest_timestamp).max(1);
 
         let mut path = String::new();
-        for (i, &val) in values.iter().enumerate() {
-            let x = (i as f32 / (values.len().max(2) - 1) as f32) * width;
+        for (timestamp, info) in &filtered_history {
+            let val = extractor(info).clamp(0.0, 100.0);
+
+            // 基于时间戳计算 x 坐标，而不是索引
+            let x = ((*timestamp - oldest_timestamp) as f32 / time_range as f32) * width;
             let normalized = if scale_max > scale_min {
                 (val - scale_min) / (scale_max - scale_min)
             } else {
@@ -116,7 +113,7 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
             };
             let y = margin_top + (1.0 - normalized) * chart_height;
 
-            if i == 0 {
+            if path.is_empty() {
                 path.push_str(&format!("M {:.1},{:.1}", x, y));
             } else {
                 path.push_str(&format!(" L {:.1},{:.1}", x, y));

@@ -61,8 +61,12 @@ pub fn run() {
                                 {
                                     let _ =
                                         app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                                    // Exit fullscreen if currently in fullscreen mode
+                                    if window.is_fullscreen().unwrap_or(false) {
+                                        let _ = window.set_fullscreen(false);
+                                    }
                                     // Reset window size and position on macOS
-                                    let _ = window.set_size(tauri::PhysicalSize::new(880, 700));
+                                    let _ = window.set_size(tauri::LogicalSize::new(880, 700));
                                     let _ = window.center();
                                 }
                                 let _ = window.show();
@@ -95,6 +99,10 @@ pub fn run() {
                                 {
                                     let _ =
                                         app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                                    // Exit fullscreen if currently in fullscreen mode
+                                    if window.is_fullscreen().unwrap_or(false) {
+                                        let _ = window.set_fullscreen(false);
+                                    }
                                     // Reset window size and position on macOS
                                     let _ = window.set_size(tauri::PhysicalSize::new(880, 600));
                                     let _ = window.center();

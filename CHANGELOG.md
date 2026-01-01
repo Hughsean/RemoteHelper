@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-01-01
+
+### Fixed
+
+- **Chart Rendering**: Fixed trend chart X-axis to use actual timestamps instead of data point indices
+  - Chart now displays data based on real time intervals, not refresh rate
+  - Changing refresh interval (0.1s → 5s) no longer affects visual scrolling speed
+  - Time windows (1min/5min/30min) now accurately represent wall-clock time
+- **macOS Fullscreen**: Tauri app now properly exits fullscreen mode when showing window from tray
+  - Prevents window being stuck in fullscreen without title bar controls
+  - Ensures window appears in normal mode with proper size and position
+  - Applies to both menu item click and tray icon click events
+
+### Improved
+
+- Chart behavior now matches Windows Task Manager (time-based scrolling)
+- More consistent user experience across different refresh rate settings
+
 ## [2.1.0] - 2026-01-01
 
 ### Changed
