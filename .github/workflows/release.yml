@@ -63,7 +63,7 @@ jobs:
             ### 🚀 快速开始
 
             1. **生成密钥**: 运行 keygen 生成 ~/id_ed25519.json
-            2. **配置**: 将公钥填入 config.toml 的 uthorized_keys
+            2. **配置**: 将公钥填入 config.toml 的 authorized_keys
             3. **启动**: 运行 RemoteHelperServer
             4. **连接**: 使用客户端连接
 
