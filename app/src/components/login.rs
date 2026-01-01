@@ -45,10 +45,11 @@ pub fn Login(on_login: EventHandler<(String, String)>) -> Element {
                         }
                     }
                     div { class: "form-group",
-                        label { class: "form-label", "访问密钥" }
+                        label { class: "form-label", "密钥文件密码" }
                         input {
                             r#type: "password",
                             class: "form-input",
+                            placeholder: "~/id_ed25519.json 的密码",
                             value: "{passphrase}",
                             oninput: move |e| passphrase.set(e.value()),
                         }

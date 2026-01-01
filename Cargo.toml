@@ -1,10 +1,5 @@
 [workspace]
-members = [
-    "common",
-    "client",
-    "app",
-    "app/src-tauri", "hwlib",
-]
+members = ["common", "client", "app", "app/src-tauri", "hwlib"]
 [workspace.package]
 version = "2.0.0"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
@@ -39,6 +34,7 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 nanoid = "0.4"
 gloo-timers = "0.3"
 gloo-console = "0.3"
+dirs = "5.0"
 # workspace members
 common = { path = "common" }
 client = { path = "client" }
@@ -77,4 +73,5 @@ aes-gcm.workspace = true
 x25519-dalek.workspace = true
 rcgen.workspace = true
 nanoid.workspace = true
+dirs.workspace = true
 # wasm-bindgen-futures.workspace = true

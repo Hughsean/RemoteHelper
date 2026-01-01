@@ -44,17 +44,10 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
         header { class: "app-header",
             div { class: "header-left",
                 div { class: "logo-box",
-                    svg {
+                    img {
                         class: "icon-md",
-                        fill: "none",
-                        stroke: "currentColor",
-                        view_box: "0 0 24 24",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            stroke_width: "2",
-                            d: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10",
-                        }
+                        src: asset!("/assets/app.svg"),
+                        alt: "RemoteHelper Logo",
                     }
                 }
                 h1 { class: "header-title", "服务监控" }

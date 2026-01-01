@@ -5,6 +5,37 @@ All notable changes to RemoteHelper will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING**: Client private keys are now automatically loaded from `~/id_ed25519.json` instead of being hardcoded
+- `keygen` tool now saves keys directly to `~/id_ed25519.json` in user home directory
+- Login UI updated to clarify password is for the key file
+- All client implementations (Tauri, Web, test tools) now use standardized key file location
+
+### Migration Guide
+
+If you have an existing `client_key.json`, migrate it to the new location:
+
+**Windows:**
+
+```powershell
+Move-Item client_key.json $env:USERPROFILE\id_ed25519.json
+```
+
+**Linux/macOS:**
+
+```bash
+mv client_key.json ~/id_ed25519.json
+```
+
+Or generate a new keypair:
+
+```bash
+cargo run --bin keygen
+```
+
 ## [2.0.0] - 2026-01-01
 
 ### Added

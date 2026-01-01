@@ -59,10 +59,15 @@ fn main() -> anyhow::Result<()> {
         nonce: BASE64_STANDARD.encode(nonce_bytes),
     };
 
-    let file = File::create("client_key.json")?;
+    // Save to user home directory
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Failed to locate home directory"))?;
+    let key_path = home_dir.join("id_ed25519.json");
+
+    let file = File::create(&key_path)?;
     serde_json::to_writer_pretty(file, &key_file)?;
 
-    println!("\nKeypair saved to 'client_key.json'.");
+    println!("\nKeypair saved to '{}'.", key_path.display());
     println!("Add the Public Key to your server's config.toml 'authorized_keys' list.");
 
     Ok(())

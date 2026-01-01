@@ -44,29 +44,30 @@
 
         <!-- 外层旋转轨道 (青色) -->
         <g filter="url(#glow)">
-            <path d="M -140 0 A 140 140 0 0 1 140 0"
+            <path d="M -225 0 A 225 225 0 0 1 225 0"
                 stroke="#06b6d4" stroke-width="16" fill="none" stroke-linecap="round"
                 transform="rotate(-30)" opacity="0.9" />
-            <circle cx="140" cy="0" r="8" fill="#06b6d4" transform="rotate(-30)" />
+            <circle cx="225" cy="0" r="8" fill="#06b6d4" transform="rotate(-30)" />
         </g>
 
         <!-- 内层旋转轨道 (紫色) -->
         <g filter="url(#glow)">
-            <path d="M -100 0 A 100 100 0 0 0 100 0"
+            <path d="M -180 0 A 180 180 0 0 0 180 0"
                 stroke="#d946ef" stroke-width="16" fill="none" stroke-linecap="round"
                 transform="rotate(-30)" opacity="0.9" />
-            <circle cx="-100" cy="0" r="8" fill="#d946ef" transform="rotate(-30)" />
+            <circle cx="-180" cy="0" r="8" fill="#d946ef" transform="rotate(-30)" />
         </g>
 
         <!-- 核心六边形护盾 -->
         <path d="M 0 -60 L 52 -30 L 52 30 L 0 60 L -52 30 L -52 -30 Z"
-            fill="none" stroke="url(#cyber-grad)" stroke-width="6" opacity="0.5" />
+            fill="none" stroke="url(#cyber-grad)" stroke-width="6" opacity="0.5"
+            transform="scale(2)" />
 
         <!-- 中心能量闪电/脉冲 -->
         <g filter="url(#glow)">
             <path d="M -15 -10 L 5 -35 L 15 -35 L -5 10 L 15 10 L -5 45 L -15 45 L 5 -10 Z"
                 fill="url(#core-grad)"
-                transform="scale(1.8) rotate(10)" />
+                transform="scale(2.4) rotate(10)" />
         </g>
 
         <!-- 装饰性数据点 -->

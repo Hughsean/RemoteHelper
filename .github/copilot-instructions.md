@@ -150,9 +150,9 @@ cargo tauri dev  # Tauri desktop app
 
 ### Utility Binaries
 
-- `cargo run --bin keygen` - Generate Ed25519 keypair and encrypt private key.
+- `cargo run --bin keygen` - Generate Ed25519 keypair and encrypt private key to `~/id_ed25519.json`.
 - `cargo run --bin gen_cert` - Generate self-signed TLS certificate (currently unused).
-- `cargo run --bin test_real_ip` - Test client authentication flow.
+- `cargo run --bin test_real_ip` - Test client authentication flow (reads from `~/id_ed25519.json`).
 
 ## Conventions & Patterns
 
@@ -195,7 +195,8 @@ When modifying `Request` or `Response` in `common/src/lib.rs`:
 - **Nonce Randomization**: Initial nonce is randomized to prevent reuse on reconnection.
 - **Key Authorization**: Only pre-configured public keys in `authorized_keys` can authenticate.
 - **Connection Limits**: Prevents resource exhaustion DoS attacks.
-- **Sensitive Data**: Keep private keys encrypted at rest (use `keygen` tool).
+- **Sensitive Data**: Keep private keys encrypted at rest in `~/id_ed25519.json` (use `keygen` tool).
+- **Client Key Loading**: Clients automatically read from `~/id_ed25519.json`, no hardcoded keys.
 
 ### Hardware Monitoring
 
@@ -259,7 +260,9 @@ When modifying `Request` or `Response` in `common/src/lib.rs`:
 
 ### Authentication Fails
 
+- Confirm `~/id_ed25519.json` exists and is readable.
 - Confirm public key in `authorized_keys` matches the one from `keygen`.
+- Verify correct passphrase for encrypted private key.
 - Check challenge hasn't expired (30s limit).
 - Verify keypair file is readable by client.
 

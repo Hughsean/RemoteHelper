@@ -37,3 +37,4 @@ sha2 = { workspace = true }
 anyhow = { workspace = true }
 x25519-dalek = { workspace = true }
 client = { workspace = true }
+dirs = "5.0"

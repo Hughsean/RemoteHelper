@@ -25,14 +25,21 @@ pub async fn authenticate(passphrase: String, address: String) -> Result<String,
         *guard = address;
     }
 
-    // Hardcoded key data
-    let key_file = client::KeyFile {
-        pub_key: "cD4nEfSeBQF+aWZZzLusNAcUthuq2uw4kZRlCPhkgkQ=".to_string(),
-        enc_priv_key: "IGvKSCMIOyF0b4fkLwf9rDDUgsPv/rZ/QOJPIU/YKKVRd+AznMwBWCwU/LsSYC9R"
-            .to_string(),
-        salt: "bLkBsCBwWIwjsWLuKM5fEg==".to_string(),
-        nonce: "lBjdmc2vFXvVWB31".to_string(),
-    };
+    // Read key file from user directory
+    let home_dir = dirs::home_dir().ok_or_else(|| "Failed to locate home directory".to_string())?;
+    let key_path = home_dir.join("id_ed25519.json");
+
+    if !key_path.exists() {
+        return Err(format!(
+            "密钥文件不存在: {}\n请使用 keygen 工具生成密钥文件",
+            key_path.display()
+        ));
+    }
+
+    let key_content =
+        std::fs::read_to_string(&key_path).map_err(|e| format!("无法读取密钥文件: {}", e))?;
+    let key_file: client::KeyFile =
+        serde_json::from_str(&key_content).map_err(|e| format!("密钥文件格式错误: {}", e))?;
 
     // Decrypt Key
     let salt = BASE64_STANDARD
