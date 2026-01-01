@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,25 +15,29 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Get version from tag
         id: get_version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        id: create_release
+        uses: softprops/action-gh-release@v2
         with:
           name: RemoteHelper ${{ steps.get_version.outputs.version }}
-          draft: false
+          draft: true
           prerelease: false
-          generate_release_notes: false
+          generate_release_notes: true
           body: |
             ## RemoteHelper ${{ steps.get_version.outputs.version }}
 
-            🎉 RemoteHelper 首个正式版本发布！这是一个专为 Windows 设计的系统监控和远程管理工具，提供端到端加密通信和实时硬件监控。
+            🎉 RemoteHelper 新版本发布！
 
             ### ✨ 核心特性
 
@@ -45,87 +49,28 @@ jobs:
             - 📝 **自动日志轮转** - 10MB 阈值
             - ⚙️ **可配置连接限制和超时**
 
-            ### 📦 下载
+            ### 📦 下载说明
 
-            #### 服务器端
-            - **Windows (x64)**: `RemoteHelperServer-x86_64-pc-windows-msvc.zip`
-            - **macOS (Intel)**: `RemoteHelperServer-x86_64-apple-darwin.tar.gz`
-            - **macOS (Apple Silicon)**: `RemoteHelperServer-aarch64-apple-darwin.tar.gz`
+            #### 服务器端 (Server)
+            - **Windows (x64)**: RemoteHelperServer-x86_64-pc-windows-msvc.zip
+            - **macOS (Intel)**: RemoteHelperServer-x86_64-apple-darwin.tar.gz
+            - **macOS (Apple Silicon)**: RemoteHelperServer-aarch64-apple-darwin.tar.gz
 
-            #### 桌面客户端
-            - **Windows**: `RemoteHelper-*.msi` (MSI 安装包)
-            - **macOS**: `RemoteHelper-*.dmg` (DMG 镜像)
-
-            #### 工具集
-            所有平台的服务器压缩包均包含：
-            - `keygen` - 密钥对生成工具
-            - `gen_cert` - 证书生成工具
-            - `test_real_ip` - 认证测试工具
+            #### 桌面客户端 (Client)
+            - **Windows**: RemoteHelper_..._x64-setup.exe / .msi
+            - **macOS**: RemoteHelper_..._x64.dmg / _aarch64.dmg
 
             ### 🚀 快速开始
 
-            **1. 生成密钥对**
-            ```bash
-            # Windows
-            .\keygen.exe
+            1. **生成密钥**: 运行 keygen 生成 ~/id_ed25519.json
+            2. **配置**: 将公钥填入 config.toml 的 uthorized_keys
+            3. **启动**: 运行 RemoteHelperServer
+            4. **连接**: 使用客户端连接
 
-            # macOS/Linux
-            ./keygen
-            ```
-            密钥将保存到 `~/id_ed25519.json`
-
-            **2. 配置服务器**
-            编辑 `config.toml`，将公钥添加到 `authorized_keys`
-
-            **3. 启动服务器**
-            ```bash
-            # Windows
-            .\RemoteHelperServer.exe
-
-            # macOS/Linux
-            ./RemoteHelperServer
-            ```
-
-            **4. 连接客户端**
-            - 启动桌面客户端或访问 Web 界面
-            - 输入服务器地址和密钥密码
-            - 开始监控！
-
-            ### 🔐 安全性
-
-            - X25519 Diffie-Hellman 密钥交换
-            - AES-256-GCM 对称加密
-            - Ed25519 数字签名
-            - PBKDF2 密钥派生
-            - 30 秒挑战过期时间
-            - 每消息唯一随机数
-            - 连接限制 DoS 防护
-
-            ### 📚 文档
-
-            - [README.md](https://github.com/Hughsean/RemoteHelper/blob/main/README.md) - 完整文档
-            - [CHANGELOG.md](https://github.com/Hughsean/RemoteHelper/blob/main/CHANGELOG.md) - 变更日志
-            - [CONTRIBUTING.md](https://github.com/Hughsean/RemoteHelper/blob/main/CONTRIBUTING.md) - 贡献指南
-
-            ### ⚠️ 注意事项
-
-            - 首次运行必须先使用 `keygen` 生成密钥对
-            - GPU 监控仅支持 NVIDIA 显卡（需要驱动）
-            - macOS 版本可能需要在"系统设置 > 隐私与安全性"中允许运行
-
-            ### 🐛 问题反馈
-
-            如遇到问题，请在 [Issues](https://github.com/Hughsean/RemoteHelper/issues) 中提交
-
-            ### 📄 许可证
-
-            MIT License - 详见 [LICENSE](https://github.com/Hughsean/RemoteHelper/blob/main/LICENSE)
-
-  build-release:
-    name: Build Release
+  build-server:
+    name: Build Server
+    needs: create-release
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
     strategy:
       matrix:
         include:
@@ -149,110 +94,99 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build server
-        run: cargo build --release --target ${{ matrix.target }} --bin RemoteHelperServer
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
-      - name: Build utilities
+      - name: Build server binaries
         run: |
+          cargo build --release --target ${{ matrix.target }} --bin RemoteHelperServer
           cargo build --release --target ${{ matrix.target }} --bin keygen
           cargo build --release --target ${{ matrix.target }} --bin gen_cert
           cargo build --release --target ${{ matrix.target }} --bin test_real_ip
 
       - name: Package release (Windows)
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          mkdir RemoteHelperServer-${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/RemoteHelperServer${{ matrix.ext }} RemoteHelperServer-${{ matrix.target }}/
-          cp target/${{ matrix.target }}/release/keygen${{ matrix.ext }} RemoteHelperServer-${{ matrix.target }}/
-          cp target/${{ matrix.target }}/release/gen_cert${{ matrix.ext }} RemoteHelperServer-${{ matrix.target }}/
-          cp target/${{ matrix.target }}/release/test_real_ip${{ matrix.ext }} RemoteHelperServer-${{ matrix.target }}/
-          cp config.toml RemoteHelperServer-${{ matrix.target }}/config.example.toml
-          cp README.md RemoteHelperServer-${{ matrix.target }}/
-          cp LICENSE RemoteHelperServer-${{ matrix.target }}/
-          Compress-Archive -Path RemoteHelperServer-${{ matrix.target }} -DestinationPath RemoteHelperServer-${{ matrix.target }}.zip
+          $name = "RemoteHelperServer-${{ matrix.target }}"
+          mkdir $name
+          cp target/${{ matrix.target }}/release/RemoteHelperServer${{ matrix.ext }} $name/
+          cp target/${{ matrix.target }}/release/keygen${{ matrix.ext }} $name/
+          cp target/${{ matrix.target }}/release/gen_cert${{ matrix.ext }} $name/
+          cp target/${{ matrix.target }}/release/test_real_ip${{ matrix.ext }} $name/
+          cp config.toml $name/config.example.toml
+          cp README.md $name/
+          cp LICENSE $name/
+          Compress-Archive -Path $name -DestinationPath "$name.zip"
 
       - name: Package release (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          mkdir RemoteHelperServer-${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/RemoteHelperServer RemoteHelperServer-${{ matrix.target }}/
-          cp target/${{ matrix.target }}/release/keygen RemoteHelperServer-${{ matrix.target }}/
-          cp target/${{ matrix.target }}/release/gen_cert RemoteHelperServer-${{ matrix.target }}/
-          cp target/${{ matrix.target }}/release/test_real_ip RemoteHelperServer-${{ matrix.target }}/
-          cp config.toml RemoteHelperServer-${{ matrix.target }}/config.example.toml
-          cp README.md RemoteHelperServer-${{ matrix.target }}/
-          cp LICENSE RemoteHelperServer-${{ matrix.target }}/
-          tar czf RemoteHelperServer-${{ matrix.target }}.tar.gz RemoteHelperServer-${{ matrix.target }}
+          NAME="RemoteHelperServer-${{ matrix.target }}"
+          mkdir $NAME
+          cp target/${{ matrix.target }}/release/RemoteHelperServer $NAME/
+          cp target/${{ matrix.target }}/release/keygen $NAME/
+          cp target/${{ matrix.target }}/release/gen_cert $NAME/
+          cp target/${{ matrix.target }}/release/test_real_ip $NAME/
+          cp config.toml $NAME/config.example.toml
+          cp README.md $NAME/
+          cp LICENSE $NAME/
+          tar czf "$NAME.tar.gz" $NAME
 
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: ./RemoteHelperServer-${{ matrix.target }}.${{ matrix.archive }}
 
-  build-tauri-release:
-    name: Build Tauri Release
-    runs-on: ${{ matrix.os }}
+  build-tauri:
+    name: Build Tauri Client
+    needs: create-release
     permissions:
       contents: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            platform: windows
-          - os: macos-latest
-            platform: macos
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+          - platform: "windows-latest"
+            args: ""
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./app/src-tauri -> target"
 
       - name: Install Dioxus CLI
-        run: cargo install dioxus-cli
-
-      - name: Build Dioxus app
-        working-directory: app
-        run: dx build --release
-
-      - name: Build Tauri app
-        working-directory: app
-        run: cargo tauri build
-
-      - name: Find and Upload Windows MSI
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $msi = Get-ChildItem -Path app/src-tauri/target/release/bundle/msi -Filter "*.msi" | Select-Object -First 1
-          echo "MSI_PATH=$($msi.FullName)" >> $env:GITHUB_ENV
-          echo "MSI_NAME=$($msi.Name)" >> $env:GITHUB_ENV
-
-      - name: Upload Windows MSI
-        if: matrix.os == 'windows-latest'
-        uses: softprops/action-gh-release@v1
+        uses: baptiste0928/cargo-install@v3
         with:
-          files: ${{ env.MSI_PATH }}
+          crate: dioxus-cli
+          version: "0.6"
 
-      - name: Find and Upload macOS DMG
-        if: matrix.os == 'macos-latest'
-        run: |
-          DMG_PATH=$(find app/src-tauri/target/release/bundle/dmg -name "*.dmg" | head -n 1)
-          DMG_NAME=$(basename "$DMG_PATH")
-          echo "DMG_PATH=$DMG_PATH" >> $GITHUB_ENV
-          echo "DMG_NAME=$DMG_NAME" >> $GITHUB_ENV
-
-      - name: Upload macOS DMG
-        if: matrix.os == 'macos-latest'
-        uses: softprops/action-gh-release@v1
+      - name: Build and Upload Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: ${{ env.DMG_PATH }}
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          projectPath: "./app"
+          args: ${{ matrix.args }}
 
   publish-crate:
     name: Publish to crates.io
+    needs: [build-server, build-tauri]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -265,7 +199,7 @@ jobs:
         run: cargo publish -p common --token ${{ secrets.CARGO_TOKEN }}
         continue-on-error: true
 
-      - name: Wait for common to be available
+      - name: Wait for common
         run: sleep 30
 
       - name: Publish client
