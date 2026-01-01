@@ -36,12 +36,26 @@
   transform: scale(1.05) rotate(3deg);
 }
 
+.title-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
 .header-title {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-white);
   letter-spacing: -0.025em;
   margin: 0;
+}
+
+.header-subtitle {
+  font-size: 0.625rem;
+  color: var(--text-slate-400);
+  margin: 0;
+  font-weight: 400;
+  opacity: 0.7;
 }
 
 .uptime-badge {

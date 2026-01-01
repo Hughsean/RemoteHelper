@@ -50,7 +50,10 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
                         alt: "RemoteHelper Logo",
                     }
                 }
-                h1 { class: "header-title", "服务监控" }
+                div { class: "title-box",
+                    h1 { class: "header-title", "服务监控" }
+                    p { class: "header-subtitle", "Powered by Hughsean" }
+                }
                 if uptime > 0 {
                     div { class: "uptime-badge",
                         svg {

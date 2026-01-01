@@ -37,22 +37,37 @@ jobs:
           body: |
             ## RemoteHelper ${{ steps.get_version.outputs.version }}
 
-            🎉 RemoteHelper 新版本发布！
+            🔄 RemoteHelper v2.0.1 - 密钥管理优化更新
 
-            ### ✨ 核心特性
+            ### 🔑 重要变更（需要迁移）
 
-            - 🔒 **端到端加密通信** (X25519 + AES-256-GCM)
-            - 🔑 **Ed25519 公钥认证** - 无需密码，更安全
-            - 📊 **实时硬件监控** - CPU、内存、GPU、网络流量
-            - 🚀 **进程管理** - 启动/停止/重启外部程序
-            - 💻 **双客户端支持** - Web 界面 + Tauri 桌面应用
-            - 📝 **自动日志轮转** - 10MB 阈值
-            - ⚙️ **可配置连接限制和超时**
+            **密钥文件位置标准化**
+            - 客户端私钥现在统一从 `~/id_ed25519.json` 自动加载
+            - 不再需要在代码中硬编码密钥
+            - `keygen` 工具现在直接保存到标准位置
 
-            ### 📦 下载说明
+            ### 🎨 界面优化
 
-            #### 桌面客户端 (Client)
-            - **macOS**: RemoteHelper_..._aarch64.dmg
+            - 优化应用标题布局，提升视觉层次感
+
+            ### 📦 迁移指南
+
+            如果你有现有的 `client_key.json`，请迁移到新位置：
+
+            **Windows:**
+            ```powershell
+            Move-Item client_key.json $env:USERPROFILE\id_ed25519.json
+            ```
+
+            **Linux/macOS:**
+            ```bash
+            mv client_key.json ~/id_ed25519.json
+            ```
+
+            或生成新密钥对：
+            ```bash
+            cargo run --bin keygen
+            ```
 
             ### 🚀 快速开始
 
