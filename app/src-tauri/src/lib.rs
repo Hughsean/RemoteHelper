@@ -22,17 +22,11 @@ fn toggle_window_visibility(#[cfg(target_os = "macos")] app: &AppHandle, window:
             let _ = window.hide();
         }
     } else {
-        // Showing window: make app Regular so native full-screen works
+        // Showing window: make app Regular so it appears in Dock and Alt-Tab
         #[cfg(target_os = "macos")]
         {
-            // Exit fullscreen if currently in fullscreen mode
-            if window.is_fullscreen().unwrap_or(false) {
-                let _ = window.set_fullscreen(false);
-            }
-            // Reset window size and position on macOS before showing
-            let _ = window.set_size(tauri::LogicalSize::new(880, 700));
-            let _ = window.center();
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+            let _ = window.center();
         }
         let _ = window.show();
         let _ = window.set_focus();
