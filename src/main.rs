@@ -42,8 +42,10 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let config = AppConfig::load()?;
 
-    // Optional startup delay (configurable)
-    if config.web_panel.health_check_url.is_some() {
+    let no_url = config.web_panel.health_check_url.is_none();
+    let no_delay = config.web_panel.startup_delay_secs == 0;
+
+    if !no_url || !no_delay {
         tracing::info!(
             "Waiting for network initialization... {} seconds",
             config.web_panel.startup_delay_secs
@@ -51,9 +53,9 @@ async fn main() -> anyhow::Result<()> {
 
         let delay = config.web_panel.startup_delay_secs;
 
-        if config.web_panel.startup_delay_secs > 0 {
+        if !no_delay && no_url {
             tokio::time::sleep(Duration::from_secs(delay)).await;
-        } else {
+        } else if !no_url {
             let timeout = delay.max(10);
             let mut sleep_time = 1;
             loop {
