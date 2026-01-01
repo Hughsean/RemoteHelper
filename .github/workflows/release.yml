@@ -8,28 +8,28 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ steps.get_version.outputs.version }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Get version from tag
         id: get_version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: RemoteHelper ${{ steps.get_version.outputs.version }}
+          name: RemoteHelper ${{ steps.get_version.outputs.version }}
           draft: false
           prerelease: false
+          generate_release_notes: false
           body: |
             ## RemoteHelper ${{ steps.get_version.outputs.version }}
 
@@ -123,7 +123,9 @@ jobs:
 
   build-release:
     name: Build Release
-    needs: create-release
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -139,7 +141,6 @@ jobs:
             target: aarch64-apple-darwin
             ext: ""
             archive: tar.gz
-    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -184,18 +185,15 @@ jobs:
           tar czf RemoteHelperServer-${{ matrix.target }}.tar.gz RemoteHelperServer-${{ matrix.target }}
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./RemoteHelperServer-${{ matrix.target }}.${{ matrix.archive }}
-          asset_name: RemoteHelperServer-${{ matrix.target }}.${{ matrix.archive }}
-          asset_content_type: ${{ matrix.archive == 'zip' && 'application/zip' || 'application/gzip' }}
+          files: ./RemoteHelperServer-${{ matrix.target }}.${{ matrix.archive }}
 
   build-tauri-release:
     name: Build Tauri Release
-    needs: create-release
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -203,7 +201,6 @@ jobs:
             platform: windows
           - os: macos-latest
             platform: macos
-    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -236,14 +233,9 @@ jobs:
 
       - name: Upload Windows MSI
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ env.MSI_PATH }}
-          asset_name: ${{ env.MSI_NAME }}
-          asset_content_type: application/x-msi
+          files: ${{ env.MSI_PATH }}
 
       - name: Find and Upload macOS DMG
         if: matrix.os == 'macos-latest'
@@ -255,18 +247,12 @@ jobs:
 
       - name: Upload macOS DMG
         if: matrix.os == 'macos-latest'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ env.DMG_PATH }}
-          asset_name: ${{ env.DMG_NAME }}
-          asset_content_type: application/x-apple-diskimage
+          files: ${{ env.DMG_PATH }}
 
   publish-crate:
     name: Publish to crates.io
-    needs: build-release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
