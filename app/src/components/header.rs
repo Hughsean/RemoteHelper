@@ -21,13 +21,13 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
         let secs = seconds % 60;
 
         if days > 0 {
-            format!("{:2}d {:2}h {:2}m {:2}s", days, hours, minutes, secs)
+            format!("{:>2}d {:>2}h {:>2}m {:>2}s", days, hours, minutes, secs)
         } else if hours > 0 {
-            format!("{:2}h {:2}m {:2}s", hours, minutes, secs)
+            format!("{:>2}h {:>2}m {:>2}s", hours, minutes, secs)
         } else if minutes > 0 {
-            format!("{:2}m {:2}s", minutes, secs)
+            format!("{:>2}m {:>2}s", minutes, secs)
         } else {
-            format!("{:2}s", secs)
+            format!("{:>2}s", secs)
         }
     };
 
