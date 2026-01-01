@@ -89,9 +89,11 @@ cargo run --bin keygen
 - All tests passing
 - Zero compilation warnings
 
-## [Unreleased]
+---
 
-### Planned
+## Future Enhancements
+
+The following features are planned for future releases:
 
 - Persistent dynamic service storage
 - TLS certificate support
