@@ -38,7 +38,7 @@ pub fn Login(on_login: EventHandler<(String, String)>) -> Element {
                     div { class: "form-group",
                         label { class: "form-label", "服务器地址" }
                         input {
-                            r#type: "text",
+                            r#type: "password",
                             class: "form-input",
                             value: "{address}",
                             oninput: move |e| address.set(e.value()),
