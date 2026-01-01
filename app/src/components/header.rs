@@ -20,14 +20,15 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
         let minutes = (seconds % 3600) / 60;
         let secs = seconds % 60;
 
+        // Use zero padding so HTML whitespace collapsing does not remove alignment spacing.
         if days > 0 {
-            format!("{:>2}d {:>2}h {:>2}m {:>2}s", days, hours, minutes, secs)
+            format!("{days:02}d {hours:02}h {minutes:02}m {secs:02}s")
         } else if hours > 0 {
-            format!("{:>2}h {:>2}m {:>2}s", hours, minutes, secs)
+            format!("{hours:02}h {minutes:02}m {secs:02}s")
         } else if minutes > 0 {
-            format!("{:>2}m {:>2}s", minutes, secs)
+            format!("{minutes:02}m {secs:02}s")
         } else {
-            format!("{:>2}s", secs)
+            format!("{secs:02}s")
         }
     };
 
