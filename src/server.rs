@@ -32,6 +32,9 @@ pub async fn handle_connection(mut socket: TcpStream, state: AppState) {
 }
 
 async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Result<()> {
+    // Increment connection counter when actually starting to handle connection
+    state.active_connections.fetch_add(1, Ordering::Relaxed);
+
     // --- Handshake Phase ---
     let mut buf = [0u8; 1024];
 

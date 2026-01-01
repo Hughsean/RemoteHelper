@@ -159,7 +159,6 @@ async fn main() -> anyhow::Result<()> {
                         }
 
                         tracing::info!("New connection from {} ({}/{})", addr, current + 1, max_connections);
-                        server_state.active_connections.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
                         let state = server_state.clone();
                         tokio::spawn(async move {
