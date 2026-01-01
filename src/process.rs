@@ -46,7 +46,7 @@ pub async fn start_service(state: &AppState, id: usize) -> Result<()> {
 
     tracing::info!("Starting service: {}", config.description);
 
-    let log_name = format!("service_{}", id);
+    let log_name = format!("service_id({})_{}", id, config.description);
     // We need separate handles for stdout and stderr because Stdio::from consumes the file
     let stdout_file = get_log_file(&log_name).context("Failed to create log file")?;
     let stderr_file = get_log_file(&log_name).context("Failed to create log file")?;
