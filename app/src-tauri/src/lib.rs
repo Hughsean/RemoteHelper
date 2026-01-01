@@ -1,10 +1,43 @@
 mod command;
 
+#[cfg(target_os = "macos")]
+use tauri::AppHandle;
 use tauri::{
-    Manager,
+    Manager, WebviewWindow,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
+
+/// Toggle window visibility with proper macOS activation policy handling
+fn toggle_window_visibility(#[cfg(target_os = "macos")] app: &AppHandle, window: &WebviewWindow) {
+    if window.is_visible().unwrap_or(false) {
+        // Hide: switch back to Accessory so Dock stays hidden
+        #[cfg(target_os = "macos")]
+        {
+            let _ = window.hide();
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = window.hide();
+        }
+    } else {
+        // Showing window: make app Regular so native full-screen works
+        #[cfg(target_os = "macos")]
+        {
+            // Exit fullscreen if currently in fullscreen mode
+            if window.is_fullscreen().unwrap_or(false) {
+                let _ = window.set_fullscreen(false);
+            }
+            // Reset window size and position on macOS before showing
+            let _ = window.set_size(tauri::LogicalSize::new(880, 700));
+            let _ = window.center();
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+        }
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -47,31 +80,11 @@ pub fn run() {
                     }
                     "show" => {
                         if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
-                                // Hide: switch back to Accessory so Dock stays hidden
+                            toggle_window_visibility(
                                 #[cfg(target_os = "macos")]
-                                {
-                                    let _ = app
-                                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
-                                }
-                                let _ = window.hide();
-                            } else {
-                                // Showing window: make app Regular so native full-screen works
-                                #[cfg(target_os = "macos")]
-                                {
-                                    let _ =
-                                        app.set_activation_policy(tauri::ActivationPolicy::Regular);
-                                    // Exit fullscreen if currently in fullscreen mode
-                                    if window.is_fullscreen().unwrap_or(false) {
-                                        let _ = window.set_fullscreen(false);
-                                    }
-                                    // Reset window size and position on macOS
-                                    let _ = window.set_size(tauri::LogicalSize::new(880, 700));
-                                    let _ = window.center();
-                                }
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                                app,
+                                &window,
+                            );
                         }
                     }
                     _ => {}
@@ -85,31 +98,11 @@ pub fn run() {
                     {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
-                                // Hide: switch back to Accessory so Dock stays hidden
+                            toggle_window_visibility(
                                 #[cfg(target_os = "macos")]
-                                {
-                                    let _ = app
-                                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
-                                }
-                                let _ = window.hide();
-                            } else {
-                                // Showing window: make app Regular so native full-screen works
-                                #[cfg(target_os = "macos")]
-                                {
-                                    let _ =
-                                        app.set_activation_policy(tauri::ActivationPolicy::Regular);
-                                    // Exit fullscreen if currently in fullscreen mode
-                                    if window.is_fullscreen().unwrap_or(false) {
-                                        let _ = window.set_fullscreen(false);
-                                    }
-                                    // Reset window size and position on macOS
-                                    let _ = window.set_size(tauri::PhysicalSize::new(880, 600));
-                                    let _ = window.center();
-                                }
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                                app,
+                                &window,
+                            );
                         }
                     }
                 })
