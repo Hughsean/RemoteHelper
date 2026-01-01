@@ -19,7 +19,7 @@
         "center": true,
         "minWidth": 880,
         "minHeight": 700,
-        "titleBarStyle": "Overlay",
+        "titleBarStyle": "Visible",
         "additionalBrowserArgs": "--disable-features=Autofill,PasswordManager"
       }
     ],

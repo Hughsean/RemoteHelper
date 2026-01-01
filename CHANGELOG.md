@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-01-01
+
+### Changed
+
+- **BREAKING**: Removed `nanoid` dependency and related fields from `SystemInfo` and `ServiceInfo` structures
+- **BREAKING**: `SystemInfo` now uses `timestamp: u64` (Unix milliseconds) instead of `nanoid` for unique identification
+- `SystemInfo` equality comparison now based on `timestamp` instead of `nanoid`
+- `ServiceInfo` equality comparison now based on `id` and `pid` combination
+
+### Added
+
+- `SystemInfo.timestamp` field: Unix timestamp in milliseconds for accurate data collection timing
+- Web client now uses time-based data retention (30-minute rolling window) instead of fixed-length buffer
+
+### Improved
+
+- **Performance**: Web client optimized with `VecDeque` instead of `Vec` for O(1) time-series data operations
+- Historical data management now based on actual time intervals rather than arbitrary point counts
+- Server generates timestamps using `SystemTime::now()` for consistent time tracking
+
+### Removed
+
+- `nanoid` crate dependency from workspace, server, and common library
+- `common::func::nanoid_gen()` function (no longer needed)
+- Client-side nanoid generation logic from Tauri commands
+
+### Migration Guide
+
+**For Server Operators:**
+
+- No action required - changes are backward compatible in protocol
+- Server will automatically generate timestamps for all status responses
+
+**For Custom Client Developers:**
+
+- Update to latest `common` library version
+- Remove any code that references `SystemInfo.nanoid` or `ServiceInfo.nanoid`
+- Use `SystemInfo.timestamp` for time-based operations
+- Ensure proper handling of `timestamp` field (u64, milliseconds since Unix epoch)
+
 ## [2.0.2] - 2026-01-01
 
 ### Fixed

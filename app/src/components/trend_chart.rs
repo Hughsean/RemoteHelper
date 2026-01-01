@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use common::SystemInfo;
 use dioxus::prelude::*;
 
@@ -13,13 +15,13 @@ impl TimeWindow {
         match self {
             TimeWindow::OneMin => "1分钟",
             TimeWindow::FiveMin => "5分钟",
-            TimeWindow::All => "全部",
+            TimeWindow::All => "30分钟",
         }
     }
 }
 
 #[component]
-pub fn TrendChart(history: Vec<(u64, SystemInfo)>) -> Element {
+pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
     let mut time_window = use_signal(|| TimeWindow::OneMin);
     let mut show_cpu = use_signal(|| true);
     let mut show_mem = use_signal(|| true);
@@ -29,12 +31,13 @@ pub fn TrendChart(history: Vec<(u64, SystemInfo)>) -> Element {
         return rsx! {};
     }
 
-    let now = js_sys::Date::now() as u64;
+    // Use the latest timestamp from data instead of client time to avoid clock skew
+    let latest_timestamp = history.back().map(|(t, _)| *t).unwrap_or(0);
     let filtered_history: Vec<&SystemInfo> = history
         .iter()
         .filter(|(t, _)| match time_window() {
-            TimeWindow::OneMin => *t > now.saturating_sub(60 * 1000),
-            TimeWindow::FiveMin => *t > now.saturating_sub(5 * 60 * 1000),
+            TimeWindow::OneMin => *t > latest_timestamp.saturating_sub(60 * 1000),
+            TimeWindow::FiveMin => *t > latest_timestamp.saturating_sub(5 * 60 * 1000),
             TimeWindow::All => true,
         })
         .map(|(_, s)| s)

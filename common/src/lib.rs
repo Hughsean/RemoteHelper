@@ -53,8 +53,7 @@ pub enum Response {
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct SystemInfo {
-    // #[serde(default)]
-    pub nanoid: String,
+    pub timestamp: u64,
     pub cpu_usage: f32,
     pub memory_usage: u64,
     pub total_memory: u64,
@@ -76,8 +75,6 @@ pub struct SystemInfo {
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct ServiceInfo {
-    #[serde(default)]
-    pub nanoid: String,
     pub id: usize,
     pub description: String,
     pub running: bool,
@@ -86,13 +83,13 @@ pub struct ServiceInfo {
 
 impl PartialEq for SystemInfo {
     fn eq(&self, other: &Self) -> bool {
-        self.nanoid == other.nanoid
+        self.timestamp == other.timestamp
     }
 }
 
 impl PartialEq for ServiceInfo {
     fn eq(&self, other: &Self) -> bool {
-        self.nanoid == other.nanoid
+        self.id == other.id && self.pid == other.pid
     }
 }
 

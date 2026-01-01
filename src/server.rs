@@ -1,7 +1,6 @@
 use crate::state::AppState;
 use anyhow::Result;
 use base64::prelude::*;
-use common::func;
 use common::{
     Handshake, Request, Response, ServiceAction, ServiceInfo, SystemInfo, crypto::CryptoSession,
 };
@@ -275,7 +274,10 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             };
 
             Response::Status(SystemInfo {
-                nanoid: func::nanoid_gen(),
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
                 cpu_usage: cpu,
                 memory_usage: mem,
                 total_memory: total,
@@ -301,7 +303,6 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 let pid = processes.get(&id).and_then(|c| c.id());
 
                 services.push(ServiceInfo {
-                    nanoid: func::nanoid_gen(),
                     id,
                     description: svc_config.description.clone(),
                     running,
@@ -318,7 +319,6 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 let pid = processes.get(&id).and_then(|c| c.id());
 
                 services.push(ServiceInfo {
-                    nanoid: func::nanoid_gen(),
                     id,
                     description: svc_config.description.clone(),
                     running,

@@ -1,7 +1,7 @@
 [workspace]
 members = ["common", "client", "app", "app/src-tauri", "hwlib"]
 [workspace.package]
-version = "2.0.2"
+version = "2.1.0"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
 edition = "2024"
 license = "MIT"
@@ -31,7 +31,6 @@ rand_core = "0.6"
 log = "0.4"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 # uuid = "1.19"
-nanoid = "0.4"
 gloo-timers = "0.3"
 gloo-console = "0.3"
 dirs = "5.0"
@@ -72,7 +71,6 @@ base64.workspace = true
 aes-gcm.workspace = true
 x25519-dalek.workspace = true
 rcgen.workspace = true
-nanoid.workspace = true
 dirs.workspace = true
 reqwest = "0.13.1"
 # wasm-bindgen-futures.workspace = true

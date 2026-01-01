@@ -7,6 +7,7 @@ use crate::components::{
 };
 // use crate::models::{ServiceInfo, SystemInfo};
 use dioxus::prelude::*;
+use std::collections::VecDeque;
 use std::time::Duration;
 
 static BASE_CSS: Asset = asset!("/assets/css/base.css");
@@ -21,8 +22,8 @@ pub fn App() -> Element {
     let mut authenticated = use_signal(|| false);
     let mut connected = use_signal(|| false);
     let mut system_status = use_signal(common::SystemInfo::default);
-    let mut history = use_signal(Vec::<(u64, common::SystemInfo)>::new);
-    let mut services = use_signal(Vec::<common::ServiceInfo>::new);
+    let mut history = use_signal(|| VecDeque::<(u64, common::SystemInfo)>::with_capacity(30 * 60));
+    let mut services = use_signal(|| Vec::<common::ServiceInfo>::with_capacity(10));
     let mut refresh_interval = use_signal(|| 1000u64);
     let mut show_add_modal = use_signal(|| false);
     let mut error_msg = use_signal(|| Option::<String>::None);
@@ -38,10 +39,23 @@ pub fn App() -> Element {
                             system_status.set(status.clone());
 
                             let mut current_history = history();
-                            let now = js_sys::Date::now() as u64;
-                            current_history.push((now, status));
-                            if current_history.len() > 10240 {
-                                current_history.remove(0);
+                            let timestamp = status.timestamp;
+                            current_history.push_back((timestamp, status));
+
+                            // Keep only last 30 minutes of data
+                            const MAX_TIME_WINDOW_MS: u64 = 30 * 60 * 1000; // 30 minutes
+                            while current_history.len() > 1 {
+                                if let (Some(oldest), Some(newest)) =
+                                    (current_history.front(), current_history.back())
+                                {
+                                    if newest.0 - oldest.0 > MAX_TIME_WINDOW_MS {
+                                        current_history.pop_front();
+                                    } else {
+                                        break;
+                                    }
+                                } else {
+                                    break;
+                                }
                             }
                             history.set(current_history);
 
