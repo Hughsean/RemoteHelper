@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-01-01
+
 ### Changed
 
 - **BREAKING**: Client private keys are now automatically loaded from `~/id_ed25519.json` instead of being hardcoded
 - `keygen` tool now saves keys directly to `~/id_ed25519.json` in user home directory
 - Login UI updated to clarify password is for the key file
 - All client implementations (Tauri, Web, test tools) now use standardized key file location
+
+### Improved
+
+- Header UI redesign: "Powered by Hughsean" now displays as subtitle below main title
+- Enhanced visual hierarchy in application header
 
 ### Migration Guide
 
@@ -107,4 +114,5 @@ The following features are planned for future releases:
 
 ---
 
+[2.0.1]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.1
 [2.0.0]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.0
