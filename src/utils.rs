@@ -17,7 +17,7 @@ pub async fn test_http_503(url: &str, timeout: u64) -> Result<bool> {
     let response = client.get(url).send().await?;
     let status = response.status();
 
-    tracing::info!("URL: {}, 状态码: {}", url, status);
+    tracing::info!("URL: {}, 状态码: {}", url, status.as_u16());
 
     Ok(status == reqwest::StatusCode::SERVICE_UNAVAILABLE)
 }
