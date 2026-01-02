@@ -151,11 +151,14 @@ pub fn Header() -> Element {
 
                 button {
                     class: "header-btn ml-4",
-                    title: "登出",
+                    title: "退出程序",
                     onclick: move |_| {
-                        use crate::state::use_auth_state;
-                        let mut auth = use_auth_state();
-                        auth.write().logout();
+                        // 退出桌面应用程序
+                        #[cfg(feature = "desktop")]
+                        {
+                            use dioxus::desktop::window;
+                            window().close();
+                        }
                     },
                     svg {
                         class: "icon-md",
@@ -166,7 +169,7 @@ pub fn Header() -> Element {
                             stroke_linecap: "round",
                             stroke_linejoin: "round",
                             stroke_width: "2",
-                            d: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
+                            d: "M6 18L18 6M6 6l12 12",
                         }
                     }
                 }

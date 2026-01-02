@@ -118,20 +118,26 @@ a,
   gap: 1.5rem;
 }
 
-/* Icons */
+/* Icons - 使用 !important 防止 Tailwind 覆盖 */
 .icon-lg {
-  width: 2rem;
-  height: 2rem;
+  width: 2rem !important;
+  height: 2rem !important;
+  max-width: 2rem !important;
+  flex-shrink: 0;
 }
 
 .icon-md {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+  max-width: 1.5rem !important;
+  flex-shrink: 0;
 }
 
 .icon-sm {
-  width: 1rem;
-  height: 1rem;
+  width: 1rem !important;
+  height: 1rem !important;
+  max-width: 1rem !important;
+  flex-shrink: 0;
 }
 
 .error-banner {

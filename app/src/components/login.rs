@@ -9,6 +9,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn Login() -> Element {
     let mut auth = use_auth_state();
+    let nav = use_navigator();
 
     let mut passphrase = use_signal(String::new);
     let mut loading = use_signal(|| false);
@@ -30,6 +31,8 @@ pub fn Login() -> Element {
             match backend::authenticate(pass, addr).await {
                 Ok(_) => {
                     auth.write().set_authenticated();
+                    // 登录成功后导航到 Dashboard
+                    nav.push("/dashboard");
                 }
                 Err(e) => {
                     auth.write().set_auth_failed(e);

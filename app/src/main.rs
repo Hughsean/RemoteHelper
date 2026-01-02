@@ -1,7 +1,7 @@
 // dioxus prelude 包含了大量在 dioxus 应用中常用的项。在任何需要 dioxus 的地方导入它都是个好主意
 use dioxus::prelude::*;
 
-use views::Home;
+use views::{LoginView, Dashboard};
 
 /// 后端通信模块 - 封装与服务器的所有 API 调用
 mod backend;
@@ -22,19 +22,17 @@ use state::{AuthData, ServicesData, SystemData};
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
 enum Route {
-    // 临时简化路由，未来将扩展为：
-    // - / -> Login 页面
-    // - /dashboard -> 主监控面板
     #[route("/")]
-    Home {},
+    LoginView {},
+    #[route("/dashboard")]
+    Dashboard {},
 }
 
 // 我们可以使用 `asset!` 宏在 dioxus 中导入资源。该宏接受相对于 crate 根目录的资源路径。
 // 该宏返回一个 `Asset` 类型，在浏览器中显示为资源路径，或在桌面应用中显示为本地路径。
 const FAVICON: Asset = asset!("/assets/favicon.ico");
-// asset 宏还会压缩某些资源（如 CSS 和 JS），以减小打包体积
+// 主样式文件 - 包含所有自定义样式，不使用 Tailwind 以避免样式冲突
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
-const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 const FONT_MONO: Asset = asset!("/assets/fonts/LXGWWenKaiMono-Regular.woff2");
 
 /// Windows 平台检查 WebView2 Runtime 是否已安装
@@ -143,18 +141,23 @@ fn main() {
 /// 组件应该用 `#[component]` 注解，以支持 props、更好的错误消息和自动补全
 #[component]
 fn App() -> Element {
-    // 符合官方推荐：在根组件使用 use_signal 创建响应式状态，然后通过 Context 提供
-    use_context_provider(|| use_signal(AuthData::default));
-    use_context_provider(|| use_signal(SystemData::default));
-    use_context_provider(|| use_signal(ServicesData::default));
+    // 符合官方推荐：在根组件创建响应式状态，然后通过 Context 提供
+    // 注意：不能在 hook 内部调用另一个 hook，所以先创建 signal 再提供
+    let auth = use_signal(AuthData::default);
+    let system = use_signal(SystemData::default);
+    let services = use_signal(ServicesData::default);
+
+    use_context_provider(|| auth);
+    use_context_provider(|| system);
+    use_context_provider(|| services);
 
     // `rsx!` 宏让我们可以在 rust 中定义 HTML。它会展开为一个包含所有 HTML 的 Element。
     rsx! {
         // 除了元素和文本（稍后我们会看到），rsx 还可以包含其他组件。在这种情况下，
         // 我们使用 `document::Link` 组件将 favicon 和主 CSS 文件的链接添加到应用的 head 中。
         document::Link { rel: "icon", href: FAVICON }
+        // 只加载我们的自定义样式，不使用 Tailwind 以避免样式冲突
         document::Link { rel: "stylesheet", href: MAIN_CSS }
-        document::Link { rel: "stylesheet", href: TAILWIND_CSS }
 
         // 设置字体
         document::Style {

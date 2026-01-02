@@ -1,8 +1,8 @@
 //! 趋势图表组件
 
-use std::collections::VecDeque;
 use common::SystemInfo;
 use dioxus::prelude::*;
+use std::collections::VecDeque;
 
 #[derive(Clone, Copy, PartialEq)]
 enum TimeWindow {
@@ -28,8 +28,18 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
     let mut show_mem = use_signal(|| true);
     let mut show_gpu = use_signal(|| true);
 
+    // 如果没有数据，显示空状态（而不是返回空）
     if history.is_empty() {
-        return rsx! {};
+        return rsx! {
+            div { class: "chart-container",
+                div { class: "chart-header",
+                    h3 { class: "chart-title", "系统趋势" }
+                }
+                div { class: "chart-body chart-empty",
+                    span { "等待数据..." }
+                }
+            }
+        };
     }
 
     // 使用最新时间戳避免时钟偏移
@@ -94,7 +104,8 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
 
     // 辅助函数：生成折线 SVG path 字符串（基于时间戳）
     let make_line_path = |extractor: fn(&SystemInfo) -> f32| -> String {
-        if filtered_history.is_empty() {
+        if filtered_history.len() < 2 {
+            // 少于2个数据点时无法画线
             return String::new();
         }
 
