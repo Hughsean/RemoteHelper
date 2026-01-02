@@ -132,40 +132,46 @@ fn main() {
         // macOS 自定义中文菜单
         #[cfg(target_os = "macos")]
         {
-            use dioxus::desktop::tao::menu::{MenuBar, MenuItem};
+            use dioxus::desktop::muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
-            let mut menu = MenuBar::new();
+            let menu = Menu::new();
 
             // 应用菜单
-            let mut app_menu = MenuBar::new();
-            app_menu.add_native_item(MenuItem::About(
-                "RemoteHelper".to_string(),
-                Default::default(),
-            ));
-            app_menu.add_native_item(MenuItem::Separator);
-            app_menu.add_native_item(MenuItem::Hide);
-            app_menu.add_native_item(MenuItem::HideOthers);
-            app_menu.add_native_item(MenuItem::ShowAll);
-            app_menu.add_native_item(MenuItem::Separator);
-            app_menu.add_native_item(MenuItem::Quit);
-            menu.add_submenu("RemoteHelper", true, app_menu);
-
-            // 编辑菜单
-            let mut edit_menu = MenuBar::new();
-            edit_menu.add_native_item(MenuItem::Copy);
-            edit_menu.add_native_item(MenuItem::Paste);
-            edit_menu.add_native_item(MenuItem::SelectAll);
-            menu.add_submenu("编辑", true, edit_menu);
+            let app_submenu = Submenu::new("RemoteHelper", true);
+            app_submenu
+                .append(&PredefinedMenuItem::about(Some("关于 RemoteHelper"), None))
+                .ok();
+            app_submenu.append(&PredefinedMenuItem::separator()).ok();
+            app_submenu
+                .append(&PredefinedMenuItem::hide(Some("隐藏")))
+                .ok();
+            app_submenu
+                .append(&PredefinedMenuItem::hide_others(Some("隐藏其他")))
+                .ok();
+            app_submenu
+                .append(&PredefinedMenuItem::show_all(Some("显示全部")))
+                .ok();
+            app_submenu.append(&PredefinedMenuItem::separator()).ok();
+            app_submenu
+                .append(&PredefinedMenuItem::quit(Some("退出")))
+                .ok();
+            menu.append(&app_submenu).ok();
 
             // 窗口菜单
-            let mut window_menu = MenuBar::new();
-            window_menu.add_native_item(MenuItem::Minimize);
-            window_menu.add_native_item(MenuItem::Zoom);
-            window_menu.add_native_item(MenuItem::Separator);
-            window_menu.add_native_item(MenuItem::CloseWindow);
-            menu.add_submenu("窗口", true, window_menu);
+            let window_submenu = Submenu::new("窗口", true);
+            window_submenu
+                .append(&PredefinedMenuItem::minimize(Some("最小化")))
+                .ok();
+            window_submenu
+                .append(&PredefinedMenuItem::maximize(Some("最大化")))
+                .ok();
+            window_submenu.append(&PredefinedMenuItem::separator()).ok();
+            window_submenu
+                .append(&PredefinedMenuItem::close_window(Some("关闭窗口")))
+                .ok();
+            menu.append(&window_submenu).ok();
 
-            cfg = cfg.with_menu(Some(menu));
+            cfg = cfg.with_menu(menu);
         }
 
         println!("[4/4] 正在启动 Dioxus 应用...");
