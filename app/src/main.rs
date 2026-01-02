@@ -129,6 +129,45 @@ fn main() {
             cfg = cfg.with_menu(None);
         }
 
+        // macOS 自定义中文菜单
+        #[cfg(target_os = "macos")]
+        {
+            use dioxus::desktop::tao::menu::{MenuBar, MenuItem};
+
+            let mut menu = MenuBar::new();
+
+            // 应用菜单
+            let mut app_menu = MenuBar::new();
+            app_menu.add_native_item(MenuItem::About(
+                "RemoteHelper".to_string(),
+                Default::default(),
+            ));
+            app_menu.add_native_item(MenuItem::Separator);
+            app_menu.add_native_item(MenuItem::Hide);
+            app_menu.add_native_item(MenuItem::HideOthers);
+            app_menu.add_native_item(MenuItem::ShowAll);
+            app_menu.add_native_item(MenuItem::Separator);
+            app_menu.add_native_item(MenuItem::Quit);
+            menu.add_submenu("RemoteHelper", true, app_menu);
+
+            // 编辑菜单
+            let mut edit_menu = MenuBar::new();
+            edit_menu.add_native_item(MenuItem::Copy);
+            edit_menu.add_native_item(MenuItem::Paste);
+            edit_menu.add_native_item(MenuItem::SelectAll);
+            menu.add_submenu("编辑", true, edit_menu);
+
+            // 窗口菜单
+            let mut window_menu = MenuBar::new();
+            window_menu.add_native_item(MenuItem::Minimize);
+            window_menu.add_native_item(MenuItem::Zoom);
+            window_menu.add_native_item(MenuItem::Separator);
+            window_menu.add_native_item(MenuItem::CloseWindow);
+            menu.add_submenu("窗口", true, window_menu);
+
+            cfg = cfg.with_menu(Some(menu));
+        }
+
         println!("[4/4] 正在启动 Dioxus 应用...");
         dioxus_logger::tracing::info!("正在启动 Dioxus 应用...");
         dioxus::LaunchBuilder::desktop().with_cfg(cfg).launch(App);
