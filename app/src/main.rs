@@ -1,7 +1,7 @@
 // dioxus prelude 包含了大量在 dioxus 应用中常用的项。在任何需要 dioxus 的地方导入它都是个好主意
 use dioxus::prelude::*;
 
-use views::{LoginView, Dashboard};
+use views::{Dashboard, LoginView};
 
 /// 后端通信模块 - 封装与服务器的所有 API 调用
 mod backend;
@@ -31,8 +31,15 @@ enum Route {
 // 我们可以使用 `asset!` 宏在 dioxus 中导入资源。该宏接受相对于 crate 根目录的资源路径。
 // 该宏返回一个 `Asset` 类型，在浏览器中显示为资源路径，或在桌面应用中显示为本地路径。
 const FAVICON: Asset = asset!("/assets/favicon.ico");
-// 主样式文件 - 包含所有自定义样式，不使用 Tailwind 以避免样式冲突
-const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
+// 样式文件 - 按组件分离加载
+const CSS_BASE: Asset = asset!("/assets/styling/base.css");
+const CSS_HEADER: Asset = asset!("/assets/styling/header.css");
+const CSS_LOGIN: Asset = asset!("/assets/styling/login.css");
+const CSS_MODAL: Asset = asset!("/assets/styling/modal.css");
+const CSS_STATUS: Asset = asset!("/assets/styling/status.css");
+const CSS_CHART: Asset = asset!("/assets/styling/chart.css");
+const CSS_SERVICES: Asset = asset!("/assets/styling/services.css");
+const CSS_UTILITIES: Asset = asset!("/assets/styling/utilities.css");
 const FONT_MONO: Asset = asset!("/assets/fonts/LXGWWenKaiMono-Regular.woff2");
 
 /// Windows 平台检查 WebView2 Runtime 是否已安装
@@ -156,8 +163,15 @@ fn App() -> Element {
         // 除了元素和文本（稍后我们会看到），rsx 还可以包含其他组件。在这种情况下，
         // 我们使用 `document::Link` 组件将 favicon 和主 CSS 文件的链接添加到应用的 head 中。
         document::Link { rel: "icon", href: FAVICON }
-        // 只加载我们的自定义样式，不使用 Tailwind 以避免样式冲突
-        document::Link { rel: "stylesheet", href: MAIN_CSS }
+        // 按组件分离加载所有样式文件
+        document::Link { rel: "stylesheet", href: CSS_BASE }
+        document::Link { rel: "stylesheet", href: CSS_HEADER }
+        document::Link { rel: "stylesheet", href: CSS_LOGIN }
+        document::Link { rel: "stylesheet", href: CSS_MODAL }
+        document::Link { rel: "stylesheet", href: CSS_STATUS }
+        document::Link { rel: "stylesheet", href: CSS_CHART }
+        document::Link { rel: "stylesheet", href: CSS_SERVICES }
+        document::Link { rel: "stylesheet", href: CSS_UTILITIES }
 
         // 设置字体
         document::Style {

@@ -1,184 +1,200 @@
-/* Header */
+/* ========================================
+   header.css - 顶部导航栏组件
+   ======================================== */
+
 .app-header {
-  background-color: rgba(11, 14, 20, 0.7);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  background-color: rgba(11, 14, 20, 0.7) !important;
+  backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  padding: 1rem 2rem !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 50 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
 }
 
-.header-left,
+.header-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+}
+
 .header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
 }
 
+/* Logo */
 .logo-box {
-  width: 2rem;
-  height: 2rem;
-  background-color: var(--color-indigo-500);
-  border-radius: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.2);
-  transition: transform 0.2s;
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  background: linear-gradient(135deg, var(--color-indigo-600), var(--color-purple-500)) !important;
+  border-radius: 0.625rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+  transition: transform 0.2s !important;
 }
 
 .logo-box:hover {
-  transform: scale(1.05) rotate(3deg);
+  transform: scale(1.05) rotate(3deg) !important;
 }
 
+/* 标题 */
 .title-box {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.125rem !important;
 }
 
 .header-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-white);
-  letter-spacing: -0.025em;
-  margin: 0;
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  color: var(--text-white) !important;
+  letter-spacing: -0.025em !important;
+  margin: 0 !important;
 }
 
 .header-subtitle {
-  font-size: 0.625rem;
-  color: var(--text-slate-400);
-  margin: 0;
-  font-weight: 400;
-  opacity: 0.7;
+  font-size: 0.625rem !important;
+  color: var(--text-slate-500) !important;
+  margin: 0 !important;
+  font-weight: 400 !important;
 }
 
+/* 运行时间徽章 */
 .uptime-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  background-color: rgba(16, 185, 129, 0.1);
-  color: var(--color-emerald-400);
-  padding: 0 0.75rem;
-  height: 2.25rem;
-  box-sizing: border-box;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
-  margin-left: 0.5rem;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.375rem !important;
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  color: var(--color-emerald-400) !important;
+  padding: 0 0.75rem !important;
+  height: 2.25rem !important;
+  border-radius: 9999px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.05) !important;
+  margin-left: 0.5rem !important;
 }
 
-.header-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(30, 41, 59, 0.5);
-  border: 1px solid var(--bg-slate-700);
-  border-radius: 0.5rem;
-  padding: 0 0.75rem;
-  height: 2.25rem;
-  color: var(--color-red-500);
-  cursor: pointer;
-  transition: all 0.3s;
-  box-sizing: border-box;
-}
-
-.header-btn:hover {
-  background-color: rgba(239, 68, 68, 0.1);
-  border-color: var(--color-red-500);
-  color: var(--color-red-400);
-}
-
+/* 刷新间隔控制 */
 .refresh-control {
-  position: relative;
-  background-color: rgba(30, 41, 59, 0.5);
-  border-radius: 0.5rem;
-  border: 1px solid var(--bg-slate-700);
-  min-width: 9rem;
-  height: 2.25rem;
-  box-sizing: border-box;
-  transition: all 0.3s;
-  cursor: pointer;
+  position: relative !important;
+  background-color: rgba(30, 41, 59, 0.5) !important;
+  border-radius: 0.5rem !important;
+  border: 1px solid var(--bg-slate-700) !important;
+  min-width: 9rem !important;
+  height: 2.25rem !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+  z-index: 100 !important;
 }
 
 .refresh-control:hover {
-  background-color: var(--bg-slate-800);
-  border-color: var(--text-slate-500);
+  background-color: var(--bg-slate-800) !important;
+  border-color: var(--text-slate-500) !important;
 }
 
 .refresh-display {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 0.75rem;
-  pointer-events: none;
-  height: 100%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 0.75rem !important;
+  height: 100% !important;
+  pointer-events: none !important;
 }
 
 .refresh-label {
-  font-size: 0.75rem;
-  color: var(--text-slate-400);
+  font-size: 0.75rem !important;
+  color: var(--text-slate-400) !important;
 }
 
 .refresh-value-box {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
 }
 
 .refresh-value {
-  font-size: 0.875rem;
-  color: var(--text-white);
-  font-weight: 500;
+  font-size: 0.875rem !important;
+  color: var(--text-white) !important;
+  font-weight: 500 !important;
 }
 
+/* 下拉菜单 */
 .refresh-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-  background-color: rgba(30, 41, 59, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--bg-slate-700);
-  border-radius: 0.5rem;
-  padding: 0.25rem;
-  min-width: 100%;
-  box-sizing: border-box;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-  z-index: 100;
-  overflow: hidden;
-  animation: slideDown 0.2s ease-out;
+  position: absolute !important;
+  top: calc(100% + 0.5rem) !important;
+  right: 0 !important;
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--bg-slate-700) !important;
+  border-radius: 0.5rem !important;
+  padding: 0.25rem !important;
+  min-width: 100% !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+  z-index: 1000 !important;
+  animation: slideDown 0.2s ease-out !important;
 }
 
 .refresh-option {
-  padding: 0.5rem 0.75rem;
-  color: var(--text-slate-400);
-  font-size: 0.875rem;
-  cursor: pointer;
-  border-radius: 0.25rem;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  color: var(--text-slate-400) !important;
+  cursor: pointer !important;
+  border-radius: 0.25rem !important;
+  transition: all 0.15s !important;
 }
 
 .refresh-option:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  color: var(--text-white);
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: var(--text-white) !important;
 }
 
 .refresh-option.active {
-  background-color: var(--color-indigo-500);
-  color: white;
+  background-color: var(--color-indigo-600) !important;
+  color: white !important;
 }
 
+/* 退出程序按钮 */
+.header-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05)) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  border-radius: 0.5rem !important;
+  color: #f87171 !important;
+  cursor: pointer !important;
+  transition: all 0.25s ease !important;
+}
+
+.header-btn:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(239, 68, 68, 0.15)) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  color: #fca5a5 !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.3) !important;
+}
+
+.header-btn:active {
+  transform: scale(0.95) !important;
+}
+
+/* 动画 */
 @keyframes slideDown {
   from {
     opacity: 0;

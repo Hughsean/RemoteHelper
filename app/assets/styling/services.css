@@ -1,181 +1,248 @@
-/* Service List */
+/* ========================================
+   services.css - 服务列表组件
+   ======================================== */
+
+/* 服务列表容器 */
 .service-list-container {
-  background-color: rgba(21, 27, 43, 0.6);
-  backdrop-filter: blur(10px);
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+    background-color: rgba(21, 27, 43, 0.6) !important;
+    backdrop-filter: blur(10px) !important;
+    border-radius: 1rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+    overflow: hidden !important;
 }
 
+/* 服务列表头部 */
 .service-list-header {
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: rgba(15, 23, 42, 0.3);
+    padding: 1.25rem 1.5rem !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    background-color: rgba(15, 23, 42, 0.3) !important;
 }
 
 .service-list-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-white);
-  margin: 0;
+    font-size: 1.125rem !important;
+    font-weight: 600 !important;
+    color: var(--text-white) !important;
+    margin: 0 !important;
 }
 
+/* 添加服务按钮 */
 .btn-add-service {
-  background-color: var(--color-indigo-600);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: linear-gradient(135deg, var(--color-indigo-600), var(--color-indigo-500)) !important;
+    color: white !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 0.5rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3) !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
 }
 
 .btn-add-service:hover {
-  background-color: var(--color-indigo-500);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4) !important;
 }
 
+/* 服务列表主体 */
 .service-list-body {
-  display: flex;
-  flex-direction: column;
+    display: flex !important;
+    flex-direction: column !important;
 }
 
-.service-list-body > :not(:last-child) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+.service-list-body> :not(:last-child) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
+/* 服务项 */
 .service-item {
-  padding: 1.25rem 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  transition: background-color 0.2s;
+    padding: 1.25rem 1.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    transition: background-color 0.2s !important;
 }
 
 .service-item:hover {
-  background-color: rgba(255, 255, 255, 0.03);
+    background-color: rgba(255, 255, 255, 0.03) !important;
 }
 
+/* 服务信息 */
 .service-info {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+    display: flex !important;
+    align-items: center !important;
+    gap: 1rem !important;
 }
 
+/* 服务图标盒 */
 .service-icon-box {
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  transition: all 0.3s;
+    width: 2.75rem !important;
+    height: 2.75rem !important;
+    border-radius: 0.75rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid transparent !important;
+    transition: all 0.3s !important;
 }
 
 .icon-running {
-  background-color: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.2);
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+    background-color: rgba(16, 185, 129, 0.1) !important;
+    border-color: rgba(16, 185, 129, 0.2) !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.1) !important;
 }
 
 .icon-stopped {
-  background-color: rgba(30, 41, 59, 0.5);
-  border-color: var(--bg-slate-700);
+    background-color: rgba(30, 41, 59, 0.5) !important;
+    border-color: var(--bg-slate-700) !important;
 }
 
+/* 状态圆点 */
 .service-dot {
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 9999px;
-  box-shadow: 0 0 8px currentColor;
+    width: 0.625rem !important;
+    height: 0.625rem !important;
+    border-radius: 9999px !important;
+    box-shadow: 0 0 8px currentColor !important;
 }
 
-.status-running { color: var(--color-emerald-400); }
-.service-dot.status-running { background-color: var(--color-emerald-400); }
+.status-running {
+    color: var(--color-emerald-400) !important;
+}
 
-.status-stopped { color: var(--text-slate-500); }
-.service-dot.status-stopped { background-color: var(--text-slate-500); box-shadow: none; }
+.service-dot.status-running {
+    background-color: var(--color-emerald-400) !important;
+}
 
+.status-stopped {
+    color: var(--text-slate-500) !important;
+}
+
+.service-dot.status-stopped {
+    background-color: var(--text-slate-500) !important;
+    box-shadow: none !important;
+}
+
+/* 服务名称 */
 .service-name {
-  color: var(--text-white);
-  font-weight: 600;
-  margin: 0;
-  font-size: 1rem;
+    color: var(--text-white) !important;
+    font-weight: 600 !important;
+    margin: 0 !important;
+    font-size: 1rem !important;
 }
 
+/* 服务元信息 */
 .service-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  margin-top: 0.25rem;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    font-size: 0.8rem !important;
+    margin-top: 0.25rem !important;
 }
 
 .service-status {
-  font-weight: 500;
+    font-weight: 500 !important;
+}
+
+.service-status.status-running {
+    color: var(--color-emerald-400) !important;
+}
+
+.service-status.status-stopped {
+    color: var(--text-slate-500) !important;
 }
 
 .meta-separator {
-  color: var(--text-slate-500);
+    color: var(--text-slate-500) !important;
 }
 
 .meta-pid {
-  color: var(--text-slate-500);
-  font-family: monospace;
-  background: rgba(0,0,0,0.2);
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.25rem;
+    color: var(--text-slate-500) !important;
+    font-family: monospace !important;
+    background: rgba(0, 0, 0, 0.2) !important;
+    padding: 0.1rem 0.4rem !important;
+    border-radius: 0.25rem !important;
 }
 
+/* 服务操作按钮组 */
 .service-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  opacity: 0;
-  transform: translateX(10px);
-  transition: all 0.2s ease;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    opacity: 0 !important;
+    transform: translateX(10px) !important;
+    transition: all 0.2s ease !important;
 }
 
 .service-item:hover .service-actions {
-  opacity: 1;
-  transform: translateX(0);
+    opacity: 1 !important;
+    transform: translateX(0) !important;
 }
 
+/* 图标按钮 */
 .btn-icon {
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.875rem;
-  background: rgba(255,255,255,0.05);
-  color: var(--text-slate-300);
-  font-weight: 500;
+    padding: 0.5rem 0.75rem !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid transparent !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    font-size: 0.875rem !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: var(--text-slate-300) !important;
+    font-weight: 500 !important;
 }
 
-.btn-restart:hover {
-  color: var(--color-amber-400);
-  background-color: rgba(251, 191, 36, 0.1);
-  border-color: rgba(251, 191, 36, 0.2);
+.btn-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-.btn-stop:hover {
-  color: var(--color-red-400);
-  background-color: rgba(248, 113, 113, 0.1);
-  border-color: rgba(248, 113, 113, 0.2);
+.btn-icon:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* 启动按钮 */
+.btn-start {
+    border-color: rgba(52, 211, 153, 0.3) !important;
 }
 
 .btn-start:hover {
-  color: var(--color-emerald-400);
-  background-color: rgba(52, 211, 153, 0.1);
-  border-color: rgba(52, 211, 153, 0.2);
+    color: var(--color-emerald-400) !important;
+    background-color: rgba(52, 211, 153, 0.1) !important;
+    border-color: rgba(52, 211, 153, 0.4) !important;
+}
+
+/* 停止按钮 */
+.btn-stop {
+    border-color: rgba(248, 113, 113, 0.3) !important;
+}
+
+.btn-stop:hover {
+    color: var(--color-red-400) !important;
+    background-color: rgba(248, 113, 113, 0.1) !important;
+    border-color: rgba(248, 113, 113, 0.4) !important;
+}
+
+/* 重启按钮 */
+.btn-restart {
+    border-color: rgba(251, 191, 36, 0.3) !important;
+}
+
+.btn-restart:hover {
+    color: var(--color-amber-400) !important;
+    background-color: rgba(251, 191, 36, 0.1) !important;
+    border-color: rgba(251, 191, 36, 0.4) !important;
+}
+
+/* 空状态 */
+.service-empty {
+    padding: 3rem !important;
+    text-align: center !important;
+    color: var(--text-slate-500) !important;
 }

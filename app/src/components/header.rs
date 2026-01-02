@@ -21,14 +21,10 @@ pub fn Header() -> Element {
         _ => "自定义",
     };
 
-    // 计算运行时间（基于最早和最新的数据点）
+    // 获取服务器返回的系统运行时间
     let uptime = {
         let data = system.read();
-        if let (Some(oldest), Some(newest)) = (data.history.front(), data.history.back()) {
-            (newest.0 - oldest.0) / 1000
-        } else {
-            0
-        }
+        data.current_status.as_ref().map(|s| s.uptime).unwrap_or(0)
     };
 
     let format_uptime = |seconds: u64| -> String {
@@ -150,7 +146,7 @@ pub fn Header() -> Element {
                 }
 
                 button {
-                    class: "header-btn ml-4",
+                    class: "header-btn",
                     title: "退出程序",
                     onclick: move |_| {
                         // 退出桌面应用程序
@@ -160,6 +156,7 @@ pub fn Header() -> Element {
                             window().close();
                         }
                     },
+                    // 电源/关机图标
                     svg {
                         class: "icon-md",
                         fill: "none",
@@ -169,7 +166,7 @@ pub fn Header() -> Element {
                             stroke_linecap: "round",
                             stroke_linejoin: "round",
                             stroke_width: "2",
-                            d: "M6 18L18 6M6 6l12 12",
+                            d: "M18.364 5.636a9 9 0 11-12.728 0M12 3v9",
                         }
                     }
                 }
