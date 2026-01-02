@@ -24,7 +24,7 @@ impl Default for AuthData {
     fn default() -> Self {
         // 从本地配置读取默认地址（可选）
         let default_addr =
-            std::env::var("REMOTE_SERVER_ADDR").unwrap_or_else(|_| "127.0.0.1:9999".to_string());
+            std::env::var("REMOTE_SERVER_ADDR").unwrap_or_else(|_| "frp-try.com:53460".to_string());
 
         Self {
             authenticated: false,
