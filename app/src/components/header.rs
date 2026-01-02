@@ -1,5 +1,6 @@
 //! 顶部导航栏组件
 
+use crate::backend;
 use crate::state::use_system_state;
 use dioxus::prelude::*;
 
@@ -7,6 +8,18 @@ use dioxus::prelude::*;
 pub fn Header() -> Element {
     let mut system = use_system_state();
     let mut is_open = use_signal(|| false);
+    let mut is_connected = use_signal(|| false);
+
+    // 持续检查连接状态（每5秒检查一次）
+    use_resource(move || async move {
+        loop {
+            let connected = backend::is_connected().await;
+            is_connected.set(connected);
+
+            // 每5秒检查一次连接状态
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        }
+    });
 
     let refresh_interval = system.read().refresh_interval;
 
@@ -70,8 +83,27 @@ pub fn Header() -> Element {
                     h1 { class: "header-title", "服务监控" }
                     p { class: "header-subtitle", "Powered by Hughsean" }
                 }
-                if uptime > 0 {
-                    div { class: "uptime-badge",
+                // 服务器上线时间或未连接状态
+                if is_connected() {
+                    if uptime > 0 {
+                        div { class: "uptime-badge",
+                            svg {
+                                class: "icon-sm",
+                                fill: "none",
+                                stroke: "currentColor",
+                                view_box: "0 0 24 24",
+                                path {
+                                    stroke_linecap: "round",
+                                    stroke_linejoin: "round",
+                                    stroke_width: "2",
+                                    d: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+                                }
+                            }
+                            span { "服务器已上线: {format_uptime(uptime)}" }
+                        }
+                    }
+                } else {
+                    div { class: "uptime-badge uptime-disconnected",
                         svg {
                             class: "icon-sm",
                             fill: "none",
@@ -81,10 +113,10 @@ pub fn Header() -> Element {
                                 stroke_linecap: "round",
                                 stroke_linejoin: "round",
                                 stroke_width: "2",
-                                d: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+                                d: "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636",
                             }
                         }
-                        span { "服务器已上线: {format_uptime(uptime)}" }
+                        span { "未连接" }
                     }
                 }
             }

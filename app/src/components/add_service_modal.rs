@@ -1,8 +1,8 @@
 //! 添加服务模态框组件
 
-use dioxus::prelude::*;
-use crate::state::use_services_state;
 use crate::backend;
+use crate::state::use_services_state;
+use dioxus::prelude::*;
 
 // 根据基础路径计算相对显示路径
 fn get_display_path(full_path: &str, base_path: &str) -> String {
@@ -73,6 +73,9 @@ pub fn AddServiceModal() -> Element {
     let mut description = use_signal(String::new);
     let mut exe_path = use_signal(String::new);
     let mut args = use_signal(String::new);
+    let mut run_as_user = use_signal(|| false);
+    let mut user_name = use_signal(String::new);
+    let mut user_password = use_signal(String::new);
     let mut suggestions = use_signal(Vec::<common::PathItem>::new);
     let mut show_suggestions = use_signal(|| false);
     let mut selected_index = use_signal(|| 0usize);
@@ -86,6 +89,9 @@ pub fn AddServiceModal() -> Element {
         let desc = description();
         let path = exe_path();
         let args_str = args();
+        let as_user = run_as_user();
+        let username = user_name();
+        let password = user_password();
 
         // 验证必填字段
         if desc.trim().is_empty() || path.trim().is_empty() {
@@ -93,10 +99,27 @@ pub fn AddServiceModal() -> Element {
             return;
         }
 
+        // 如果启用用户模式，必须提供凭据
+        if as_user && (username.trim().is_empty() || password.trim().is_empty()) {
+            tracing::warn!("验证失败: 用户模式需要提供用户名和密码");
+            return;
+        }
+
         let args_vec: Vec<String> = args_str.split_whitespace().map(|s| s.to_string()).collect();
+        let user_name_opt = if as_user { Some(username) } else { None };
+        let user_password_opt = if as_user { Some(password) } else { None };
 
         spawn(async move {
-            match backend::add_service(desc, path, args_vec).await {
+            match backend::add_service(
+                desc,
+                path,
+                args_vec,
+                as_user,
+                user_name_opt,
+                user_password_opt,
+            )
+            .await
+            {
                 Ok(_) => {
                     // 刷新服务列表
                     if let Ok(new_services) = backend::list_services().await {
@@ -112,237 +135,235 @@ pub fn AddServiceModal() -> Element {
     };
 
     rsx! {
-        div { class: "modal-overlay",
-            div { class: "modal-box",
+        div {
+            class: "modal-overlay",
+            onclick: move |_| services.write().hide_add_modal(),
+            div { class: "modal", onclick: move |e| e.stop_propagation(),
+                // 头部
                 div { class: "modal-header",
                     h3 { class: "modal-title", "添加自定义服务" }
                     button {
                         class: "btn-close",
-                        onclick: move |_| {
-                            services.write().hide_add_modal();
-                        },
-                        svg {
-                            class: "icon-md",
-                            fill: "none",
-                            stroke: "currentColor",
-                            view_box: "0 0 24 24",
-                            path {
-                                stroke_linecap: "round",
-                                stroke_linejoin: "round",
-                                stroke_width: "2",
-                                d: "M6 18L18 6M6 6l12 12",
-                            }
-                        }
+                        onclick: move |_| services.write().hide_add_modal(),
+                        "×"
                     }
                 }
-                form { onsubmit: handle_submit, class: "modal-form",
-                    div { class: "form-group",
-                        label { class: "form-label", "描述" }
-                        input {
-                            r#type: "text",
-                            class: "form-input",
-                            value: "{description}",
-                            oninput: move |e| description.set(e.value()),
+
+                // 内容
+                div { class: "modal-body",
+                    form {
+                        id: "add-service-form",
+                        onsubmit: handle_submit,
+                        class: "modal-form",
+                        div { class: "form-group",
+                            label { class: "form-label", "描述" }
+                            input {
+                                r#type: "text",
+                                class: "form-input",
+                                value: "{description}",
+                                oninput: move |e| description.set(e.value()),
+                            }
                         }
-                    }
-                    div {
-                        class: "form-group autocomplete-container",
-                        position: "relative",
-                        label { class: "form-label", "可执行文件路径" }
-                        input {
-                            r#type: "text",
-                            class: "form-input",
-                            value: "{exe_path}",
-                            onfocus: move |_| {
-                                let value = exe_path();
-                                selected_index.set(0);
-                                window_start.set(0);
 
-                                spawn(async move {
-                                    match backend::query_path(value).await {
-                                        Ok(items) => {
-                                            suggestions.set(items.clone());
-                                            show_suggestions.set(!items.is_empty());
-                                        }
-                                        Err(_) => {
-                                            suggestions.set(Vec::new());
-                                            show_suggestions.set(false);
-                                        }
-                                    }
-                                });
-                            },
-                            oninput: move |e| {
-                                let value = e.value();
-                                exe_path.set(value.clone());
-                                selected_index.set(0);
-                                window_start.set(0);
+                        div {
+                            class: "form-group autocomplete-container",
+                            position: "relative",
+                            label { class: "form-label", "可执行文件路径" }
+                            input {
+                                r#type: "text",
+                                class: "form-input",
+                                value: "{exe_path}",
+                                onfocus: move |_| {
+                                    let value = exe_path();
+                                    selected_index.set(0);
+                                    window_start.set(0);
 
-                                spawn(async move {
-                                    match backend::query_path(value).await {
-                                        Ok(items) => {
-                                            suggestions.set(items.clone());
-                                            show_suggestions.set(!items.is_empty());
-                                        }
-                                        Err(_) => {
-                                            suggestions.set(Vec::new());
-                                            show_suggestions.set(false);
-                                        }
-                                    }
-                                });
-                            },
-                            onkeydown: move |evt: Event<KeyboardData>| {
-                                let key = evt.data.key();
-
-                                if show_suggestions() && !suggestions().is_empty() {
-                                    match key {
-                                        Key::ArrowDown => {
-                                            evt.stop_propagation();
-                                            evt.prevent_default();
-                                            let sugg_len = suggestions().len();
-                                            let new_idx = (selected_index() + 1) % sugg_len;
-                                            selected_index.set(new_idx);
-
-                                            let current_window = window_start();
-                                            if new_idx >= current_window + WINDOW_SIZE {
-                                                window_start.set(new_idx - WINDOW_SIZE + 1);
-                                            } else if new_idx < current_window {
-                                                window_start.set(0);
+                                    spawn(async move {
+                                        match backend::query_path(value).await {
+                                            Ok(items) => {
+                                                suggestions.set(items.clone());
+                                                show_suggestions.set(!items.is_empty());
                                             }
-                                        }
-                                        Key::ArrowUp => {
-                                            evt.stop_propagation();
-                                            evt.prevent_default();
-                                            let sugg_len = suggestions().len();
-                                            let idx = selected_index();
-                                            let new_idx = if idx == 0 { sugg_len - 1 } else { idx - 1 };
-                                            selected_index.set(new_idx);
-
-                                            let current_window = window_start();
-                                            if new_idx < current_window {
-                                                window_start.set(new_idx);
-                                            } else if new_idx >= current_window + WINDOW_SIZE {
-                                                let max_start = sugg_len.saturating_sub(WINDOW_SIZE);
-                                                window_start.set(max_start);
-                                            }
-                                        }
-                                        Key::Enter => {
-                                            evt.stop_propagation();
-                                            evt.prevent_default();
-                                            let sugg = suggestions();
-                                            let selected = &sugg[selected_index()];
-                                            let path = selected.path.clone();
-                                            let is_dir = selected.is_dir;
-
-                                            if is_dir {
-                                                selected_index.set(0);
-                                                window_start.set(0);
-
-                                                spawn(async move {
-                                                    match backend::query_path(path.clone()).await {
-                                                        Ok(items) => {
-                                                            exe_path.set(path);
-                                                            suggestions.set(items.clone());
-                                                            show_suggestions.set(!items.is_empty());
-                                                        }
-                                                        Err(_) => {
-                                                            suggestions.set(Vec::new());
-                                                            show_suggestions.set(false);
-                                                        }
-                                                    }
-                                                });
-                                            } else {
-                                                exe_path.set(path);
-                                                show_suggestions.set(false);
+                                            Err(_) => {
                                                 suggestions.set(Vec::new());
+                                                show_suggestions.set(false);
                                             }
                                         }
-                                        Key::Escape => {
-                                            evt.stop_propagation();
-                                            evt.prevent_default();
-                                            show_suggestions.set(false);
+                                    });
+                                },
+                                oninput: move |e| {
+                                    let value = e.value();
+                                    exe_path.set(value.clone());
+                                    selected_index.set(0);
+                                    window_start.set(0);
+
+                                    spawn(async move {
+                                        match backend::query_path(value).await {
+                                            Ok(items) => {
+                                                suggestions.set(items.clone());
+                                                show_suggestions.set(!items.is_empty());
+                                            }
+                                            Err(_) => {
+                                                suggestions.set(Vec::new());
+                                                show_suggestions.set(false);
+                                            }
                                         }
-                                        _ => {}
-                                    }
-                                }
-                            },
-                            autocomplete: "off",
-                        }
-                        if show_suggestions() {
-                            {
-                                let current_selected = selected_index();
-                                let current_window = window_start();
-                                let all_suggestions = suggestions();
-                                let window_end = (current_window + WINDOW_SIZE).min(all_suggestions.len());
-                                let visible_items: Vec<_> = all_suggestions[current_window..window_end].to_vec();
+                                    });
+                                },
+                                onkeydown: move |evt: Event<KeyboardData>| {
+                                    let key = evt.data.key();
 
-                                rsx! {
-                                    div {
-                                        class: "autocomplete-suggestions-floating",
-                                        position: "absolute",
-                                        z_index: "1000",
-                                        top: "100%",
-                                        left: "0",
-                                        right: "0",
-                                        margin_top: "4px",
-                                        background_color: "#1e293b",
-                                        border: "1px solid #475569",
-                                        border_radius: "8px",
-                                        box_shadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
-                                        max_height: "320px",
-                                        overflow_y: "auto",
-                                        for (offset , item) in visible_items.iter().enumerate() {
-                                            {
-                                                let idx = current_window + offset;
-                                                let path = item.path.clone();
-                                                let is_dir = item.is_dir;
-                                                let is_exe = item.is_executable;
-                                                let is_selected = idx == current_selected;
+                                    if show_suggestions() && !suggestions().is_empty() {
+                                        match key {
+                                            Key::ArrowDown => {
+                                                evt.stop_propagation();
+                                                evt.prevent_default();
+                                                let sugg_len = suggestions().len();
+                                                let new_idx = (selected_index() + 1) % sugg_len;
+                                                selected_index.set(new_idx);
 
+                                                let current_window = window_start();
+                                                if new_idx >= current_window + WINDOW_SIZE {
+                                                    window_start.set(new_idx - WINDOW_SIZE + 1);
+                                                } else if new_idx < current_window {
+                                                    window_start.set(0);
+                                                }
+                                            }
+                                            Key::ArrowUp => {
+                                                evt.stop_propagation();
+                                                evt.prevent_default();
+                                                let sugg_len = suggestions().len();
+                                                let idx = selected_index();
+                                                let new_idx = if idx == 0 { sugg_len - 1 } else { idx - 1 };
+                                                selected_index.set(new_idx);
 
+                                                let current_window = window_start();
+                                                if new_idx < current_window {
+                                                    window_start.set(new_idx);
+                                                } else if new_idx >= current_window + WINDOW_SIZE {
+                                                    let max_start = sugg_len.saturating_sub(WINDOW_SIZE);
+                                                    window_start.set(max_start);
+                                                }
+                                            }
+                                            Key::Enter => {
+                                                evt.stop_propagation();
+                                                evt.prevent_default();
+                                                let sugg = suggestions();
+                                                let selected = &sugg[selected_index()];
+                                                let path = selected.path.clone();
+                                                let is_dir = selected.is_dir;
 
-                                                let current_input = exe_path();
-                                                let relative_path = get_display_path(&path, &current_input);
-                                                let display_name = truncate_middle(&relative_path, 50);
+                                                if is_dir {
+                                                    selected_index.set(0);
+                                                    window_start.set(0);
 
-                                                rsx! {
-                                                    div {
-                                                        key: "{idx}",
-                                                        class: "suggestion-item",
-                                                        background_color: if is_selected { "#4f46e5" },
-                                                        border_left: if is_selected { "3px solid #818cf8" },
-                                                        onclick: move |_| {
-                                                            if is_dir {
-                                                                let path_clone = path.clone();
-                                                                spawn(async move {
-                                                                    match backend::query_path(path_clone.clone()).await {
-                                                                        Ok(items) => {
-                                                                            exe_path.set(path_clone);
-                                                                            suggestions.set(items.clone());
-                                                                            show_suggestions.set(!items.is_empty());
-                                                                            selected_index.set(0);
-                                                                            window_start.set(0);
-                                                                        }
-                                                                        Err(_) => {
-                                                                            suggestions.set(Vec::new());
-                                                                            show_suggestions.set(false);
-                                                                        }
-                                                                    }
-                                                                });
-                                                            } else {
-                                                                exe_path.set(path.clone());
-                                                                show_suggestions.set(false);
+                                                    spawn(async move {
+                                                        match backend::query_path(path.clone()).await {
+                                                            Ok(items) => {
+                                                                exe_path.set(path);
+                                                                suggestions.set(items.clone());
+                                                                show_suggestions.set(!items.is_empty());
+                                                            }
+                                                            Err(_) => {
                                                                 suggestions.set(Vec::new());
+                                                                show_suggestions.set(false);
                                                             }
-                                                        },
-                                                        div { class: "suggestion-content",
-                                                            if is_dir {
-                                                                span { class: "suggestion-icon dir", "📁" }
-                                                            } else if is_exe {
-                                                                span { class: "suggestion-icon exe", "⚙️" }
-                                                            } else {
-                                                                span { class: "suggestion-icon file", "📄" }
+                                                        }
+                                                    });
+                                                } else {
+                                                    exe_path.set(path);
+                                                    show_suggestions.set(false);
+                                                    suggestions.set(Vec::new());
+                                                }
+                                            }
+                                            Key::Escape => {
+                                                evt.stop_propagation();
+                                                evt.prevent_default();
+                                                show_suggestions.set(false);
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                },
+                                autocomplete: "off",
+                            }
+                            if show_suggestions() {
+                                {
+                                    let current_selected = selected_index();
+                                    let current_window = window_start();
+                                    let all_suggestions = suggestions();
+                                    let window_end = (current_window + WINDOW_SIZE).min(all_suggestions.len());
+                                    let visible_items: Vec<_> = all_suggestions[current_window..window_end].to_vec();
+
+                                    rsx! {
+                                        div {
+                                            class: "autocomplete-suggestions-floating",
+                                            position: "absolute",
+                                            z_index: "1000",
+                                            top: "100%",
+                                            left: "0",
+                                            right: "0",
+                                            margin_top: "4px",
+                                            background_color: "#1e293b",
+                                            border: "1px solid #475569",
+                                            border_radius: "8px",
+                                            box_shadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+                                            max_height: "320px",
+                                            overflow_y: "auto",
+                                            for (offset , item) in visible_items.iter().enumerate() {
+                                                {
+                                                    let idx = current_window + offset;
+                                                    let path = item.path.clone();
+                                                    let is_dir = item.is_dir;
+                                                    let is_exe = item.is_executable;
+                                                    let is_selected = idx == current_selected;
+
+
+
+                                                    let current_input = exe_path();
+                                                    let relative_path = get_display_path(&path, &current_input);
+                                                    let display_name = truncate_middle(&relative_path, 50);
+
+                                                    rsx! {
+                                                        div {
+                                                            key: "{idx}",
+                                                            class: "suggestion-item",
+                                                            background_color: if is_selected { "#4f46e5" },
+                                                            border_left: if is_selected { "3px solid #818cf8" },
+                                                            onclick: move |_| {
+                                                                if is_dir {
+                                                                    let path_clone = path.clone();
+                                                                    spawn(async move {
+                                                                        match backend::query_path(path_clone.clone()).await {
+                                                                            Ok(items) => {
+                                                                                exe_path.set(path_clone);
+                                                                                suggestions.set(items.clone());
+                                                                                show_suggestions.set(!items.is_empty());
+                                                                                selected_index.set(0);
+                                                                                window_start.set(0);
+                                                                            }
+                                                                            Err(_) => {
+                                                                                suggestions.set(Vec::new());
+                                                                                show_suggestions.set(false);
+                                                                            }
+                                                                        }
+                                                                    });
+                                                                } else {
+                                                                    exe_path.set(path.clone());
+                                                                    show_suggestions.set(false);
+                                                                    suggestions.set(Vec::new());
+                                                                }
+                                                            },
+                                                            div { class: "suggestion-content",
+                                                                if is_dir {
+                                                                    span { class: "suggestion-icon dir", "📁" }
+                                                                } else if is_exe {
+                                                                    span { class: "suggestion-icon exe", "⚙️" }
+                                                                } else {
+                                                                    span { class: "suggestion-icon file", "📄" }
+                                                                }
+                                                                span { class: "suggestion-path", "{display_name}" }
                                                             }
-                                                            span { class: "suggestion-path", "{display_name}" }
                                                         }
                                                     }
                                                 }
@@ -352,26 +373,64 @@ pub fn AddServiceModal() -> Element {
                                 }
                             }
                         }
-                    }
-                    div { class: "form-group",
-                        label { class: "form-label", "参数 (空格分隔)" }
-                        input {
-                            r#type: "text",
-                            class: "form-input",
-                            value: "{args}",
-                            oninput: move |e| args.set(e.value()),
+                        div { class: "form-group",
+                            label { class: "form-label", "参数 (空格分隔)" }
+                            input {
+                                r#type: "text",
+                                class: "form-input",
+                                value: "{args}",
+                                oninput: move |e| args.set(e.value()),
+                            }
+                        }
+                        div { class: "form-group",
+                            label { class: "form-label checkbox-label",
+                                input {
+                                    r#type: "checkbox",
+                                    class: "form-checkbox",
+                                    checked: run_as_user(),
+                                    onchange: move |e| run_as_user.set(e.checked()),
+                                }
+                                span { "以用户模式运行 (可显示界面)" }
+                            }
+                        }
+                        if run_as_user() {
+                            div { class: "form-group",
+                                label { class: "form-label", "用户名" }
+                                input {
+                                    r#type: "text",
+                                    class: "form-input",
+                                    placeholder: "COMPUTERNAME\\Username",
+                                    value: "{user_name}",
+                                    oninput: move |e| user_name.set(e.value()),
+                                }
+                            }
+                            div { class: "form-group",
+                                label { class: "form-label", "密码" }
+                                input {
+                                    r#type: "password",
+                                    class: "form-input",
+                                    placeholder: "用户密码",
+                                    value: "{user_password}",
+                                    oninput: move |e| user_password.set(e.value()),
+                                }
+                            }
                         }
                     }
-                    div { class: "modal-actions",
+
+                    // 底部
+                    div { class: "modal-footer",
                         button {
                             r#type: "button",
-                            class: "btn-cancel",
-                            onclick: move |_| {
-                                services.write().hide_add_modal();
-                            },
+                            class: "btn btn-secondary",
+                            onclick: move |_| services.write().hide_add_modal(),
                             "取消"
                         }
-                        button { r#type: "submit", class: "btn-primary", "添加服务" }
+                        button {
+                            r#type: "submit",
+                            class: "btn btn-primary",
+                            form: "add-service-form",
+                            "添加服务"
+                        }
                     }
                 }
             }

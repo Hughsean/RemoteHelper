@@ -12,7 +12,8 @@ pub use api::*;
 pub async fn connect(addr: String, password: String) -> Result<(), String> {
     // 设置服务器地址
     {
-        let mut server_addr = client::SERVER_ADDRESS.lock()
+        let mut server_addr = client::SERVER_ADDRESS
+            .lock()
             .map_err(|e| format!("Failed to acquire server address lock: {}", e))?;
         *server_addr = addr;
     }
@@ -28,30 +29,33 @@ pub async fn connect(addr: String, password: String) -> Result<(), String> {
 
 /// 加载签名密钥
 fn load_signing_key(password: &str) -> Result<(), String> {
-    use std::path::PathBuf;
     use std::fs;
+    use std::path::PathBuf;
 
     let key_path: PathBuf = dirs::home_dir()
         .ok_or("Failed to get home directory")?
         .join("id_ed25519.json");
 
-    let key_content = fs::read_to_string(&key_path)
-        .map_err(|e| format!("Failed to read key file: {}", e))?;
+    let key_content =
+        fs::read_to_string(&key_path).map_err(|e| format!("Failed to read key file: {}", e))?;
 
     let key_file: client::KeyFile = serde_json::from_str(&key_content)
         .map_err(|e| format!("Failed to parse key file: {}", e))?;
 
     // 解密私钥
-    use pbkdf2::pbkdf2_hmac;
-    use sha2::Sha256;
     use aes_gcm::{Aes256Gcm, KeyInit, aead::Aead};
     use base64::prelude::*;
+    use pbkdf2::pbkdf2_hmac;
+    use sha2::Sha256;
 
-    let salt = BASE64_STANDARD.decode(&key_file.salt)
+    let salt = BASE64_STANDARD
+        .decode(&key_file.salt)
         .map_err(|e| format!("Failed to decode salt: {}", e))?;
-    let enc_key = BASE64_STANDARD.decode(&key_file.enc_priv_key)
+    let enc_key = BASE64_STANDARD
+        .decode(&key_file.enc_priv_key)
         .map_err(|e| format!("Failed to decode encrypted key: {}", e))?;
-    let nonce_bytes = BASE64_STANDARD.decode(&key_file.nonce)
+    let nonce_bytes = BASE64_STANDARD
+        .decode(&key_file.nonce)
         .map_err(|e| format!("Failed to decode nonce: {}", e))?;
 
     let mut key = [0u8; 32];
@@ -60,16 +64,19 @@ fn load_signing_key(password: &str) -> Result<(), String> {
     let cipher = Aes256Gcm::new(&key.into());
     let nonce = aes_gcm::Nonce::from_slice(&nonce_bytes);
 
-    let priv_key_bytes = cipher.decrypt(nonce, enc_key.as_ref())
+    let priv_key_bytes = cipher
+        .decrypt(nonce, enc_key.as_ref())
         .map_err(|_| "Wrong password or corrupted key file".to_string())?;
 
     let signing_key = ed25519_dalek::SigningKey::from_bytes(
-        &priv_key_bytes.try_into()
-            .map_err(|_| "Invalid key length")?
+        &priv_key_bytes
+            .try_into()
+            .map_err(|_| "Invalid key length")?,
     );
 
     // 存储密钥
-    let mut guard = client::SIGNING_KEY.lock()
+    let mut guard = client::SIGNING_KEY
+        .lock()
         .map_err(|_| "Failed to lock key store")?;
     *guard = Some((signing_key, key_file.pub_key));
 

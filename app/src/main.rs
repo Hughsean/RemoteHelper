@@ -99,7 +99,7 @@ fn main() {
     {
         println!("[3/4] 平台: Desktop (Windows)");
         dioxus_logger::tracing::info!("平台: Desktop (Windows)");
-        dioxus_logger::tracing::info!("Starting RemoteHelper Desktop Application");
+        dioxus_logger::tracing::info!("正在启动 RemoteHelper 桌面应用程序");
 
         // 检查 WebView2 Runtime
         println!("[3/4] 正在检查 WebView2 Runtime...");

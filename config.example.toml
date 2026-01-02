@@ -40,6 +40,8 @@ args = ["-f", "token:port"]
 auto_start = false
 # 是否允许通过 Web 控制
 allow_web_control = true
+# 是否以用户模式运行（false=系统服务, true=用户进程可显示界面）
+run_as_user = false
 
 # 服务配置示例 2：SSH 访问
 [[service]]
@@ -48,6 +50,7 @@ exe_path = "frpc.exe"
 args = ["-f", "token:port"]
 auto_start = true
 allow_web_control = true
+run_as_user = false
 
 # 服务配置示例 3：自定义程序
 # [[service]]
@@ -56,9 +59,10 @@ allow_web_control = true
 # args = ["--arg1", "value1", "--arg2", "value2"]
 # auto_start = false
 # allow_web_control = true
+# run_as_user = true  # GUI 程序通常需要设为 true
 
 # 配置说明：
-# 
+#
 # [web_panel] 部分：
 # - enabled: 控制是否启动 Web 控制面板隧道
 # - local_port: 本地 TCP 服务器监听端口
@@ -72,10 +76,15 @@ allow_web_control = true
 # - args: 启动参数列表
 # - auto_start: 服务器启动时自动启动该服务
 # - allow_web_control: 是否允许通过 Web 控制该服务
+# - run_as_user: 运行模式（false=系统服务后台运行, true=用户进程可显示界面）
+# - user_name: 用户名（可选，格式：COMPUTERNAME\Username 或 domain\username）
+# - user_password: 用户密码（可选，明文存储需注意安全）
 #
-# 安全建议：
+# 用户凭据在全局级别配置，所有 run_as_user=true 的服务使用相同凭据
 # 1. 定期更换密钥对
 # 2. 不要在公共仓库中提交包含实际 token 的配置文件
 # 3. 使用强密码保护私钥文件
+# 6. 用户密码以明文存储，请确保配置文件权限受限
+# 7. 建议使用 Windows 文件加密（EFS）保护配置文件
 # 4. 限制 authorized_keys 中的公钥数量
 # 5. 根据需要调整 max_connections 和 connection_timeout_secs

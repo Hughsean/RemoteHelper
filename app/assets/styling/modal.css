@@ -4,146 +4,148 @@
 
 /* 模态框遮罩层 */
 .modal-overlay {
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 100 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background-color: rgba(2, 6, 23, 0.85) !important;
-    backdrop-filter: blur(4px) !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: rgba(2, 6, 23, 0.85) !important;
+  backdrop-filter: blur(4px) !important;
 }
 
-/* 模态框容器 */
+/* 通用模态框容器 */
+.modal,
 .modal-box {
-    background-color: var(--bg-slate-900) !important;
-    padding: 1.5rem !important;
-    border-radius: 0.75rem !important;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
-    border: 1px solid var(--bg-slate-800) !important;
-    width: 100% !important;
-    max-width: 32rem !important;
-    max-height: 90vh !important;
-    overflow-y: auto !important;
+  position: relative !important;
+  z-index: 10000 !important;
+  background-color: var(--bg-slate-900) !important;
+  padding: 1.5rem !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid var(--bg-slate-800) !important;
+  width: 100% !important;
+  max-width: 28rem !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
 }
 
 /* 模态框头部 */
 .modal-header {
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    margin-bottom: 1.5rem !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 1.5rem !important;
 }
 
 .modal-title {
-    font-size: 1.25rem !important;
-    font-weight: 600 !important;
-    color: var(--text-white) !important;
-    margin: 0 !important;
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  color: var(--text-white) !important;
+  margin: 0 !important;
 }
 
 /* 关闭按钮 */
 .btn-close {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 2rem !important;
-    height: 2rem !important;
-    color: var(--text-slate-400) !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0.375rem !important;
-    cursor: pointer !important;
-    transition: all 0.2s !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  color: var(--text-slate-400) !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0.375rem !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
 }
 
 .btn-close:hover {
-    color: var(--text-white) !important;
-    background-color: rgba(255, 255, 255, 0.1) !important;
+  color: var(--text-white) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* 模态框表单 */
 .modal-form {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 1rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
 }
 
 /* 模态框底部操作区 */
-.modal-actions {
-    display: flex !important;
-    justify-content: flex-end !important;
-    gap: 0.75rem !important;
-    margin-top: 1.5rem !important;
+.modal-actions,
+.modal-footer {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 0.75rem !important;
+  margin-top: 1.5rem !important;
+  padding-top: 1rem !important;
+  border-top: 1px solid var(--bg-slate-800) !important;
 }
 
-.modal-actions .btn-primary {
-    width: auto !important;
-    padding: 0.625rem 1.25rem !important;
+.modal-actions .btn-primary,
+.modal-footer .btn-primary {
+  width: auto !important;
+  padding: 0.625rem 1.25rem !important;
+}
+
+/* 模态框内容区 */
+.modal-body {
+  margin-bottom: 0.5rem !important;
 }
 
 /* 取消按钮 */
-.btn-cancel {
-    background-color: var(--bg-slate-700) !important;
-    color: var(--text-slate-300) !important;
-    border: none !important;
-    padding: 0.625rem 1.25rem !important;
-    border-radius: 0.5rem !important;
-    font-size: 0.875rem !important;
-    font-weight: 500 !important;
-    cursor: pointer !important;
-    transition: all 0.2s !important;
-    white-space: nowrap !important;
-    min-width: fit-content !important;
+.btn-cancel,
+.btn-secondary {
+  background-color: var(--bg-slate-700) !important;
+  color: var(--text-slate-300) !important;
+  border: none !important;
+  padding: 0.625rem 1.25rem !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+  white-space: nowrap !important;
+  min-width: fit-content !important;
 }
 
-.btn-cancel:hover {
-    background-color: var(--bg-slate-600) !important;
-    color: var(--text-white) !important;
+.btn-cancel:hover,
+.btn-secondary:hover {
+  background-color: var(--bg-slate-600) !important;
+  color: var(--text-white) !important;
 }
 
-/* 自动完成容器 */
-.autocomplete-container {
-    position: relative !important;
+
+/* Checkbox 样式 */
+.checkbox-label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  cursor: pointer !important;
+  user-select: none !important;
 }
 
-/* 自动完成下拉列表 */
-.autocomplete-list {
-    position: absolute !important;
-    top: 100% !important;
-    left: 0 !important;
-    right: 0 !important;
-    background-color: var(--bg-slate-800) !important;
-    border: 1px solid var(--bg-slate-700) !important;
-    border-radius: 0.5rem !important;
-    margin-top: 0.25rem !important;
-    max-height: 200px !important;
-    overflow-y: auto !important;
-    z-index: 50 !important;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+.form-checkbox {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  border-radius: 0.25rem !important;
+  border: 2px solid var(--bg-slate-600) !important;
+  background-color: var(--bg-slate-800) !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
 }
 
-.autocomplete-item {
-    display: flex !important;
-    align-items: center !important;
-    gap: 0.5rem !important;
-    padding: 0.5rem 0.75rem !important;
-    cursor: pointer !important;
-    transition: background-color 0.15s !important;
-    font-size: 0.875rem !important;
-    color: var(--text-slate-300) !important;
+.form-checkbox:checked {
+  background-color: var(--primary-600) !important;
+  border-color: var(--primary-600) !important;
 }
 
-.autocomplete-item:hover,
-.autocomplete-item.selected {
-    background-color: var(--bg-slate-700) !important;
-    color: var(--text-white) !important;
+.form-checkbox:hover {
+  border-color: var(--primary-500) !important;
 }
 
-.autocomplete-item-icon {
-    color: var(--text-slate-500) !important;
-}
-
-.autocomplete-item-folder .autocomplete-item-icon {
-    color: var(--color-amber-400) !important;
+.checkbox-label span {
+  color: var(--text-slate-300) !important;
+  font-size: 0.875rem !important;
 }

@@ -65,7 +65,7 @@
   gap: 1rem !important;
 }
 
-/* 表单组 */
+/* 表单组 - 也用于模态框和其他表单 */
 .form-group {
   display: flex !important;
   flex-direction: column !important;

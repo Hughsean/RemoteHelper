@@ -62,13 +62,19 @@ pub struct ServiceConfig {
     pub auto_start: bool,
     #[serde(default)]
     pub allow_web_control: bool,
+    #[serde(default)]
+    pub run_as_user: bool,
+    #[serde(default)]
+    pub user_name: Option<String>,
+    #[serde(default)]
+    pub user_password: Option<String>,
 }
 
 impl AppConfig {
     pub fn load() -> anyhow::Result<Self> {
         let config_path = Path::new("config.toml");
-        let content = std::fs::read_to_string(config_path).context("Failed to read config.toml")?;
-        let config: AppConfig = toml::from_str(&content).context("Failed to parse config.toml")?;
+        let content = std::fs::read_to_string(config_path).context("无法读取 config.toml")?;
+        let config: AppConfig = toml::from_str(&content).context("无法解析 config.toml")?;
         Ok(config)
     }
 }

@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // tracing::info!("\n\n================================================================================");
-    tracing::info!("Starting RemoteHelper Server Instance");
+    tracing::info!("正在启动 RemoteHelper 服务器实例");
     // tracing::info!("================================================================================");
 
     // Load configuration
@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
 
     if !no_url || !no_delay {
         tracing::info!(
-            "Waiting for network initialization... {} seconds",
+            "等待网络初始化... {} 秒",
             config.web_panel.startup_delay_secs
         );
 
@@ -67,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or(false);
 
                 if connected {
-                    tracing::info!("Network initialization detected");
+                    tracing::info!("检测到网络初始化完成");
                     break;
                 };
                 tokio::time::sleep(Duration::from_secs(sleep_time)).await;
@@ -75,10 +75,18 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
-    tracing::info!("Configuration loaded successfully");
+    tracing::info!("配置文件加载成功");
+    tracing::info!(
+        "Web 面板配置 - 启用: {}, 端口: {}, 最大连接数: {}",
+        config.web_panel.enabled,
+        config.web_panel.local_port,
+        config.web_panel.max_connections
+    );
+    tracing::info!("已配置服务数量: {}", config.service.len());
 
     // Initialize state
     let state = AppState::new(config.clone());
+    tracing::info!("应用程序状态初始化完成");
 
     // Start background monitoring task
     let monitor_state = state.clone();
@@ -110,9 +118,11 @@ async fn main() -> anyhow::Result<()> {
 
             if timeout && should_pause {
                 // Skip this cycle
+                tracing::trace!("监控已暂停 - 无最近读取");
                 continue;
             }
 
+            tracing::trace!("正在刷新系统指标...");
             {
                 let mut sys = monitor_state.sys.write().await;
                 sys.refresh_cpu_all();
@@ -145,17 +155,27 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Auto-start services
+    tracing::info!("正在启动自动启动服务...");
+    let auto_start_count = state.config.service.iter().filter(|s| s.auto_start).count();
+    tracing::info!("发现 {} 个标记为自动启动的服务", auto_start_count);
+
     for (id, svc) in state.config.service.iter().enumerate() {
-        if svc.auto_start
-            && let Err(e) = process::start_service(&state, id).await
-        {
-            tracing::error!("Failed to auto-start service {}: {}", svc.description, e);
+        if svc.auto_start {
+            tracing::info!("自动启动服务 ID {}: {}", id, svc.description);
+            if let Err(e) = process::start_service(&state, id, None, None).await {
+                tracing::error!("自动启动服务失败 {} ({}): {}", id, svc.description, e);
+            } else {
+                tracing::info!("成功自动启动服务 ID {}", id);
+            }
         }
     }
 
     // Auto-start web tunnel
+    tracing::info!("正在启动 Web 隧道...");
     if let Err(e) = process::start_web_tunnel(&state).await {
-        tracing::error!("Failed to start web tunnel: {}", e);
+        tracing::error!("启动 Web 隧道失败: {}", e);
+    } else {
+        tracing::info!("Web 隧道启动成功");
     }
 
     // Keep a clone for cleanup
@@ -164,7 +184,7 @@ async fn main() -> anyhow::Result<()> {
     // Run it
     let port = config.web_panel.local_port;
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    tracing::info!("Listening on {}", addr);
+    tracing::info!("正在监听 {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
@@ -179,12 +199,12 @@ async fn main() -> anyhow::Result<()> {
                         // Check connection limit
                         let current = server_state.active_connections.load(std::sync::atomic::Ordering::Relaxed);
                         if current >= max_connections {
-                            tracing::warn!("Connection limit reached ({}), rejecting connection from {}", max_connections, addr);
+                            tracing::warn!("连接数已达上限 ({}), 拒绝来自 {} 的连接", max_connections, addr);
                             drop(socket);
                             continue;
                         }
 
-                        tracing::info!("New connection from {} ({}/{})", addr, current + 1, max_connections);
+                        tracing::info!("来自 {} 的新连接 ({}/{})", addr, current + 1, max_connections);
 
                         let state = server_state.clone();
                         tokio::spawn(async move {
@@ -192,7 +212,7 @@ async fn main() -> anyhow::Result<()> {
                         });
                     }
                     Err(e) => {
-                        tracing::error!("Failed to accept connection: {}", e);
+                        tracing::error!("接受连接失败: {}", e);
                     }
                 }
             }
@@ -201,24 +221,44 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Cleanup logic
-    tracing::info!("Shutting down, killing child processes...");
+    tracing::info!("正在关闭，终止子进程...");
+    let active = cleanup_state
+        .active_connections
+        .load(std::sync::atomic::Ordering::Relaxed);
+    if active > 0 {
+        tracing::warn!("关闭时仍有 {} 个活动连接", active);
+    }
 
     // Kill service processes with timeout
     {
         let mut processes = cleanup_state.service_processes.write().await;
-        for (id, child) in processes.iter_mut() {
-            tracing::info!("Killing service process {}", id);
-            if let Err(e) = child.start_kill() {
-                tracing::error!("Failed to kill service process {}: {}", id, e);
-                continue;
-            }
-            // Wait for process to exit with 5 second timeout
-            match tokio::time::timeout(Duration::from_secs(5), child.wait()).await {
-                Ok(Ok(status)) => tracing::info!("Service {} exited with status: {:?}", id, status),
-                Ok(Err(e)) => tracing::error!("Error waiting for service {}: {}", id, e),
-                Err(_) => {
-                    tracing::warn!("Service {} did not exit within timeout, force killing", id);
-                    let _ = child.kill().await;
+        tracing::info!("发现 {} 个需要终止的服务进程", processes.len());
+        for (id, handle) in processes.iter_mut() {
+            tracing::info!("正在终止服务进程 {}", id);
+            match handle {
+                state::ProcessHandle::Child(child) => {
+                    if let Err(e) = child.start_kill() {
+                        tracing::error!("终止服务进程 {} 失败: {}", id, e);
+                        continue;
+                    }
+                    // Wait for process to exit with 5 second timeout
+                    match tokio::time::timeout(Duration::from_secs(5), child.wait()).await {
+                        Ok(Ok(status)) => {
+                            tracing::info!("服务 {} 退出，状态: {:?}", id, status)
+                        }
+                        Ok(Err(e)) => tracing::error!("等待服务 {} 时出错: {}", id, e),
+                        Err(_) => {
+                            tracing::warn!("服务 {} 未在超时时间内退出，强制终止", id);
+                            let _ = child.kill().await;
+                        }
+                    }
+                }
+                state::ProcessHandle::Pid(pid) => {
+                    // 用户模式：使用 taskkill
+                    tracing::info!("正在终止用户模式进程，PID: {}", pid);
+                    let _ = std::process::Command::new("taskkill")
+                        .args(&["/F", "/PID", &pid.to_string()])
+                        .output();
                 }
             }
         }
@@ -228,22 +268,22 @@ async fn main() -> anyhow::Result<()> {
     {
         let mut tunnel = cleanup_state.web_tunnel_process.lock().await;
         if let Some(child) = tunnel.as_mut() {
-            tracing::info!("Killing web tunnel process");
+            tracing::info!("正在终止 Web 隧道进程");
             if let Err(e) = child.start_kill() {
-                tracing::error!("Failed to kill web tunnel: {}", e);
+                tracing::error!("终止 Web 隧道失败: {}", e);
             } else {
                 match tokio::time::timeout(Duration::from_secs(5), child.wait()).await {
-                    Ok(Ok(status)) => tracing::info!("Web tunnel exited with status: {:?}", status),
-                    Ok(Err(e)) => tracing::error!("Error waiting for web tunnel: {}", e),
+                    Ok(Ok(status)) => tracing::info!("Web 隧道退出，状态: {:?}", status),
+                    Ok(Err(e)) => tracing::error!("等待 Web 隧道时出错: {}", e),
                     Err(_) => {
-                        tracing::warn!("Web tunnel did not exit within timeout, force killing");
+                        tracing::warn!("Web 隧道未在超时时间内退出，强制终止");
                         let _ = child.kill().await;
                     }
                 }
             }
         }
     }
-    tracing::info!("Shutdown complete\n\n\n\n");
+    tracing::info!("关闭完成\n\n\n\n");
     Ok(())
 }
 
@@ -270,5 +310,5 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
 
-    tracing::info!("Signal received, starting graceful shutdown");
+    tracing::info!("收到信号，开始优雅关闭");
 }

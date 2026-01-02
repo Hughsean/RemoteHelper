@@ -3,7 +3,7 @@
 //! 提供类型安全的服务器 API 调用接口
 //! 使用 client 库的全局 send_request 函数
 
-use common::{Request, Response, ServiceInfo, SystemInfo, ServiceAction};
+use common::{Request, Response, ServiceAction, ServiceInfo, SystemInfo};
 
 /// 认证到服务器
 ///
@@ -44,7 +44,21 @@ pub async fn list_services() -> Result<Vec<ServiceInfo>, String> {
 /// # Arguments
 /// * `service_id` - 服务ID
 /// * `action` - 操作类型: "start", "stop", "restart"
-pub async fn control_service(service_id: usize, action: String) -> Result<(), String> {
+/// * `user_name` - 用户模式服务的用户名（可选）
+/// * `user_password` - 用户模式服务的密码（可选）
+pub async fn control_service(
+    service_id: usize,
+    action: String,
+    user_name: Option<String>,
+    user_password: Option<String>,
+) -> Result<(), String> {
+    tracing::info!(
+        "API: control_service 被调用 - id={}, action={}, user_name={:?}",
+        service_id,
+        action,
+        user_name
+    );
+
     let service_action = match action.as_str() {
         "start" => ServiceAction::Start,
         "stop" => ServiceAction::Stop,
@@ -54,13 +68,30 @@ pub async fn control_service(service_id: usize, action: String) -> Result<(), St
 
     let request = Request::ControlService {
         id: service_id,
-        action: service_action
+        action: service_action,
+        user_name,
+        user_password,
     };
 
-    match client::send_request(request).await? {
-        Response::Ok => Ok(()),
-        Response::Error(msg) => Err(msg),
-        _ => Err("Unexpected response type".to_string()),
+    tracing::info!("API: 准备发送请求到服务器: {:?}", request);
+
+    let result = client::send_request(request).await;
+
+    tracing::info!("API: 服务器返回结果: {:?}", result);
+
+    match result? {
+        Response::Ok => {
+            tracing::info!("API: 操作成功");
+            Ok(())
+        }
+        Response::Error(msg) => {
+            tracing::error!("API: 服务器返回错误: {}", msg);
+            Err(msg)
+        }
+        _ => {
+            tracing::error!("API: 收到意外的响应类型");
+            Err("Unexpected response type".to_string())
+        }
     }
 }
 
@@ -74,11 +105,17 @@ pub async fn add_service(
     description: String,
     exe_path: String,
     args: Vec<String>,
+    run_as_user: bool,
+    user_name: Option<String>,
+    user_password: Option<String>,
 ) -> Result<usize, String> {
     let request = Request::AddService {
         description,
         exe_path,
         args,
+        run_as_user,
+        user_name,
+        user_password,
     };
 
     match client::send_request(request).await? {

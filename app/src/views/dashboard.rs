@@ -2,10 +2,12 @@
 //!
 //! 主监控面板 - 显示系统状态、趋势图表和服务列表
 
-use dioxus::prelude::*;
-use crate::components::{Header, SystemStatusDisplay, TrendChart, ServiceList, AddServiceModal};
-use crate::state::{use_system_state, use_services_state};
 use crate::backend;
+use crate::components::{
+    AddServiceModal, CredentialModal, Header, ServiceList, SystemStatusDisplay, TrendChart,
+};
+use crate::state::{use_services_state, use_system_state};
+use dioxus::prelude::*;
 
 #[component]
 pub fn Dashboard() -> Element {
@@ -89,6 +91,11 @@ pub fn Dashboard() -> Element {
             // 添加服务模态框
             if services_data.show_add_modal {
                 AddServiceModal {}
+            }
+
+            // 凭据输入模态框
+            if services_data.show_credential_modal {
+                CredentialModal {}
             }
         }
     }

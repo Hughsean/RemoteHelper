@@ -85,6 +85,27 @@
   margin-left: 0.5rem !important;
 }
 
+/* 未连接状态徽章 */
+.uptime-badge.uptime-disconnected {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  color: var(--color-red-400) !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.1) !important;
+  animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+
+@keyframes pulse-red {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
 /* 刷新间隔控制 */
 .refresh-control {
   position: relative !important;

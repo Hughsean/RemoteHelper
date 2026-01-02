@@ -10,13 +10,14 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use x25519_dalek::PublicKey;
 
-pub async fn handle_connection(mut socket: TcpStream, state: AppState) {
+pub async fn handle_connection(socket: TcpStream, state: AppState) {
     let result = tokio::time::timeout(
         Duration::from_secs(state.config.web_panel.connection_timeout_secs),
-        handle_connection_inner(&mut socket, state.clone()),
+        handle_connection_inner(socket, state.clone()),
     )
     .await;
 
@@ -30,7 +31,10 @@ pub async fn handle_connection(mut socket: TcpStream, state: AppState) {
     }
 }
 
-async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Result<()> {
+async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Result<()> {
+    let peer_addr = socket.peer_addr().ok();
+    tracing::info!("正在处理来自 {:?} 的连接", peer_addr);
+
     // Increment connection counter when actually starting to handle connection
     state.active_connections.fetch_add(1, Ordering::Relaxed);
 
@@ -68,94 +72,158 @@ async fn handle_connection_inner(socket: &mut TcpStream, state: AppState) -> Res
         .map_err(|_| anyhow::anyhow!("Invalid client public key length"))?;
     let client_public_key = PublicKey::from(client_pub_array);
     let shared_secret = secret.diffie_hellman(&client_public_key);
-    let mut crypto = CryptoSession::new(shared_secret.to_bytes(), true);
+    let crypto = CryptoSession::new(shared_secret.to_bytes(), true);
 
-    info!("Encrypted session established");
+    tracing::info!("与 {:?} 建立加密会话", peer_addr);
 
-    // --- Encrypted Loop ---
+    // --- Split socket into reader and writer ---
+    let (socket_read, socket_write) = socket.into_split();
+
+    // Wrap writer in Arc<Mutex> for shared access
+    let socket_write = std::sync::Arc::new(tokio::sync::Mutex::new(socket_write));
+    let crypto = std::sync::Arc::new(tokio::sync::Mutex::new(crypto));
+
+    // --- Encrypted Loop with Async Request Processing ---
     let mut authenticated = false;
     let mut current_challenge: Option<(String, Instant)> = None;
     let mut read_buf = [0u8; 10 * 1024]; // 10 KB buffer for encrypted frames
     const CHALLENGE_TIMEOUT: Duration = Duration::from_secs(30);
 
-    while let Ok(n) = socket.read_u32().await {
-        // Read encrypted length (4 bytes)
-        // Note: This length is the length of the CIPHERTEXT (including tag)
-        let len = n as usize;
+    // 创建响应发送队列
+    let (resp_tx, mut resp_rx) = mpsc::channel::<Response>(32);
+
+    // Spawn dedicated response sender task
+    let socket_write_clone = socket_write.clone();
+    let crypto_clone = crypto.clone();
+    let resp_sender_handle = tokio::spawn(async move {
+        while let Some(response) = resp_rx.recv().await {
+            let mut sock = socket_write_clone.lock().await;
+            let mut cry = crypto_clone.lock().await;
+            if let Err(e) = send_response_inner(&mut *sock, &mut *cry, &response).await {
+                error!("Failed to send response: {}", e);
+                break;
+            }
+        }
+    });
+
+    // Main request reading loop
+    let mut socket_read = socket_read;
+    loop {
+        // Read encrypted length
+        let len = match socket_read.read_u32().await {
+            Ok(n) => n as usize,
+            Err(_) => break, // Connection closed
+        };
 
         if len > read_buf.len() {
-            return Err(anyhow::anyhow!("Request too large: {} bytes", len));
+            error!("Request too large: {} bytes", len);
+            break;
         }
 
         // Read encrypted body
-        socket.read_exact(&mut read_buf[..len]).await?;
+        if socket_read.read_exact(&mut read_buf[..len]).await.is_err() {
+            break;
+        }
 
         // Decrypt
-        let plaintext = match crypto.decrypt(&read_buf[..len]) {
-            Ok(pt) => pt,
-            Err(e) => {
-                error!("Decryption failed: {}", e);
-                return Err(e);
+        let plaintext = {
+            let mut cry = crypto.lock().await;
+            match cry.decrypt(&read_buf[..len]) {
+                Ok(pt) => pt,
+                Err(e) => {
+                    error!("Decryption failed: {}", e);
+                    break;
+                }
             }
         };
 
         // Deserialize request
+        tracing::debug!("收到加密请求，大小: {} 字节", len);
         let req: Request = match serde_json::from_slice(&plaintext) {
             Ok(r) => r,
             Err(e) => {
                 error!("Invalid JSON: {}", e);
-                // We can try to send an encrypted error response, but if JSON is bad, maybe just close?
-                // Let's try to send error.
-                let err_resp = Response::Error(format!("Invalid JSON request: {}", e));
-                send_response(socket, &mut crypto, &err_resp).await?;
+                let err_resp = Response::Error(format!("无效的 JSON 请求: {}", e));
+                if resp_tx.send(err_resp).await.is_err() {
+                    break;
+                }
                 continue;
             }
         };
 
-        // Process request
-        let response = match req {
+        // Process request - differentiate auth requests from business requests
+        tracing::debug!(
+            "Processing request type: {:?}",
+            std::mem::discriminant(&req)
+        );
+        match req {
             Request::GetChallenge => {
+                // Auth request - process immediately
                 let nonce: [u8; 32] = rand::thread_rng().r#gen();
                 let nonce_str = BASE64_STANDARD.encode(nonce);
                 current_challenge = Some((nonce_str.clone(), Instant::now()));
-                Response::Challenge(nonce_str)
+                let response = Response::Challenge(nonce_str);
+                if resp_tx.send(response).await.is_err() {
+                    break;
+                }
             }
             Request::Login {
                 public_key,
                 signature,
             } => {
-                if let Some((challenge, timestamp)) = &current_challenge {
-                    // Check if challenge has expired
+                // Auth request - process immediately
+                let response = if let Some((challenge, timestamp)) = &current_challenge {
                     if timestamp.elapsed() > CHALLENGE_TIMEOUT {
                         current_challenge = None;
-                        Response::Error("Challenge expired".to_string())
+                        Response::Error("挑战已过期".to_string())
                     } else if verify_login(&state, &public_key, &signature, challenge) {
                         authenticated = true;
-                        current_challenge = None; // Clear challenge after use
+                        current_challenge = None;
                         info!("Client authenticated successfully with key: {}", public_key);
                         Response::Ok
                     } else {
                         warn!("Authentication failed for key: {}", public_key);
-                        Response::Error("Authentication failed".to_string())
+                        Response::Error("认证失败".to_string())
                     }
                 } else {
-                    Response::Error("No challenge requested".to_string())
+                    Response::Error("未请求挑战".to_string())
+                };
+                if resp_tx.send(response).await.is_err() {
+                    break;
                 }
             }
             _ => {
-                if authenticated {
-                    process_authenticated_request(req, &state).await
-                } else {
-                    Response::Error("Unauthorized".to_string())
+                // Business request - process asynchronously
+                if !authenticated {
+                    if resp_tx
+                        .send(Response::Error("未授权".to_string()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                    continue;
                 }
-            }
-        };
 
-        send_response(socket, &mut crypto, &response).await?;
+                // Spawn async task to process request without blocking main loop
+                let state_clone = state.clone();
+                let resp_tx_clone = resp_tx.clone();
+                tokio::spawn(async move {
+                    let response = process_authenticated_request(req, &state_clone).await;
+                    let _ = resp_tx_clone.send(response).await;
+                });
+            }
+        }
     }
+
+    // Wait for response sender to finish
+    drop(resp_tx);
+    let _ = resp_sender_handle.await;
+
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn send_response(
     socket: &mut TcpStream,
     crypto: &mut CryptoSession,
@@ -169,7 +237,25 @@ async fn send_response(
     Ok(())
 }
 
+async fn send_response_inner(
+    socket: &mut tokio::net::tcp::OwnedWriteHalf,
+    crypto: &mut CryptoSession,
+    response: &Response,
+) -> Result<()> {
+    let resp_bytes = serde_json::to_vec(response)?;
+    let ciphertext = crypto.encrypt(&resp_bytes)?;
+
+    socket.write_u32(ciphertext.len() as u32).await?;
+    socket.write_all(&ciphertext).await?;
+    Ok(())
+}
+
 fn verify_login(state: &AppState, pub_key_b64: &str, sig_b64: &str, challenge: &str) -> bool {
+    tracing::debug!(
+        "Verifying login for public key: {}...",
+        &pub_key_b64.chars().take(16).collect::<String>()
+    );
+
     // Check if key is authorized
     if !state
         .config
@@ -177,6 +263,7 @@ fn verify_login(state: &AppState, pub_key_b64: &str, sig_b64: &str, challenge: &
         .authorized_keys
         .contains(&pub_key_b64.to_string())
     {
+        tracing::warn!("未授权的公钥尝试登录");
         return false;
     }
 
@@ -203,13 +290,23 @@ fn verify_login(state: &AppState, pub_key_b64: &str, sig_b64: &str, challenge: &
 
     let signature = match Signature::from_slice(&sig_bytes) {
         Ok(s) => s,
-        Err(_) => return false,
+        Err(_) => {
+            tracing::warn!("无效的签名格式");
+            return false;
+        }
     };
 
-    verifying_key.verify(&challenge_bytes, &signature).is_ok()
+    let result = verifying_key.verify(&challenge_bytes, &signature).is_ok();
+    if result {
+        tracing::info!("登录验证成功");
+    } else {
+        tracing::warn!("登录验证失败 - 签名无效");
+    }
+    result
 }
 
 async fn process_authenticated_request(req: Request, state: &AppState) -> Response {
+    tracing::debug!("正在处理已认证请求");
     match req {
         Request::GetStatus { interval_ms } => {
             // Update last read time
@@ -294,19 +391,24 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             })
         }
         Request::ListServices => {
+            tracing::debug!("正在列出所有服务");
             let mut services = Vec::new();
             let processes = state.service_processes.read().await;
 
             // Static services
             for (id, svc_config) in state.config.service.iter().enumerate() {
                 let running = processes.contains_key(&id);
-                let pid = processes.get(&id).and_then(|c| c.id());
+                let pid = processes.get(&id).and_then(|handle| match handle {
+                    crate::state::ProcessHandle::Child(c) => c.id(),
+                    crate::state::ProcessHandle::Pid(p) => Some(*p),
+                });
 
                 services.push(ServiceInfo {
                     id,
                     description: svc_config.description.clone(),
                     running,
                     pid,
+                    run_as_user: svc_config.run_as_user,
                 });
             }
 
@@ -316,24 +418,34 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             for (i, svc_config) in dynamic.iter().enumerate() {
                 let id = offset + i;
                 let running = processes.contains_key(&id);
-                let pid = processes.get(&id).and_then(|c| c.id());
+                let pid = processes.get(&id).and_then(|handle| match handle {
+                    crate::state::ProcessHandle::Child(c) => c.id(),
+                    crate::state::ProcessHandle::Pid(p) => Some(*p),
+                });
 
                 services.push(ServiceInfo {
                     id,
                     description: svc_config.description.clone(),
                     running,
                     pid,
+                    run_as_user: svc_config.run_as_user,
                 });
             }
 
             Response::Services(services)
         }
-        Request::ControlService { id, action } => {
+        Request::ControlService {
+            id,
+            action,
+            user_name,
+            user_password,
+        } => {
+            tracing::info!("服务控制请求 - ID: {}, 操作: {:?}", id, action);
             let static_count = state.config.service.len();
             let dynamic_count = state.dynamic_services.read().await.len();
 
             if id >= static_count + dynamic_count {
-                return Response::Error("Service ID out of range".to_string());
+                return Response::Error("服务 ID 超出范围".to_string());
             }
 
             let allowed = if id < static_count {
@@ -343,29 +455,43 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             };
 
             if !allowed {
-                return Response::Error("Web control is disabled for this service".to_string());
+                return Response::Error("此服务的 Web 控制已禁用".to_string());
             }
 
             match action {
-                ServiceAction::Start => match crate::process::start_service(state, id).await {
-                    Ok(_) => Response::Ok,
-                    Err(e) => Response::Error(e.to_string()),
-                },
+                ServiceAction::Start => {
+                    match crate::process::start_service(state, id, user_name, user_password).await {
+                        Ok(_) => Response::Ok,
+                        Err(e) => Response::Error(e.to_string()),
+                    }
+                }
                 ServiceAction::Stop => match crate::process::stop_service(state, id).await {
                     Ok(_) => Response::Ok,
                     Err(e) => Response::Error(e.to_string()),
                 },
-                ServiceAction::Restart => match crate::process::restart_service(state, id).await {
-                    Ok(_) => Response::Ok,
-                    Err(e) => Response::Error(e.to_string()),
-                },
+                ServiceAction::Restart => {
+                    match crate::process::restart_service(state, id, user_name, user_password).await
+                    {
+                        Ok(_) => Response::Ok,
+                        Err(e) => Response::Error(e.to_string()),
+                    }
+                }
             }
         }
         Request::AddService {
             description,
             exe_path,
             args,
+            run_as_user,
+            user_name,
+            user_password,
         } => {
+            tracing::info!(
+                "正在添加新服务: {} (可执行文件: {}, 用户模式: {})",
+                description,
+                exe_path,
+                run_as_user
+            );
             let mut dynamic = state.dynamic_services.write().await;
             dynamic.push(crate::config::ServiceConfig {
                 description,
@@ -373,14 +499,20 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 args,
                 auto_start: false,
                 allow_web_control: true,
+                run_as_user,
+                user_name,
+                user_password,
             });
 
             // Return actual service ID: static count + new dynamic index
             let id = state.config.service.len() + dynamic.len() - 1;
             Response::ServiceAdded(id)
         }
-        Request::QueryPath { path } => query_path_suggestions(&path),
-        _ => Response::Error("Invalid request state".to_string()),
+        Request::QueryPath { path } => {
+            tracing::debug!("路径查询请求: {}", path);
+            query_path_suggestions(&path)
+        }
+        _ => Response::Error("无效的请求状态".to_string()),
     }
 }
 

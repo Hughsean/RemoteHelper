@@ -7,6 +7,12 @@ use sysinfo::{Networks, System};
 use tokio::process::Child;
 use tokio::sync::{Mutex, Notify, RwLock};
 
+/// 进程句柄：可能是直接的 Child 句柄（系统模式），或者是 PID（用户模式）
+pub enum ProcessHandle {
+    Child(Child),
+    Pid(u32),
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct GpuCache {
     pub usage: Option<u32>,
@@ -26,7 +32,7 @@ pub struct AppState {
     pub refresh_interval: Arc<RwLock<u64>>,
     pub last_read_time: Arc<RwLock<std::time::Instant>>,
     pub update_notify: Arc<Notify>,
-    pub service_processes: Arc<RwLock<HashMap<usize, Child>>>,
+    pub service_processes: Arc<RwLock<HashMap<usize, ProcessHandle>>>,
     pub web_tunnel_process: Arc<Mutex<Option<Child>>>,
     pub active_connections: Arc<AtomicUsize>,
 }

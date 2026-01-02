@@ -9,7 +9,7 @@ license.workspace = true
 
 [dependencies]
 # Dioxus 核心框架 - 仅启用桌面和路由功能
-dioxus = { version = "0.7.2", features = ["desktop", "router"] }
+dioxus = { version = "0.7", features = ["desktop", "router"] }
 dioxus-logger = "0.7"
 
 # 与服务器通信的客户端库
@@ -18,10 +18,11 @@ common.workspace = true
 
 # 异步运行时
 tokio.workspace = true
+tokio.features = ["full"]
 
 # 序列化
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde.workspace = true
+serde_json.workspace = true
 
 # 加密库（用于密钥解密）
 ed25519-dalek.workspace = true
@@ -35,7 +36,7 @@ log.workspace = true
 tracing = "0.1"
 
 # 系统工具
-dirs = "5.0"
+dirs = "6.0"
 once_cell = "1.20"
 
 [features]

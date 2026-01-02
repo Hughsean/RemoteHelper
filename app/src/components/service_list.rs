@@ -9,8 +9,6 @@ use dioxus::prelude::*;
 pub fn ServiceList() -> Element {
     let mut services = use_services_state();
 
-    let services_data = services.read();
-
     rsx! {
         div { class: "service-list-container",
             div { class: "service-list-header",
@@ -24,7 +22,7 @@ pub fn ServiceList() -> Element {
                 }
             }
             div { class: "service-list-body",
-                for service in services_data.services.iter() {
+                for service in services.read().services.iter() {
                     ServiceItem { key: "{service.id}", service: service.clone() }
                 }
             }
@@ -54,26 +52,61 @@ fn ServiceItem(service: ServiceInfo) -> Element {
         "icon-stopped"
     };
 
+    let service_id = service.id;
+    let run_as_user = service.run_as_user;
+
     let mut handle_control = move |action: &str| {
-        let service_id = service.id;
-        let action = action.to_string();
+        let action_str = action.to_string();
 
-        services.write().set_operating(service_id);
+        tracing::info!(
+            "handle_control: service_id={}, action={}, run_as_user={}",
+            service_id,
+            action_str,
+            run_as_user
+        );
 
-        spawn(async move {
-            let result = backend::control_service(service_id, action).await;
+        // 如果是用户模式服务且动作是启动或重启，需要凭据
+        if run_as_user && (action == "start" || action == "restart") {
+            tracing::info!(
+                "显示凭据弹窗: service_id={}, action={}",
+                service_id,
+                action_str
+            );
+            services
+                .write()
+                .show_credential_modal(service_id, action_str.clone());
 
-            if let Err(e) = result {
-                tracing::error!("控制服务失败: {}", e);
-            }
+            // 验证状态是否更新
+            let state_after = services.read();
+            tracing::info!(
+                "状态更新后: show_credential_modal={}, pending={:?}",
+                state_after.show_credential_modal,
+                state_after.pending_credential_action
+            );
+        } else {
+            // 系统服务或停止操作，直接执行
+            tracing::info!(
+                "直接执行操作: service_id={}, action={}",
+                service_id,
+                action_str
+            );
+            services.write().set_operating(service_id);
 
-            // 刷新服务列表
-            if let Ok(new_services) = backend::list_services().await {
-                services.write().update_services(new_services);
-            }
+            spawn(async move {
+                let result = backend::control_service(service_id, action_str, None, None).await;
 
-            services.write().clear_operating();
-        });
+                if let Err(e) = result {
+                    tracing::error!("控制服务失败: {}", e);
+                }
+
+                // 刷新服务列表
+                if let Ok(new_services) = backend::list_services().await {
+                    services.write().update_services(new_services);
+                }
+
+                services.write().clear_operating();
+            });
+        }
     };
 
     rsx! {
@@ -89,6 +122,14 @@ fn ServiceItem(service: ServiceInfo) -> Element {
                         if let Some(pid) = service.pid {
                             span { class: "meta-separator", "•" }
                             span { class: "meta-pid", "PID: {pid}" }
+                        }
+                        span { class: "meta-separator", "•" }
+                        span { class: "meta-mode",
+                            if service.run_as_user {
+                                "用户进程"
+                            } else {
+                                "系统服务"
+                            }
                         }
                     }
                 }
