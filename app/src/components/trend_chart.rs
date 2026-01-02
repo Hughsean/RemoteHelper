@@ -1,5 +1,6 @@
-use std::collections::VecDeque;
+//! 趋势图表组件
 
+use std::collections::VecDeque;
 use common::SystemInfo;
 use dioxus::prelude::*;
 
@@ -31,7 +32,7 @@ pub fn TrendChart(history: VecDeque<(u64, SystemInfo)>) -> Element {
         return rsx! {};
     }
 
-    // Use the latest timestamp from data instead of client time to avoid clock skew
+    // 使用最新时间戳避免时钟偏移
     let latest_timestamp = history.back().map(|(t, _)| *t).unwrap_or(0);
     let filtered_history: Vec<(u64, &SystemInfo)> = history
         .iter()

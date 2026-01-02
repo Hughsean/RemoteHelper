@@ -1,5 +1,5 @@
 [workspace]
-members = ["common", "client", "app", "app/src-tauri", "hwlib", "App-D"]
+members = ["common", "client", "app", "hwlib"]
 [workspace.package]
 version = "2.1.2"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
@@ -35,7 +35,6 @@ x25519-dalek = "2.0"
 rand_core = "0.6"
 log = "0.4"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
-# uuid = "1.19"
 gloo-timers = "0.3"
 gloo-console = "0.3"
 dirs = "5.0"

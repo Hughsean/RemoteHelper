@@ -22,4 +22,3 @@ hmac.workspace = true
 sha2.workspace = true
 anyhow.workspace = true
 x25519-dalek.workspace = true
-tauri.workspace = true

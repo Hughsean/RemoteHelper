@@ -1,8 +1,14 @@
+//! 顶部导航栏组件
+
+use crate::state::use_system_state;
 use dioxus::prelude::*;
 
 #[component]
-pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandler<u64>) -> Element {
+pub fn Header() -> Element {
+    let mut system = use_system_state();
     let mut is_open = use_signal(|| false);
+
+    let refresh_interval = system.read().refresh_interval;
 
     let display_text = match refresh_interval {
         0 => "暂停",
@@ -10,8 +16,19 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
         500 => "0.5s",
         1000 => "1s",
         3000 => "3s",
-        10000 => "5s",
+        5000 => "5s",
+        10000 => "10s",
         _ => "自定义",
+    };
+
+    // 计算运行时间（基于最早和最新的数据点）
+    let uptime = {
+        let data = system.read();
+        if let (Some(oldest), Some(newest)) = (data.history.front(), data.history.back()) {
+            (newest.0 - oldest.0) / 1000
+        } else {
+            0
+        }
     };
 
     let format_uptime = |seconds: u64| -> String {
@@ -20,7 +37,6 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
         let minutes = (seconds % 3600) / 60;
         let secs = seconds % 60;
 
-        // Use zero padding so HTML whitespace collapsing does not remove alignment spacing.
         if days > 0 {
             format!("{days:02}d {hours:02}h {minutes:02}m {secs:02}s")
         } else if hours > 0 {
@@ -37,7 +53,8 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
         (500, "0.5s"),
         (1000, "1s"),
         (3000, "3s"),
-        (10000, "5s"),
+        (5000, "5s"),
+        (10000, "10s"),
         (0, "暂停"),
     ];
 
@@ -45,10 +62,12 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
         header { class: "app-header",
             div { class: "header-left",
                 div { class: "logo-box",
-                    img {
+                    // Logo placeholder - 暂时使用 SVG 图标
+                    svg {
                         class: "icon-md",
-                        src: asset!("/assets/app.svg"),
-                        alt: "RemoteHelper Logo",
+                        fill: "currentColor",
+                        view_box: "0 0 24 24",
+                        path { d: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" }
                     }
                 }
                 div { class: "title-box",
@@ -105,7 +124,7 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
                                     class: if refresh_interval == val { "refresh-option active" } else { "refresh-option" },
                                     onclick: move |evt| {
                                         evt.stop_propagation();
-                                        on_refresh_change.call(val);
+                                        system.write().set_refresh_interval(val);
                                         is_open.set(false);
                                     },
                                     span { "{label}" }
@@ -132,11 +151,11 @@ pub fn Header(refresh_interval: u64, uptime: u64, on_refresh_change: EventHandle
 
                 button {
                     class: "header-btn ml-4",
-                    title: "退出程序",
+                    title: "登出",
                     onclick: move |_| {
-                        spawn(async move {
-                            crate::command::quit_app().await;
-                        });
+                        use crate::state::use_auth_state;
+                        let mut auth = use_auth_state();
+                        auth.write().logout();
                     },
                     svg {
                         class: "icon-md",

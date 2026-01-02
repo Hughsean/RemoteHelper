@@ -1,3 +1,5 @@
+//! 系统状态显示组件
+
 use common::SystemInfo;
 use dioxus::prelude::*;
 

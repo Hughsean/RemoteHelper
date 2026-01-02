@@ -1,15 +1,42 @@
+//! 登录组件
+//!
+//! 使用新的状态管理模式，直接通过 use_auth_state 访问认证状态
+
+use crate::backend;
+use crate::state::use_auth_state;
 use dioxus::prelude::*;
 
 #[component]
-pub fn Login(on_login: EventHandler<(String, String)>) -> Element {
+pub fn Login() -> Element {
+    let mut auth = use_auth_state();
+
     let mut passphrase = use_signal(String::new);
-    let mut address = use_signal(|| "frp-try.com:53460".to_string());
-    let error = use_signal(|| Option::<String>::None);
+    let mut loading = use_signal(|| false);
 
     let handle_submit = move |evt: FormEvent| {
         evt.stop_propagation();
         evt.prevent_default();
-        on_login.call((passphrase(), address()));
+
+        if loading() {
+            return;
+        }
+
+        let pass = passphrase();
+        let addr = auth.read().server_addr.clone();
+
+        loading.set(true);
+
+        spawn(async move {
+            match backend::authenticate(pass, addr).await {
+                Ok(_) => {
+                    auth.write().set_authenticated();
+                }
+                Err(e) => {
+                    auth.write().set_auth_failed(e);
+                }
+            }
+            loading.set(false);
+        });
     };
 
     rsx! {
@@ -38,10 +65,12 @@ pub fn Login(on_login: EventHandler<(String, String)>) -> Element {
                     div { class: "form-group",
                         label { class: "form-label", "服务器地址" }
                         input {
-                            r#type: "password",
+                            r#type: "text",
                             class: "form-input",
-                            value: "{address}",
-                            oninput: move |e| address.set(e.value()),
+                            value: "{auth.read().server_addr}",
+                            oninput: move |e| {
+                                auth.write().server_addr = e.value();
+                            },
                         }
                     }
                     div { class: "form-group",
@@ -52,12 +81,24 @@ pub fn Login(on_login: EventHandler<(String, String)>) -> Element {
                             placeholder: "~/id_ed25519.json 的密码",
                             value: "{passphrase}",
                             oninput: move |e| passphrase.set(e.value()),
+                            disabled: loading(),
                         }
                     }
-                    if let Some(err) = error() {
+
+                    if let Some(err) = &auth.read().error_msg {
                         div { class: "error-message", "{err}" }
                     }
-                    button { r#type: "submit", class: "btn-primary w-full", "连接" }
+
+                    button {
+                        r#type: "submit",
+                        class: "btn-primary w-full",
+                        disabled: loading(),
+                        if loading() {
+                            "连接中..."
+                        } else {
+                            "连接"
+                        }
+                    }
                 }
             }
         }

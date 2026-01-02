@@ -1,4 +1,8 @@
+//! 添加服务模态框组件
+
 use dioxus::prelude::*;
+use crate::state::use_services_state;
+use crate::backend;
 
 // 根据基础路径计算相对显示路径
 fn get_display_path(full_path: &str, base_path: &str) -> String {
@@ -53,7 +57,7 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
         return text.to_string();
     }
 
-    let keep_len = (max_len.saturating_sub(3)) / 2; // 3是省略号的长度
+    let keep_len = (max_len.saturating_sub(3)) / 2;
     let chars: Vec<char> = text.chars().collect();
 
     let start: String = chars.iter().take(keep_len).collect();
@@ -63,18 +67,17 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
 }
 
 #[component]
-pub fn AddServiceModal(
-    on_close: EventHandler<()>,
-    on_add: EventHandler<(String, String, Vec<String>)>,
-) -> Element {
+pub fn AddServiceModal() -> Element {
+    let mut services = use_services_state();
+
     let mut description = use_signal(String::new);
     let mut exe_path = use_signal(String::new);
     let mut args = use_signal(String::new);
     let mut suggestions = use_signal(Vec::<common::PathItem>::new);
     let mut show_suggestions = use_signal(|| false);
     let mut selected_index = use_signal(|| 0usize);
-    let mut window_start = use_signal(|| 0usize); // 滑动窗口起始索引
-    const WINDOW_SIZE: usize = 6; // 窗口大小
+    let mut window_start = use_signal(|| 0usize);
+    const WINDOW_SIZE: usize = 6;
 
     let handle_submit = move |evt: FormEvent| {
         evt.stop_propagation();
@@ -84,20 +87,28 @@ pub fn AddServiceModal(
         let path = exe_path();
         let args_str = args();
 
-        gloo_console::log!(format!(
-            "表单提交 - 描述: '{}', 路径: '{}', 参数: '{}'",
-            desc, path, args_str
-        ));
-
         // 验证必填字段
         if desc.trim().is_empty() || path.trim().is_empty() {
-            gloo_console::log!("验证失败: 描述或路径不能为空");
+            tracing::warn!("验证失败: 描述或路径不能为空");
             return;
         }
 
         let args_vec: Vec<String> = args_str.split_whitespace().map(|s| s.to_string()).collect();
-        gloo_console::log!("准备调用 on_add");
-        on_add.call((desc, path, args_vec));
+
+        spawn(async move {
+            match backend::add_service(desc, path, args_vec).await {
+                Ok(_) => {
+                    // 刷新服务列表
+                    if let Ok(new_services) = backend::list_services().await {
+                        services.write().update_services(new_services);
+                    }
+                    services.write().hide_add_modal();
+                }
+                Err(e) => {
+                    tracing::error!("添加服务失败: {}", e);
+                }
+            }
+        });
     };
 
     rsx! {
@@ -107,7 +118,9 @@ pub fn AddServiceModal(
                     h3 { class: "modal-title", "添加自定义服务" }
                     button {
                         class: "btn-close",
-                        onclick: move |_| on_close.call(()),
+                        onclick: move |_| {
+                            services.write().hide_add_modal();
+                        },
                         svg {
                             class: "icon-md",
                             fill: "none",
@@ -145,9 +158,8 @@ pub fn AddServiceModal(
                                 selected_index.set(0);
                                 window_start.set(0);
 
-                                // 获得焦点时查询路径建议
                                 spawn(async move {
-                                    match crate::command::query_path(value).await {
+                                    match backend::query_path(value).await {
                                         Ok(items) => {
                                             suggestions.set(items.clone());
                                             show_suggestions.set(!items.is_empty());
@@ -165,9 +177,8 @@ pub fn AddServiceModal(
                                 selected_index.set(0);
                                 window_start.set(0);
 
-                                // 异步查询路径建议
                                 spawn(async move {
-                                    match crate::command::query_path(value).await {
+                                    match backend::query_path(value).await {
                                         Ok(items) => {
                                             suggestions.set(items.clone());
                                             show_suggestions.set(!items.is_empty());
@@ -182,7 +193,6 @@ pub fn AddServiceModal(
                             onkeydown: move |evt: Event<KeyboardData>| {
                                 let key = evt.data.key();
 
-                                // 如果下拉列表显示，优先处理导航键
                                 if show_suggestions() && !suggestions().is_empty() {
                                     match key {
                                         Key::ArrowDown => {
@@ -192,12 +202,10 @@ pub fn AddServiceModal(
                                             let new_idx = (selected_index() + 1) % sugg_len;
                                             selected_index.set(new_idx);
 
-                                            // 窗口滑动逻辑：如果选中项超出窗口下边界，向下移动窗口
                                             let current_window = window_start();
                                             if new_idx >= current_window + WINDOW_SIZE {
                                                 window_start.set(new_idx - WINDOW_SIZE + 1);
                                             } else if new_idx < current_window {
-                                                // 循环到开头时，重置窗口
                                                 window_start.set(0);
                                             }
                                         }
@@ -209,12 +217,10 @@ pub fn AddServiceModal(
                                             let new_idx = if idx == 0 { sugg_len - 1 } else { idx - 1 };
                                             selected_index.set(new_idx);
 
-                                            // 窗口滑动逻辑：如果选中项超出窗口上边界，向上移动窗口
                                             let current_window = window_start();
                                             if new_idx < current_window {
                                                 window_start.set(new_idx);
                                             } else if new_idx >= current_window + WINDOW_SIZE {
-                                                // 循环到末尾时，调整窗口显示最后8项
                                                 let max_start = sugg_len.saturating_sub(WINDOW_SIZE);
                                                 window_start.set(max_start);
                                             }
@@ -228,12 +234,11 @@ pub fn AddServiceModal(
                                             let is_dir = selected.is_dir;
 
                                             if is_dir {
-                                                // 如果是目录，先查询子目录内容，成功后再更新输入框
                                                 selected_index.set(0);
                                                 window_start.set(0);
 
                                                 spawn(async move {
-                                                    match crate::command::query_path(path.clone()).await {
+                                                    match backend::query_path(path.clone()).await {
                                                         Ok(items) => {
                                                             exe_path.set(path);
                                                             suggestions.set(items.clone());
@@ -246,7 +251,6 @@ pub fn AddServiceModal(
                                                     }
                                                 });
                                             } else {
-                                                // 如果是文件，立即更新并关闭建议窗口
                                                 exe_path.set(path);
                                                 show_suggestions.set(false);
                                                 suggestions.set(Vec::new());
@@ -310,7 +314,7 @@ pub fn AddServiceModal(
                                                             if is_dir {
                                                                 let path_clone = path.clone();
                                                                 spawn(async move {
-                                                                    match crate::command::query_path(path_clone.clone()).await {
+                                                                    match backend::query_path(path_clone.clone()).await {
                                                                         Ok(items) => {
                                                                             exe_path.set(path_clone);
                                                                             suggestions.set(items.clone());
@@ -362,7 +366,9 @@ pub fn AddServiceModal(
                         button {
                             r#type: "button",
                             class: "btn-cancel",
-                            onclick: move |_| on_close.call(()),
+                            onclick: move |_| {
+                                services.write().hide_add_modal();
+                            },
                             "取消"
                         }
                         button { r#type: "submit", class: "btn-primary", "添加服务" }
