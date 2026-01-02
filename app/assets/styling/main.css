@@ -52,7 +52,7 @@ html,
 body {
     width: 100% !important;
     height: 100% !important;
-    overflow: hidden !important;
+    overflow: auto !important;
     margin: 0 !important;
     padding: 0 !important;
 }
@@ -73,7 +73,8 @@ body {
 #main {
     width: 100% !important;
     height: 100vh !important;
-    overflow: hidden !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
 }
 
 /* ========================================
@@ -432,6 +433,33 @@ svg {
 /* ========================================
    服务列表
    ======================================== */
+.service-list-container {
+    background-color: var(--bg-slate-900) !important;
+    border: 1px solid var(--bg-slate-800) !important;
+    border-radius: 12px !important;
+    padding: 20px !important;
+}
+
+.service-list-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 16px !important;
+}
+
+.service-list-title {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: var(--text-white) !important;
+    margin: 0 !important;
+}
+
+.service-list-body {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+}
+
 .services-section {
     background-color: var(--bg-slate-900) !important;
     border: 1px solid var(--bg-slate-800) !important;
@@ -460,9 +488,10 @@ svg {
     border-radius: 6px !important;
     font-size: 14px !important;
     cursor: pointer !important;
-    display: flex !important;
+    display: inline-flex !important;
     align-items: center !important;
     gap: 6px !important;
+    transition: background-color 0.2s !important;
 }
 
 .btn-add-service:hover {
@@ -479,16 +508,133 @@ svg {
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    padding: 16px !important;
+    padding: 16px 20px !important;
     background-color: var(--bg-slate-800) !important;
     border-radius: 8px !important;
     border: 1px solid var(--bg-slate-700) !important;
+    transition: border-color 0.2s !important;
+}
+
+.service-item:hover {
+    border-color: var(--bg-slate-600) !important;
 }
 
 .service-info {
     display: flex !important;
     align-items: center !important;
-    gap: 12px !important;
+    gap: 14px !important;
+}
+
+.service-icon-box {
+    width: 10px !important;
+    height: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.service-dot {
+    width: 10px !important;
+    height: 10px !important;
+    border-radius: 50% !important;
+}
+
+.service-dot.status-running,
+.status-running .service-dot {
+    background-color: var(--color-emerald-500) !important;
+    box-shadow: 0 0 8px var(--color-emerald-500) !important;
+}
+
+.service-dot.status-stopped,
+.status-stopped .service-dot {
+    background-color: var(--text-slate-500) !important;
+}
+
+.service-name {
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    color: var(--text-white) !important;
+    margin: 0 0 4px 0 !important;
+}
+
+.service-meta {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    font-size: 13px !important;
+}
+
+.service-status {
+    color: var(--text-slate-400) !important;
+}
+
+.service-status.status-running {
+    color: var(--color-emerald-400) !important;
+}
+
+.service-status.status-stopped {
+    color: var(--text-slate-500) !important;
+}
+
+.meta-separator {
+    color: var(--text-slate-600) !important;
+}
+
+.meta-pid {
+    color: var(--text-slate-500) !important;
+}
+
+.service-actions {
+    display: flex !important;
+    gap: 8px !important;
+}
+
+.btn-icon {
+    background-color: var(--bg-slate-700) !important;
+    border: 1px solid var(--bg-slate-600) !important;
+    color: var(--text-slate-300) !important;
+    padding: 6px 14px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+}
+
+.btn-icon:hover {
+    background-color: var(--bg-slate-600) !important;
+    color: var(--text-white) !important;
+}
+
+.btn-icon:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+.btn-start {
+    border-color: var(--color-emerald-500) !important;
+    color: var(--color-emerald-400) !important;
+}
+
+.btn-start:hover {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.btn-stop {
+    border-color: var(--color-red-500) !important;
+    color: var(--color-red-400) !important;
+}
+
+.btn-stop:hover {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+.btn-restart {
+    border-color: var(--color-amber-400) !important;
+    color: var(--color-amber-400) !important;
+}
+
+.btn-restart:hover {
+    background-color: rgba(251, 191, 36, 0.15) !important;
 }
 
 .service-status-dot {
@@ -504,16 +650,6 @@ svg {
 
 .service-status-dot.stopped {
     background-color: var(--color-red-500) !important;
-}
-
-.service-name {
-    font-weight: 500 !important;
-    color: var(--text-white) !important;
-}
-
-.service-actions {
-    display: flex !important;
-    gap: 8px !important;
 }
 
 .btn-service-action {
@@ -755,6 +891,8 @@ svg {
     border-radius: 6px !important;
     font-size: 14px !important;
     cursor: pointer !important;
+    white-space: nowrap !important;
+    min-width: fit-content !important;
 }
 
 .btn-cancel:hover {
@@ -866,6 +1004,8 @@ svg {
     width: 100% !important;
     background: var(--bg-slate-950) !important;
     background-image: radial-gradient(circle at top center, #1e293b 0%, #0b0e14 60%) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
 }
 
 .dashboard-content {
@@ -877,7 +1017,7 @@ svg {
     display: flex !important;
     flex-direction: column !important;
     gap: 24px !important;
-    overflow-y: auto !important;
+    padding-bottom: 40px !important;
 }
 
 /* ========================================
