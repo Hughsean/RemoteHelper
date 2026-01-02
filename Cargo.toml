@@ -1,7 +1,7 @@
 [workspace]
 members = ["common", "client", "app", "hwlib"]
 [workspace.package]
-version = "2.1.2"
+version = "2.2.0"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
 edition = "2024"
 license = "MIT"

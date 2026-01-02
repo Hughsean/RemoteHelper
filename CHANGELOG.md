@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-01-03
+
+### 新增
+
+- **用户模式支持**: 完整的凭据管理系统
+  - 新增凭据管理模态框组件 (`credential_modal.rs`)
+  - 支持多用户凭据的安全存储和管理
+  - 凭据加密存储机制
+- **UI/UX 全面升级**:
+  - 新增登录视图 (`views/login.rs`)
+  - 新增仪表板视图 (`views/dashboard.rs`)
+  - 重构应用状态管理系统 (`state/auth.rs`, `state/services.rs`, `state/system.rs`)
+  - 新增顶部导航栏组件 (`components/header.rs`)
+  - 新增服务添加模态框 (`components/add_service_modal.rs`)
+  - 新增服务列表组件 (`components/service_list.rs`)
+  - 新增系统状态组件 (`components/system_status.rs`)
+- **样式系统重构**:
+  - 模块化 CSS 文件结构 (`header.css`, `login.css`, `modal.css`, `services.css`, `status.css`)
+  - 优化滚动条样式和行为
+  - 改进状态卡片和进度条视觉效果
+- **macOS 原生支持增强**:
+  - 添加自定义中文菜单
+  - 使用 Tauri v2 新的菜单结构和预定义菜单项
+  - 更新包名称为 `RemoteHelperApp`
+
+### 改进
+
+- 重构路由系统，支持登录/仪表板视图切换
+- 采用现代化的状态管理模式（Arc + RwLock）
+- 优化窗口大小配置和标题样式
+- 移除未使用的文件和引用
+- 更新默认服务器地址为 `frp-try.com:53460`
+
+### 技术细节
+
+- 路由系统：支持 `/login` 和 `/dashboard` 视图
+- 状态管理：分离认证、服务和系统状态
+- 组件化：模块化的 UI 组件设计
+- 样式：CSS 模块化，提升可维护性
+
 ## [2.0.1] - 2026-01-01
 
 ### Fixed

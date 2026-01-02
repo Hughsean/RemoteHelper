@@ -37,11 +37,27 @@ jobs:
           body: |
             ## RemoteHelper ${{ steps.get_version.outputs.version }}
 
-            � RemoteHelper v2.1.2 - Bug 修复版本
+            🎉 RemoteHelper v2.2.0 - 重大功能更新
 
-            ### 🐛 Bug 修复
-            - 禁用全屏
-            - 取消窗口大小记忆以防止异常
+            ### ✨ 新功能
+            - **用户模式支持**: 新增完整的用户凭据管理系统
+              - 支持多用户凭据存储和管理
+              - 安全的凭据加密存储机制
+            - **UI/UX 全面升级**:
+              - 新增登录视图和仪表板视图
+              - 重构应用状态管理，采用更现代的状态管理模式
+              - 新增顶部导航栏、凭据管理模态框、服务添加模态框
+              - 优化服务列表、系统状态卡片等组件样式
+            - **macOS 原生体验增强**:
+              - 添加自定义中文菜单支持
+              - 优化窗口大小和标题样式
+              - 更新包名称为 RemoteHelperApp
+
+            ### 🔧 改进
+            - 重构路由系统，支持登录/仪表板视图切换
+            - 优化样式文件结构（模块化 CSS）
+            - 改进滚动条行为和视觉效果
+            - 更新默认服务器地址为 `frp-try.com:53460`
 
             ### 🚀 快速开始
 
@@ -52,11 +68,12 @@ jobs:
             4. **启动客户端**: `cd app && cargo tauri dev`
 
             **升级用户**
-            - 推荐升级以获得更好的图表体验和 macOS 全屏支持
-            - 与 v2.0.0 完全兼容,无需更改配置
+            - ⚠️ 本版本包含 UI 重构，首次启动可能需要重新登录
+            - 与 v2.1.x 完全兼容，无需更改服务端配置
+            - 新增凭据管理功能，可管理多个服务器连接
 
-  build-tauri:
-    name: Build Tauri Client
+  build-dioxus:
+    name: Build Dioxus Desktop Client
     needs: create-release
     permissions:
       contents: write
@@ -64,8 +81,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-26"
-            args: ""
+          - platform: "macos-latest"
+            target: "x86_64-apple-darwin"
+            bundle_extension: "dmg"
+          - platform: "macos-latest"
+            target: "aarch64-apple-darwin"
+            bundle_extension: "dmg"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -73,11 +94,13 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./app/src-tauri -> target"
+          workspaces: "./app -> target"
 
       - name: Install Dioxus CLI
         uses: baptiste0928/cargo-install@v3
@@ -85,11 +108,14 @@ jobs:
           crate: dioxus-cli
           version: "0.7"
 
-      - name: Build and Upload Tauri
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Dioxus Desktop App
+        working-directory: ./app
+        run: dx bundle --release --target ${{ matrix.target }}
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/dist/bundle/**/*.${{ matrix.bundle_extension }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          projectPath: "./app"
-          args: ${{ matrix.args }}
