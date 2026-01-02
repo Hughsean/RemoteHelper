@@ -15,10 +15,12 @@ height = 800
 resizable = true
 decorations = true
 transparent = false
+min_width = 800
+min_height = 600
 
 # 打包配置
 [bundle]
-identifier = "com.hughsean.remotehelper"
+identifier = "dev.hughsean.remotehelper"
 publisher = "Hughsean"
 icon = ["assets/icon.png"]
 resources = ["assets/**/*"]

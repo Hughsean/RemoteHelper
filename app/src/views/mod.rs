@@ -6,5 +6,4 @@ mod home;
 mod login;
 
 pub use dashboard::Dashboard;
-pub use home::Home;
 pub use login::LoginView;
