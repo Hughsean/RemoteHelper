@@ -1,24 +1,80 @@
-use dioxus::prelude::*;
+//! 主页面 - Dashboard
+//!
+//! 整合所有组件，展示完整的监控界面
 
-/// Home 页面组件，当当前路由为 `[Route::Home]` 时渲染
-/// 临时占位组件，将在后续迁移中重构为 Dashboard
+use dioxus::prelude::*;
+use crate::components::{Header, SystemStatusDisplay, TrendChart, ServiceList, Login, AddServiceModal};
+use crate::state::{use_auth_state, use_system_state, use_services_state};
+use crate::backend;
+use std::time::Duration;
+
 #[component]
 pub fn Home() -> Element {
-    rsx! {
-        div { class: "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center",
-            div { class: "text-center",
-                h1 { class: "text-4xl font-bold text-gray-800 mb-4", "RemoteHelper 监控面板" }
-                p { class: "text-gray-600 mb-8", "正在迁移中... 即将推出新界面" }
-                div { class: "text-sm text-gray-500",
-                    "App-D 将提供："
-                    ul { class: "mt-2 space-y-1",
-                        li { "✓ 系统状态实时监控" }
-                        li { "✓ 服务管理" }
-                        li { "✓ 趋势图表展示" }
-                        li { "✓ WebSocket 连接" }
-                    }
+    let mut auth = use_auth_state();
+    let mut system = use_system_state();
+    let mut services = use_services_state();
+
+    // 如果未认证，显示登录界面
+    if !auth.read().authenticated {
+        return rsx! {
+            Login {}
+        };
+    }
+
+    // 自动刷新数据
+    use_resource(move || {
+        async move {
+            loop {
+                let interval = system.read().refresh_interval;
+
+                // 如果间隔为0，暂停刷新
+                if interval == 0 {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
                 }
+
+                // 获取系统状态
+                if let Ok(status) = backend::get_status(Some(interval)).await {
+                    system.write().update_status(status);
+                }
+
+                // 获取服务列表
+                if let Ok(services_list) = backend::list_services().await {
+                    services.write().update_services(services_list);
+                }
+
+                tokio::time::sleep(Duration::from_millis(interval)).await;
+            }
+        }
+    });
+
+    let system_data = system.read();
+    let services_data = services.read();
+
+    rsx! {
+        div { class: "app-container",
+            Header {}
+
+            div { class: "main-content",
+                // 系统状态卡片
+                if let Some(status) = &system_data.current_status {
+                    SystemStatusDisplay { status: status.clone() }
+                } else {
+                    div { class: "loading-state", "正在加载系统状态..." }
+                }
+
+                // 趋势图表
+                TrendChart { history: system_data.history.clone() }
+
+                // 服务列表
+                ServiceList {}
+            }
+
+            // 添加服务模态框
+            if services_data.show_add_modal {
+                AddServiceModal {}
             }
         }
     }
 }
+

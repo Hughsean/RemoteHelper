@@ -1,0 +1,155 @@
+/* Trend Chart */
+.chart-container {
+  background-color: rgba(21, 27, 43, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chart-svg {
+  width: 100%;
+  height: 250px;
+  display: block;
+  overflow: visible;
+}
+
+.grid-line {
+  stroke: rgba(255, 255, 255, 0.05);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.3));
+}
+
+.line-cpu {
+  stroke: var(--chart-cpu);
+}
+
+.line-mem {
+  stroke: var(--chart-mem);
+}
+
+.line-gpu {
+  stroke: var(--chart-gpu);
+}
+
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-slate-400);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.legend-item:hover {
+  opacity: 0.8;
+}
+
+.legend-item-disabled {
+  opacity: 0.3;
+}
+
+.legend-item-disabled .legend-dot {
+  box-shadow: none;
+}
+
+.legend-color {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+}
+
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.chart-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-white);
+  margin: 0;
+}
+
+.chart-body {
+  position: relative;
+  height: 250px;
+}
+
+.legend-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.legend-cpu {
+  background-color: var(--chart-cpu);
+  color: var(--chart-cpu);
+}
+
+.legend-mem {
+  background-color: var(--chart-mem);
+  color: var(--chart-mem);
+}
+
+.legend-gpu {
+  background-color: var(--chart-gpu);
+  color: var(--chart-gpu);
+}
+
+.chart-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: 1rem;
+  margin-right: auto;
+}
+
+.chart-btn {
+  background-color: var(--bg-slate-800);
+  color: var(--text-slate-400);
+  border: 1px solid var(--bg-slate-700);
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-btn:hover {
+  background-color: var(--bg-slate-700);
+  color: var(--text-slate-200);
+}
+
+.chart-btn.active {
+  background: var(--color-indigo-600);
+  color: white;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.legend-gpu {
+  background-color: var(--color-emerald-500);
+}
