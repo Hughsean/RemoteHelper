@@ -118,7 +118,7 @@ fn main() {
             dioxus::desktop::WindowBuilder::new()
                 .with_title("RemoteHelper - 远程系统监控")
                 .with_resizable(true)
-                .with_inner_size(dioxus::desktop::LogicalSize::new(1200, 800))
+                .with_inner_size(dioxus::desktop::LogicalSize::new(800, 600))
                 .with_min_inner_size(dioxus::desktop::LogicalSize::new(800, 600)),
         );
 

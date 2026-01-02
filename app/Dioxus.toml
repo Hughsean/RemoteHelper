@@ -10,13 +10,9 @@ title = "RemoteHelper - 远程系统监控"
 
 # 桌面窗口配置
 [desktop.window]
-width = 1200
-height = 800
 resizable = true
 decorations = true
 transparent = false
-min_width = 800
-min_height = 600
 
 # 打包配置
 [bundle]
