@@ -6,8 +6,8 @@
   //     "warnings"
   // ],
   // "rust-analyzer.cargo.features": "all",
-  "rust-analyzer.rustfmt.rangeFormatting.enable": true,
-  "editor.formatOnSave": true,
+  "rust-analyzer.rustfmt.rangeFormatting.enable": false,
+  "editor.formatOnSave": false,
   "editor.rulers": [
     100
   ],
@@ -31,7 +31,7 @@
   },
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer",
-    "editor.formatOnSave": true,
+    "editor.formatOnSave": false,
     "editor.tabSize": 4
   },
   "[toml]": {
@@ -51,6 +51,4 @@
     "editor.wordWrap": "on",
     "editor.rulers": []
   },
-  "tauri.configPath": "app/src-tauri/tauri.conf.json",
-  "dioxus.configPath": "app/Dioxus.toml"
 }

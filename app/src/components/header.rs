@@ -1,13 +1,16 @@
 //! 顶部导航栏组件
 
 use crate::backend;
+use crate::components::button::Button;
+use crate::components::dropdown_menu::{
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+};
 use crate::state::use_system_state;
 use dioxus::prelude::*;
 
 #[component]
 pub fn Header() -> Element {
     let mut system = use_system_state();
-    let mut is_open = use_signal(|| false);
     let mut is_connected = use_signal(|| false);
 
     // 持续检查连接状态（每5秒检查一次）
@@ -121,17 +124,14 @@ pub fn Header() -> Element {
                 }
             }
             div { class: "header-right",
-                div {
-                    class: "refresh-control",
-                    onclick: move |_| is_open.set(!is_open()),
-                    div { class: "refresh-display",
+                DropdownMenu { class: "refresh-control",
+                    DropdownMenuTrigger { class: "refresh-display",
                         span { class: "refresh-label", "刷新间隔" }
                         div { class: "refresh-value-box",
                             span { class: "refresh-value", "{display_text}" }
                             svg {
                                 class: "icon-xs",
                                 style: "width: 1rem; height: 1rem; color: #94a3b8; transition: transform 0.2s;",
-                                transform: if is_open() { "rotate(180)" } else { "rotate(0)" },
                                 fill: "none",
                                 stroke: "currentColor",
                                 view_box: "0 0 24 24",
@@ -144,31 +144,28 @@ pub fn Header() -> Element {
                             }
                         }
                     }
-
-                    if is_open() {
-                        div { class: "refresh-dropdown-menu",
-                            for (val , label) in options {
-                                div {
-                                    class: if refresh_interval == val { "refresh-option active" } else { "refresh-option" },
-                                    onclick: move |evt| {
-                                        evt.stop_propagation();
-                                        system.write().set_refresh_interval(val);
-                                        is_open.set(false);
-                                    },
-                                    span { "{label}" }
-                                    if refresh_interval == val {
-                                        svg {
-                                            class: "icon-xs",
-                                            style: "width: 1rem; height: 1rem;",
-                                            fill: "none",
-                                            stroke: "currentColor",
-                                            view_box: "0 0 24 24",
-                                            path {
-                                                stroke_linecap: "round",
-                                                stroke_linejoin: "round",
-                                                stroke_width: "2",
-                                                d: "M5 13l4 4L19 7",
-                                            }
+                    DropdownMenuContent { class: "refresh-dropdown-menu",
+                        for (i , (val , label)) in options.iter().enumerate() {
+                            DropdownMenuItem {
+                                class: if refresh_interval == *val { "refresh-option active" } else { "refresh-option" },
+                                index: i,
+                                value: *val,
+                                on_select: move |v: u64| {
+                                    system.write().set_refresh_interval(v);
+                                },
+                                span { "{label}" }
+                                if refresh_interval == *val {
+                                    svg {
+                                        class: "icon-xs",
+                                        style: "width: 1rem; height: 1rem;",
+                                        fill: "none",
+                                        stroke: "currentColor",
+                                        view_box: "0 0 24 24",
+                                        path {
+                                            stroke_linecap: "round",
+                                            stroke_linejoin: "round",
+                                            stroke_width: "2",
+                                            d: "M5 13l4 4L19 7",
                                         }
                                     }
                                 }
@@ -177,7 +174,7 @@ pub fn Header() -> Element {
                     }
                 }
 
-                button {
+                Button {
                     class: "header-btn",
                     title: "退出程序",
                     onclick: move |_| {

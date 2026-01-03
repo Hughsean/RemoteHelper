@@ -1,5 +1,6 @@
 //! 系统状态显示组件
 
+use crate::components::card::{Card, CardContent, CardHeader, CardTitle};
 use common::SystemInfo;
 use dioxus::prelude::*;
 
@@ -34,41 +35,47 @@ fn CpuCard(cpu_usage: f32, cpu_model: String, memory_usage: u64, total_memory: u
     let total_gb = total_memory as f64 / 1024.0 / 1024.0 / 1024.0;
 
     rsx! {
-        div { class: "status-card",
-            div { class: "status-header",
+        Card { class: "status-card",
+            CardHeader { class: "status-header",
                 div {
-                    h3 { class: "status-title", "CPU & 内存" }
+                    CardTitle { class: "status-title", "CPU & 内存" }
                     div { class: "status-value", "{cpu_usage:.1}%" }
                 }
             }
-
-            div { class: "mb-2",
-                div { class: "flex justify-between text-xs text-gray-400 mb-1",
-                    span { "CPU 利用率" }
-                    span { "{cpu_usage:.1}%" }
-                }
-                div { class: "progress-track",
-                    div {
-                        class: "progress-fill status-bar-red",
-                        style: "width: {cpu_usage}%",
+            CardContent { class: "!p-0",
+                div { class: "space-y-3",
+                    // CPU 利用率
+                    div { class: "mb-2",
+                        div { class: "flex justify-between text-xs text-gray-400 mb-1",
+                            span { "CPU 利用率" }
+                            span { "{cpu_usage:.1}%" }
+                        }
+                        div { class: "progress-track",
+                            div {
+                                class: "progress-fill status-bar-red",
+                                style: "width: {cpu_usage}%",
+                            }
+                        }
                     }
+
+                    // 内存使用
+                    div {
+                        div { class: "flex justify-between text-xs text-gray-400 mb-1",
+                            span { "内存使用" }
+                            span { "{used_gb:.1}/{total_gb:.1} GB" }
+                        }
+                        div { class: "progress-track",
+                            div {
+                                class: "progress-fill status-bar-blue",
+                                style: "width: {mem_percent}%",
+                            }
+                        }
+                    }
+
+                    // CPU 型号
+                    div { class: "status-subtext mt-auto pt-2", "{cpu_model}" }
                 }
             }
-
-            div {
-                div { class: "flex justify-between text-xs text-gray-400 mb-1",
-                    span { "内存使用" }
-                    span { "{used_gb:.1}/{total_gb:.1} GB" }
-                }
-                div { class: "progress-track",
-                    div {
-                        class: "progress-fill status-bar-blue",
-                        style: "width: {mem_percent}%",
-                    }
-                }
-            }
-
-            div { class: "status-subtext mt-auto pt-2", "{cpu_model}" }
         }
     }
 }
@@ -108,41 +115,47 @@ fn GpuStatusCard(
     };
 
     rsx! {
-        div { class: "status-card",
-            div { class: "status-header",
+        Card { class: "status-card",
+            CardHeader { class: "status-header",
                 div {
-                    h3 { class: "status-title", "GPU 状态" }
+                    CardTitle { class: "status-title", "GPU 状态" }
                     div { class: "status-value", "{usage_text}" }
                 }
             }
-
-            div { class: "mb-2",
-                div { class: "flex justify-between text-xs text-gray-400 mb-1",
-                    span { "利用率" }
-                    span { "{usage_text}" }
-                }
-                div { class: "progress-track",
-                    div {
-                        class: "progress-fill status-bar-emerald",
-                        style: "width: {usage_value}%",
+            CardContent { class: "!p-0",
+                div { class: "space-y-3",
+                    // GPU 利用率
+                    div { class: "mb-2",
+                        div { class: "flex justify-between text-xs text-gray-400 mb-1",
+                            span { "利用率" }
+                            span { "{usage_text}" }
+                        }
+                        div { class: "progress-track",
+                            div {
+                                class: "progress-fill status-bar-emerald",
+                                style: "width: {usage_value}%",
+                            }
+                        }
                     }
+
+                    // 显存使用
+                    div {
+                        div { class: "flex justify-between text-xs text-gray-400 mb-1",
+                            span { "显存" }
+                            span { "{mem_text}" }
+                        }
+                        div { class: "progress-track",
+                            div {
+                                class: "progress-fill status-bar-blue",
+                                style: "width: {mem_percent}%",
+                            }
+                        }
+                    }
+
+                    // GPU 型号
+                    div { class: "status-subtext mt-auto", "{model}" }
                 }
             }
-
-            div {
-                div { class: "flex justify-between text-xs text-gray-400 mb-1",
-                    span { "显存" }
-                    span { "{mem_text}" }
-                }
-                div { class: "progress-track",
-                    div {
-                        class: "progress-fill status-bar-blue",
-                        style: "width: {mem_percent}%",
-                    }
-                }
-            }
-
-            div { class: "status-subtext mt-auto", "{model}" }
         }
     }
 }

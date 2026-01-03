@@ -11,7 +11,7 @@ title = "RemoteHelper - 远程系统监控"
 # 桌面窗口配置
 [desktop.window]
 resizable = true
-decorations = true
+decorations = false
 transparent = false
 
 # 打包配置
