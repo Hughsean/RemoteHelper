@@ -2,6 +2,7 @@
 // need dioxus
 use dioxus::prelude::*;
 
+use tracing::Level;
 use views::{Blog, Home, Login, Navbar};
 
 /// Define a components module that contains all shared components for our app.
@@ -38,11 +39,14 @@ enum Route {
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.
 // The macro returns an `Asset` type that will display as the path to the asset in the browser or a local path in desktop bundles.
-const FAVICON: Asset = asset!("/assets/favicon.ico");
+const FAVICON: Asset = asset!("/assets/icon.png");
 // The asset macro also minifies some assets like CSS and JS to make bundled smaller
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 fn main() {
+
+    dioxus_logger::init(Level::DEBUG).expect("");
+
     #[cfg(feature = "desktop")]
     {
         // // The `launch` function is the main entry point for a dioxus app. It takes a component and renders it with the platform feature

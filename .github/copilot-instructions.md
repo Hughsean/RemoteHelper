@@ -150,7 +150,7 @@ allow_web_control = true           # 允许客户端控制
 
 3. 在 [client/src/lib.rs](client/src/lib.rs) 添加发送方法
 
-4. 在 [A/src/](A/src/) 前端组件中调用
+4. 在 [app/src/](app/src/) 前端组件中调用
 
 ### 添加新的监控指标
 

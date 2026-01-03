@@ -4,7 +4,7 @@ const LOGIN_CSS: Asset = asset!("/assets/styling/login.css");
 
 #[component]
 pub fn Login() -> Element {
-    let mut server_address = use_signal(|| "frp-egg.com:28450".to_string());
+    let mut server_address = use_signal(|| "frp-try.com:53460".to_string());
     let mut password = use_signal(|| String::new());
     let mut key_file_content = use_signal(|| Option::<String>::None);
     let mut key_file_name = use_signal(|| "未选择文件".to_string());
@@ -13,26 +13,47 @@ pub fn Login() -> Element {
 
     let navigator = use_navigator();
 
+    // 在组件挂载时尝试读取用户home目录下的id_ed25519.json
+    let _auto_load_key = use_resource(move || async move {
+        #[cfg(feature = "desktop")]
+        {
+            if let Some(home_dir) = dirs::home_dir() {
+                let key_path = home_dir.join("id_ed25519.json");
+                if key_path.exists() {
+                    match std::fs::read_to_string(&key_path) {
+                        Ok(content) => {
+                            key_file_content.set(Some(content));
+                            key_file_name.set("id_ed25519.json (默认位置)".to_string());
+                            return;
+                        }
+                        Err(_) => {
+                            // 静默失败，用户可手动选择
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     // 处理文件选择
-    let on_file_change = move |evt: Event<FormData>| {
+    let on_file_change = move |evt: FormEvent| {
         spawn(async move {
-            let path=evt.value();
-            log::info!("path:{}",&path);
-            // let files = evt.files();
-            // // let file_names = files.iter().map(|e| e.name()).collect::<Vec<_>>();
-            // if let Some(file) = files.first() {
-            //     match file.read_string().await {
-            //         Ok(content) => {
-            //             key_file_content.set(Some(content));
-            //             error_msg.set(None);
-            //         }
-            //         Err(e) => {
-            //             error_msg.set(Some(format!("读取文件失败: {}", e)));
-            //             key_file_content.set(None);
-            //             key_file_name.set("未选择文件".to_string());
-            //         }
-            //     }
-            // }
+            let files = evt.files();
+            // let file_names = files.iter().map(|e| e.name()).collect::<Vec<_>>();
+            if let Some(file) = files.first() {
+                match file.read_string().await {
+                    Ok(content) => {
+                        key_file_content.set(Some(content));
+                        key_file_name.set(file.name());
+                        error_msg.set(None);
+                    }
+                    Err(e) => {
+                        error_msg.set(Some(format!("读取文件失败: {}", e)));
+                        key_file_content.set(None);
+                        key_file_name.set("未选择文件".to_string());
+                    }
+                }
+            }
         });
     };
 
@@ -89,7 +110,7 @@ pub fn Login() -> Element {
                 let mut guard = client::SERVER_ADDRESS.lock().unwrap();
                 *guard = server_address();
             }
-
+            tracing::info!("尝试连接到服务器 {}", server_address());
             // 尝试连接
             match client::connect_and_auth().await {
                 Ok(conn) => {
@@ -186,6 +207,11 @@ pub fn Login() -> Element {
                 }
 
                 div { class: "login-footer",
+                    p {
+                        "💡 提示: 将 "
+                        code { "id_ed25519.json" }
+                        " 放在用户主目录可自动加载"
+                    }
                     p {
                         "首次使用？运行 "
                         code { "cargo run --bin keygen" }
