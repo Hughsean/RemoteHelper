@@ -107,7 +107,7 @@
 }
 
 /* 刷新间隔控制 */
-.refresh-control {
+.refresh-control .dropdown-menu {
   position: relative !important;
   background-color: rgba(30, 41, 59, 0.5) !important;
   border-radius: 0.5rem !important;
@@ -119,18 +119,25 @@
   z-index: 100 !important;
 }
 
-.refresh-control:hover {
+.refresh-control .dropdown-menu:hover {
   background-color: var(--bg-slate-800) !important;
   border-color: var(--text-slate-500) !important;
 }
 
-.refresh-display {
+.refresh-control .dropdown-menu-trigger {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
   padding: 0 0.75rem !important;
   height: 100% !important;
-  pointer-events: none !important;
+  width: 100% !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.refresh-control .dropdown-menu-trigger:hover {
+  background: transparent !important;
 }
 
 .refresh-label {
@@ -150,11 +157,12 @@
   font-weight: 500 !important;
 }
 
-/* 下拉菜单 */
-.refresh-dropdown-menu {
+/* 下拉菜单内容 */
+.refresh-control .dropdown-menu-content {
   position: absolute !important;
   top: calc(100% + 0.5rem) !important;
   right: 0 !important;
+  left: auto !important;
   background-color: rgba(30, 41, 59, 0.95) !important;
   backdrop-filter: blur(10px) !important;
   border: 1px solid var(--bg-slate-700) !important;
@@ -163,10 +171,9 @@
   min-width: 100% !important;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
   z-index: 1000 !important;
-  animation: slideDown 0.2s ease-out !important;
 }
 
-.refresh-option {
+.refresh-control .dropdown-menu-item {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
@@ -176,14 +183,15 @@
   cursor: pointer !important;
   border-radius: 0.25rem !important;
   transition: all 0.15s !important;
+  background: transparent !important;
 }
 
-.refresh-option:hover {
+.refresh-control .dropdown-menu-item:hover {
   background-color: rgba(255, 255, 255, 0.05) !important;
   color: var(--text-white) !important;
 }
 
-.refresh-option.active {
+.refresh-control .dropdown-menu-item.active {
   background-color: var(--color-indigo-600) !important;
   color: white !important;
 }

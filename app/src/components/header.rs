@@ -123,9 +123,9 @@ pub fn Header() -> Element {
                     }
                 }
             }
-            div { class: "header-right",
-                DropdownMenu { class: "refresh-control",
-                    DropdownMenuTrigger { class: "refresh-display",
+            div { class: "header-right refresh-control",
+                DropdownMenu {
+                    DropdownMenuTrigger {
                         span { class: "refresh-label", "刷新间隔" }
                         div { class: "refresh-value-box",
                             span { class: "refresh-value", "{display_text}" }
@@ -144,10 +144,10 @@ pub fn Header() -> Element {
                             }
                         }
                     }
-                    DropdownMenuContent { class: "refresh-dropdown-menu",
+                    DropdownMenuContent {
                         for (i , (val , label)) in options.iter().enumerate() {
                             DropdownMenuItem {
-                                class: if refresh_interval == *val { "refresh-option active" } else { "refresh-option" },
+                                class: if refresh_interval == *val { "active" } else { "" },
                                 index: i,
                                 value: *val,
                                 on_select: move |v: u64| {
