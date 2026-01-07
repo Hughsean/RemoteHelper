@@ -14,23 +14,25 @@ pub fn Login() -> Element {
     let navigator = use_navigator();
 
     // 处理文件选择
-    let on_file_change = move |evt: FormEvent| {
+    let on_file_change = move |evt: Event<FormData>| {
         spawn(async move {
-            let files = evt.files();
-            // let file_names = files.iter().map(|e| e.name()).collect::<Vec<_>>();
-            if let Some(file) = files.first() {
-                match file.read_string().await {
-                    Ok(content) => {
-                        key_file_content.set(Some(content));
-                        error_msg.set(None);
-                    }
-                    Err(e) => {
-                        error_msg.set(Some(format!("读取文件失败: {}", e)));
-                        key_file_content.set(None);
-                        key_file_name.set("未选择文件".to_string());
-                    }
-                }
-            }
+            let path=evt.value();
+            log::info!("path:{}",&path);
+            // let files = evt.files();
+            // // let file_names = files.iter().map(|e| e.name()).collect::<Vec<_>>();
+            // if let Some(file) = files.first() {
+            //     match file.read_string().await {
+            //         Ok(content) => {
+            //             key_file_content.set(Some(content));
+            //             error_msg.set(None);
+            //         }
+            //         Err(e) => {
+            //             error_msg.set(Some(format!("读取文件失败: {}", e)));
+            //             key_file_content.set(None);
+            //             key_file_name.set("未选择文件".to_string());
+            //         }
+            //     }
+            // }
         });
     };
 
