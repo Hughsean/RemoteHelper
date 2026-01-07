@@ -1,5 +1,5 @@
 [workspace]
-members = ["common", "client", "app", "hwlib"]
+members = ["common", "client", "hwlib", "A"]
 [workspace.package]
 version = "2.2.0"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
@@ -43,14 +43,12 @@ dirs = "6.0"
 common = { path = "common" }
 client = { path = "client" }
 
-
 [package]
 name = "RemoteHelperServer"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
-
 
 [dependencies]
 common.workspace = true
