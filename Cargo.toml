@@ -1,5 +1,5 @@
 [workspace]
-members = ["common", "client", "hwlib", "A"]
+members = ["common", "client", "hwlib", "app"]
 [workspace.package]
 version = "2.2.0"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
