@@ -94,6 +94,7 @@ body,
     border: 2px solid #e5e7eb;
     border-radius: 8px;
     font-size: 15px;
+    font-family: 'LXGW WenKai', monospace;
     transition: all 0.2s;
     box-sizing: border-box;
 }

@@ -1,0 +1,74 @@
+.dashboard-container {
+    min-height: 100vh;
+    height: 100vh;
+    overflow-y: auto;
+    background: linear-gradient(135deg, #0f1116 0%, #1a1d2e 100%);
+    padding: 40px;
+    color: #ffffff;
+}
+
+.dashboard-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 40px 0;
+    text-align: center;
+}
+
+.section-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 60px 0 30px 0;
+    text-align: center;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.trends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.dashboard-footer {
+    margin-top: 60px;
+    padding: 20px;
+    text-align: center;
+    color: #8892b0;
+    font-size: 14px;
+}
+
+.dashboard-footer p {
+    margin: 0;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .dashboard-container {
+        padding: 20px;
+    }
+
+    .dashboard-title {
+        font-size: 24px;
+        margin-bottom: 24px;
+    }
+
+    .section-title {
+        font-size: 20px;
+        margin: 40px 0 20px 0;
+    }
+
+    .metrics-grid,
+    .trends-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,15 +1,14 @@
 //! The components module contains all shared components for our app. Components are the building blocks of dioxus apps.
-//! They can be used to defined common UI elements like buttons, forms, and modals. In this template, we define a Hero
-//! component and an Echo component for fullstack apps to be used in our app.
+//! This module provides reusable UI components.
 
-mod hero;
-pub use hero::Hero;
+mod metric_card;
+pub use metric_card::{MetricCard, MetricCardData, MetricItem};
 
-mod echo;
-pub use echo::Echo;
+mod trend_chart;
+pub use trend_chart::{TrendChart, TrendChartData, DataPoint};
+
 pub mod hover_card;
 pub mod card;
-pub mod navbar;
 pub mod dropdown_menu;
 pub mod dialog;
 pub mod scroll_area;

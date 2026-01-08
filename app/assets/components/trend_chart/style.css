@@ -1,0 +1,90 @@
+/* 趋势图卡片样式 */
+.trend-chart-card {
+    background: linear-gradient(135deg, rgba(45, 52, 72, 0.95), rgba(30, 35, 50, 0.95)) !important;
+    border-radius: 16px !important;
+    padding: 0 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    color: #ffffff !important;
+    min-width: 300px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.trend-chart-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Header 样式 */
+.trend-chart-card .trend-chart-header {
+    padding: 24px 24px 16px 24px !important;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.trend-chart-title {
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    color: #a8b2d1 !important;
+    margin: 0 !important;
+    letter-spacing: 0.5px;
+}
+
+.trend-chart-value {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.value-number {
+    font-size: 36px;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1;
+}
+
+.value-unit {
+    font-size: 18px;
+    font-weight: 500;
+    color: #8892b0;
+}
+
+/* Content 样式 */
+.trend-chart-content {
+    padding: 0 24px 16px 24px !important;
+}
+
+.trend-chart-svg {
+    width: 100%;
+    height: 200px;
+    display: block;
+}
+
+.trend-chart-placeholder {
+    width: 100%;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* Footer 样式 */
+.trend-chart-footer {
+    font-size: 12px !important;
+    color: #64748b !important;
+    padding: 12px 24px !important;
+    border-top: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .trend-chart-svg {
+        height: 150px;
+    }
+
+    .value-number {
+        font-size: 28px;
+    }
+}

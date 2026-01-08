@@ -119,8 +119,8 @@ pub fn Login() -> Element {
                     *guard = Some(conn);
                     drop(guard);
 
-                    // 跳转到主页
-                    navigator.push("/home");
+                    // 跳转到仪表板测试页面
+                    navigator.push("/dashboard");
                 }
                 Err(e) => {
                     error_msg.set(Some(format!("连接失败: {}", e)));
