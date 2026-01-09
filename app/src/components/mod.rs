@@ -5,7 +5,7 @@ mod metric_card;
 pub use metric_card::{MetricCard, MetricCardData, MetricItem};
 
 mod trend_chart;
-pub use trend_chart::{TrendChart, TrendChartData, DataPoint};
+pub use trend_chart::{TrendChart, TrendChartData, DataPoint, DataSeries};
 
 pub mod hover_card;
 pub mod card;
@@ -18,6 +18,7 @@ pub mod date_picker;
 pub mod toggle_group;
 pub mod radio_group;
 pub mod select;
+pub use select::*;
 pub mod aspect_ratio;
 pub mod skeleton;
 pub mod form;

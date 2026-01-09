@@ -8,7 +8,6 @@ authors.workspace = true
 
 [dependencies]
 dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
-dioxus-logger = "0.7"
 
 # 与服务器通信的客户端库
 client.workspace = true
@@ -32,6 +31,7 @@ sha2.workspace = true
 # 日志
 log.workspace = true
 tracing = "0.1"
+tracing-subscriber.workspace = true
 
 # 系统工具
 dirs = "6.0"

@@ -34,8 +34,20 @@ const FAVICON: Asset = asset!("/assets/icon.png");
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 fn main() {
-
-    dioxus_logger::init(Level::DEBUG).expect("");
+    // dioxus_logger::init(Level::DEBUG).expect("");
+    tracing_subscriber::fmt()
+        // 设置日志级别 (例如 INFO, DEBUG, TRACE)
+        .with_max_level(Level::DEBUG)
+        // 关键设置：显示文件名
+        .with_file(true)
+        // 关键设置：显示行号
+        .with_line_number(true)
+        // 可选：显示线程ID (多线程调试很有用)
+        .with_thread_ids(true)
+        // 可选：设置目标 (Target) 是否显示，通常是模块路径
+        .with_target(false)
+        // 初始化
+        .init();
 
     #[cfg(feature = "desktop")]
     {
@@ -53,7 +65,7 @@ fn main() {
         // 仅在Windows上移除菜单栏
         #[cfg(target_os = "windows")]
         {
-            dioxus_logger::tracing::info!("移除 Windows 菜单栏");
+            tracing::info!("移除 Windows 菜单栏");
             cfg = cfg.with_menu(None);
         }
 

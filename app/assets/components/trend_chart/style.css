@@ -30,6 +30,66 @@
     letter-spacing: 0.5px;
 }
 
+/* 图例样式 */
+.trend-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(100, 116, 139, 0.1);
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: background 0.2s, opacity 0.2s;
+    cursor: pointer;
+    user-select: none;
+}
+
+.legend-item:hover {
+    background: rgba(100, 116, 139, 0.2);
+}
+
+.legend-item-hidden {
+    opacity: 0.5;
+}
+
+.legend-item-hidden:hover {
+    opacity: 0.7;
+}
+
+.legend-item:hover {
+    background: rgba(100, 116, 139, 0.2);
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.legend-color-hidden {
+    opacity: 0.3;
+}
+
+.legend-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #ffffff;
+}
+
+.legend-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-left: 4px;
+}
+
 .trend-chart-value {
     display: flex;
     align-items: baseline;

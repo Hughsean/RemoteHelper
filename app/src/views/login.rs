@@ -110,6 +110,7 @@ pub fn Login() -> Element {
                 let mut guard = client::SERVER_ADDRESS.lock().unwrap();
                 *guard = server_address();
             }
+
             tracing::info!("尝试连接到服务器 {}", server_address());
             // 尝试连接
             match client::connect_and_auth().await {

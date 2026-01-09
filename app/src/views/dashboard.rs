@@ -1,10 +1,42 @@
 use dioxus::prelude::*;
-use crate::components::{MetricCard, MetricCardData, MetricItem, TrendChart, TrendChartData};
+use crate::components::{MetricCard, MetricCardData, MetricItem, TrendChart, TrendChartData, DataSeries, Select, SelectTrigger, SelectValue, SelectList, SelectOption};
 
 const DASHBOARD_CSS: Asset = asset!("/assets/styling/dashboard.css");
 
+/// 更新间隔选项
+#[derive(Clone, PartialEq, Debug)]
+enum UpdateInterval {
+    HalfSecond,
+    OneSecond,
+    ThreeSeconds,
+    Paused,
+}
+
+impl UpdateInterval {
+    fn to_millis(&self) -> Option<u64> {
+        match self {
+            UpdateInterval::HalfSecond => Some(500),
+            UpdateInterval::OneSecond => Some(1000),
+            UpdateInterval::ThreeSeconds => Some(3000),
+            UpdateInterval::Paused => None,
+        }
+    }
+
+    fn to_display(&self) -> &'static str {
+        match self {
+            UpdateInterval::HalfSecond => "0.5秒",
+            UpdateInterval::OneSecond => "1秒",
+            UpdateInterval::ThreeSeconds => "3秒",
+            UpdateInterval::Paused => "暂停",
+        }
+    }
+}
+
 #[component]
 pub fn Dashboard() -> Element {
+    // 更新间隔状态
+    let mut update_interval = use_signal(|| UpdateInterval::OneSecond);
+
     // 使用 Signal 存储实时数据
     let mut cpu_data = use_signal(|| MetricCardData {
         title: "CPU & 内存".to_string(),
@@ -42,38 +74,43 @@ pub fn Dashboard() -> Element {
         footer: Some("正在获取硬件信息...".to_string()),
     });
 
-    // 趋势图数据
-    let mut cpu_trend = use_signal(|| TrendChartData {
-        title: "CPU 使用率趋势".to_string(),
-        current_value: "0.0".to_string(),
+    // 综合趋势图数据 - 包含 CPU、内存、GPU 三个系列
+    let mut system_trend = use_signal(|| TrendChartData {
+        title: "系统资源使用率趋势".to_string(),
         unit: "%".to_string(),
-        data_points: vec![],
+        series: vec![
+            DataSeries {
+                label: "CPU".to_string(),
+                data_points: vec![],
+                color: "#ef4444".to_string(),  // 红色
+                current_value: "0.0".to_string(),
+                visible: true,
+            },
+            DataSeries {
+                label: "内存".to_string(),
+                data_points: vec![],
+                color: "#3b82f6".to_string(),  // 蓝色
+                current_value: "0.0".to_string(),
+                visible: true,
+            },
+            DataSeries {
+                label: "GPU".to_string(),
+                data_points: vec![],
+                color: "#10b981".to_string(),  // 绿色
+                current_value: "0".to_string(),
+                visible: true,
+            },
+        ],
         max_points: 60,
-        color: "#ef4444".to_string(),
-    });
-
-    let mut memory_trend = use_signal(|| TrendChartData {
-        title: "内存使用率趋势".to_string(),
-        current_value: "0.0".to_string(),
-        unit: "%".to_string(),
-        data_points: vec![],
-        max_points: 60,
-        color: "#3b82f6".to_string(),
-    });
-
-    let mut gpu_trend = use_signal(|| TrendChartData {
-        title: "GPU 使用率趋势".to_string(),
-        current_value: "0".to_string(),
-        unit: "%".to_string(),
-        data_points: vec![],
-        max_points: 60,
-        color: "#10b981".to_string(),
     });
 
     // 实时数据更新
     use_future(move || async move {
         loop {
-            match client::send_request(common::Request::GetStatus { interval_ms: None }).await {
+            // 检查是否暂停
+            let current_interval = update_interval();
+            if let Some(interval_ms) = current_interval.to_millis() {
+                match client::send_request(common::Request::GetStatus { interval_ms: None }).await {
                 Ok(common::Response::Status(info)) => {
                     let timestamp = info.timestamp;
 
@@ -102,13 +139,13 @@ pub fn Dashboard() -> Element {
                         footer: Some(info.cpu_model.clone()),
                     };
 
-                    // 更新 CPU 趋势图
-                    cpu_trend.write().add_point(cpu_usage, timestamp);
-                    cpu_trend.write().current_value = format!("{:.1}", cpu_usage);
+                    // 更新系统趋势图 - CPU (系列 0)
+                    system_trend.write().add_point_to_series(0, cpu_usage, timestamp);
+                    system_trend.write().series[0].current_value = format!("{:.1}", cpu_usage);
 
-                    // 更新内存趋势图
-                    memory_trend.write().add_point(mem_usage_percent, timestamp);
-                    memory_trend.write().current_value = format!("{:.1}", mem_usage_percent);
+                    // 更新系统趋势图 - 内存 (系列 1)
+                    system_trend.write().add_point_to_series(1, mem_usage_percent, timestamp);
+                    system_trend.write().series[1].current_value = format!("{:.1}", mem_usage_percent);
 
                     // 更新 GPU 数据
                     if let (Some(gpu_usage), Some(gpu_mem_used), Some(gpu_mem_total), Some(gpu_model)) =
@@ -136,9 +173,9 @@ pub fn Dashboard() -> Element {
                             footer: Some(gpu_model),
                         };
 
-                        // 更新 GPU 趋势图
-                        gpu_trend.write().add_point(gpu_usage as f32, timestamp);
-                        gpu_trend.write().current_value = format!("{}", gpu_usage);
+                        // 更新系统趋势图 - GPU (系列 2)
+                        system_trend.write().add_point_to_series(2, gpu_usage as f32, timestamp);
+                        system_trend.write().series[2].current_value = format!("{}", gpu_usage);
                     } else {
                         *gpu_data.write() = MetricCardData {
                             title: "GPU 状态".to_string(),
@@ -156,12 +193,20 @@ pub fn Dashboard() -> Element {
                 }
             }
 
-            // 每秒更新一次
+            // 根据选择的间隔休眠
+            #[cfg(feature = "web")]
+            gloo_timers::future::TimeoutFuture::new(interval_ms as u32).await;
+
+            #[cfg(feature = "desktop")]
+            tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
+        } else {
+            // 暂停状态，等待一秒后重新检查
             #[cfg(feature = "web")]
             gloo_timers::future::TimeoutFuture::new(1000).await;
 
             #[cfg(feature = "desktop")]
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
         }
     });
 
@@ -169,7 +214,47 @@ pub fn Dashboard() -> Element {
         document::Link { rel: "stylesheet", href: DASHBOARD_CSS }
 
         div { class: "dashboard-container",
-            h1 { class: "dashboard-title", "系统监控仪表板" }
+            // Header bar with update interval control
+            div { class: "dashboard-header",
+                h1 { class: "dashboard-title", "系统监控仪表板" }
+
+                div { class: "header-controls",
+                    label { class: "update-interval-label", "更新间隔:" }
+                    Select {
+                        value: use_memo(move || Some(Some(update_interval()))),
+                        on_value_change: move |value: Option<UpdateInterval>| {
+                            if let Some(interval) = value {
+                                update_interval.set(interval);
+                            }
+                        },
+                        SelectTrigger {
+                            SelectValue { aria_placeholder: "选择更新间隔" }
+                        }
+                        SelectList {
+                            SelectOption::<UpdateInterval> {
+                                index: use_signal(|| 0),
+                                value: UpdateInterval::HalfSecond,
+                                "{UpdateInterval::HalfSecond.to_display()}"
+                            }
+                            SelectOption::<UpdateInterval> {
+                                index: use_signal(|| 1),
+                                value: UpdateInterval::OneSecond,
+                                "{UpdateInterval::OneSecond.to_display()}"
+                            }
+                            SelectOption::<UpdateInterval> {
+                                index: use_signal(|| 2),
+                                value: UpdateInterval::ThreeSeconds,
+                                "{UpdateInterval::ThreeSeconds.to_display()}"
+                            }
+                            SelectOption::<UpdateInterval> {
+                                index: use_signal(|| 3),
+                                value: UpdateInterval::Paused,
+                                "{UpdateInterval::Paused.to_display()}"
+                            }
+                        }
+                    }
+                }
+            }
 
             div { class: "metrics-grid",
                 MetricCard { data: cpu_data }
@@ -178,14 +263,12 @@ pub fn Dashboard() -> Element {
 
             h2 { class: "section-title", "历史趋势" }
 
-            div { class: "trends-grid",
-                TrendChart { data: cpu_trend }
-                TrendChart { data: memory_trend }
-                TrendChart { data: gpu_trend }
+            div { class: "trends-single",
+                TrendChart { data: system_trend }
             }
 
             div { class: "dashboard-footer",
-                p { "💡 实时数据每秒自动更新" }
+                p { "💡 实时数据自动更新 • 当前间隔: {update_interval().to_display()}" }
             }
         }
     }

@@ -15,6 +15,29 @@
     text-align: center;
 }
 
+/* Header bar styles */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+    padding: 20px 0;
+    border-bottom: 1px solid rgba(136, 146, 176, 0.2);
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.update-interval-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #8892b0;
+    white-space: nowrap;
+}
+
 .section-title {
     font-size: 24px;
     font-weight: 600;
@@ -35,6 +58,12 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
     gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* 单个趋势图容器 */
+.trends-single {
     max-width: 1400px;
     margin: 0 auto;
 }
@@ -60,6 +89,22 @@
     .dashboard-title {
         font-size: 24px;
         margin-bottom: 24px;
+    }
+
+    /* Header bar responsive */
+    .dashboard-header {
+        flex-direction: column;
+        gap: 20px;
+        align-items: stretch;
+        margin-bottom: 24px;
+    }
+
+    .header-controls {
+        justify-content: center;
+    }
+
+    .update-interval-label {
+        font-size: 13px;
     }
 
     .section-title {
