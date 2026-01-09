@@ -87,7 +87,7 @@ pub fn TrendChart(
     // SVG 尺寸
     let width = 600.0;
     let height = 200.0;
-    let padding = 40.0;  // 增加 padding 以容纳图例
+    let padding = 5.0;  // 增加 padding 以容纳图例
     let chart_width = width - padding * 2.0;
     let chart_height = height - padding * 2.0;
 

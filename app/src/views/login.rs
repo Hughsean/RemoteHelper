@@ -121,7 +121,7 @@ pub fn Login() -> Element {
                     drop(guard);
 
                     // 跳转到仪表板测试页面
-                    navigator.push("/dashboard");
+                    navigator.push("/home");
                 }
                 Err(e) => {
                     error_msg.set(Some(format!("连接失败: {}", e)));

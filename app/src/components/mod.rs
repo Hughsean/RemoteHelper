@@ -7,6 +7,9 @@ pub use metric_card::{MetricCard, MetricCardData, MetricItem};
 mod trend_chart;
 pub use trend_chart::{TrendChart, TrendChartData, DataPoint, DataSeries};
 
+mod add_service_dialog;
+pub use add_service_dialog::AddServiceDialog;
+
 pub mod hover_card;
 pub mod card;
 pub mod dropdown_menu;

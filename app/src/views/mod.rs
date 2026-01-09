@@ -5,5 +5,11 @@
 mod login;
 pub use login::Login;
 
-mod dashboard;
-pub use dashboard::Dashboard;
+mod home;
+pub use home::Home;
+
+mod test;
+pub use test::Test;
+
+mod services;
+pub use services::Services;

@@ -9,17 +9,13 @@
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.trend-chart-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4) !important;
-}
-
 /* Header 样式 */
 .trend-chart-card .trend-chart-header {
     padding: 24px 24px 16px 24px !important;
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .trend-chart-title {
@@ -88,6 +84,9 @@
     font-weight: 600;
     color: #ffffff;
     margin-left: 4px;
+    text-align: right;
+    width: 60px;
+    white-space: pre;
 }
 
 .trend-chart-value {
@@ -111,7 +110,7 @@
 
 /* Content 样式 */
 .trend-chart-content {
-    padding: 0 24px 16px 24px !important;
+    padding: 0 0 8px 0 !important;
 }
 
 .trend-chart-svg {

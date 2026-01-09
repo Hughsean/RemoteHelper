@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use tracing::Level;
-use views::{Dashboard, Login};
+use views::{Home, Login, Services, Test};
 
 /// Define a components module that contains all shared components for our app.
 mod components;
@@ -23,8 +23,16 @@ enum Route {
     Login {},
 
     // 仪表板测试页面
-    #[route("/dashboard")]
-    Dashboard {},
+    #[route("/home")]
+    Home {},
+
+    // 测试页面
+    #[route("/test")]
+    Test {},
+
+    // 服务管理页面
+    #[route("/services")]
+    Services {},
 }
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.

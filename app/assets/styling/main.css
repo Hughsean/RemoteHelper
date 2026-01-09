@@ -33,7 +33,7 @@ html, body {
 body {
     background-color: #0f1116;
     color: #ffffff;
-    font-family: 'LXGW WenKai', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'LXGW WenKai', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
 }
 
 #hero {
