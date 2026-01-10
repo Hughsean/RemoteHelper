@@ -1,9 +1,9 @@
 use crate::components::{
     DataSeries, MetricCard, MetricCardData, MetricItem, Select, SelectList, SelectOption,
-    SelectTrigger, SelectValue, TimeWindow, TrendChart, TrendChartData,
+    SelectTrigger, SelectValue, TrendChart, TrendChartData,
 };
-use dioxus::prelude::*;
 use crate::views::{Services, Test};
+use dioxus::prelude::*;
 
 const HOME_CSS: Asset = asset!("/assets/styling/home.css");
 
@@ -100,33 +100,14 @@ pub fn Home() -> Element {
     });
 
     // 综合趋势图数据 - 包含 CPU、内存、GPU 三个系列
-    let mut system_trend = use_signal(|| TrendChartData {
-        title: "系统资源使用率趋势".to_string(),
-        unit: "%".to_string(),
-        series: vec![
-            DataSeries {
-                label: "CPU".to_string(),
-                data_points: vec![],
-                color: "#ef4444".to_string(), // 红色
-                current_value: "0.0".to_string(),
-                visible: true,
-            },
-            DataSeries {
-                label: "内存".to_string(),
-                data_points: vec![],
-                color: "#3b82f6".to_string(), // 蓝色
-                current_value: "0.0".to_string(),
-                visible: true,
-            },
-            DataSeries {
-                label: "GPU".to_string(),
-                data_points: vec![],
-                color: "#10b981".to_string(), // 绿色
-                current_value: "0".to_string(),
-                visible: true,
-            },
-        ],
-        time_window: TimeWindow::Minute5,
+    let mut system_trend = use_signal(|| {
+        let mut chart_data = TrendChartData::new("系统资源使用率趋势".to_string(), "%".to_string());
+
+        chart_data.add_series(DataSeries::new("CPU".to_string(), "#ef4444".to_string()));
+        chart_data.add_series(DataSeries::new("内存".to_string(), "#3b82f6".to_string()));
+        chart_data.add_series(DataSeries::new("GPU".to_string(), "#10b981".to_string()));
+
+        chart_data
     });
 
     // 实时数据更新
