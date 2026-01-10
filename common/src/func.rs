@@ -70,7 +70,9 @@ pub fn tracing_init(dir: Option<&str>, file: Option<&str>) -> Option<WorkerGuard
     let stdout_layer = tracing_subscriber::fmt::layer()
         .with_file(true)
         .with_line_number(true)
-        .with_writer(std::io::stdout);
+        .with_writer(std::io::stdout)
+        .with_thread_ids(true)
+        .with_target(false);
 
     // 创建环境过滤器，默认级别为 info
     let env_filter =
@@ -84,6 +86,8 @@ pub fn tracing_init(dir: Option<&str>, file: Option<&str>) -> Option<WorkerGuard
             .with_file(true)
             .with_line_number(true)
             .with_ansi(false)
+            .with_thread_ids(true)
+            .with_target(false)
             .with_writer(non_blocking);
 
         tracing_subscriber::registry()

@@ -1,20 +1,17 @@
-// The dioxus prelude contains a ton of common items used in dioxus apps. It's a good idea to import wherever you
-// need dioxus
+// Dioxus prelude 包含了 Dioxus 应用中使用的许多常见项。在需要 Dioxus 的地方导入它是好的做法
 use dioxus::prelude::*;
 
 use tracing::Level;
 use views::{Home, Login, Services, Test};
 
-/// Define a components module that contains all shared components for our app.
+/// 定义一个包含应用所有共享组件的组件模块。
 mod components;
-/// Define a views module that contains the UI for all Layouts and Routes for our app.
+/// 定义一个包含应用所有布局和路由 UI 的视图模块。
 mod views;
 
-/// The Route enum is used to define the structure of internal routes in our app. All route enums need to derive
-/// the [`Routable`] trait, which provides the necessary methods for the router to work.
+/// Route 枚举用于定义应用内部路由的结构。所有路由枚举都需要派生 [`Routable`] trait，它为路由器工作提供必要的方法。
 ///
-/// Each variant represents a different URL pattern that can be matched by the router. If that pattern is matched,
-/// the components for that route will be rendered.
+/// 每个变体代表路由器可以匹配的不同 URL 模式。如果匹配该模式，将渲染该路由的组件。
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
 enum Route {
@@ -35,32 +32,19 @@ enum Route {
     Services {},
 }
 
-// We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.
-// The macro returns an `Asset` type that will display as the path to the asset in the browser or a local path in desktop bundles.
+// 我们可以使用 `asset!` 宏在 Dioxus 中导入资源。该宏接受相对于 crate 根目录的资源路径。
+// 该宏返回一个 `Asset` 类型，它将在浏览器中显示为资源路径，或在桌面包中显示为本地路径。
 // const FAVICON: Asset = asset!("/assets/favicon.svg");
-// The asset macro also minifies some assets like CSS and JS to make bundled smaller
+// asset 宏还会压缩一些资源如 CSS 和 JS 以使包更小
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 fn main() {
     // dioxus_logger::init(Level::DEBUG).expect("");
-    tracing_subscriber::fmt()
-        // 设置日志级别 (例如 INFO, DEBUG, TRACE)
-        .with_max_level(Level::DEBUG)
-        // 关键设置：显示文件名
-        .with_file(true)
-        // 关键设置：显示行号
-        .with_line_number(true)
-        // 可选：显示线程ID (多线程调试很有用)
-        .with_thread_ids(true)
-        // 可选：设置目标 (Target) 是否显示，通常是模块路径
-        .with_target(false)
-        // 初始化
-        .init();
+    let _guard = common::func::tracing_init(Some("logs"), Some("app.log"));
 
     #[cfg(feature = "desktop")]
     {
-        // // The `launch` function is the main entry point for a dioxus app. It takes a component and renders it with the platform feature
-        // // you have enabled
+        // `launch` 函数是 Dioxus 应用的主入口点。它接受一个组件，并使用您启用的平台功能渲染它
 
         let mut cfg = dioxus::desktop::Config::new().with_window(
             dioxus::desktop::WindowBuilder::new()
@@ -121,31 +105,23 @@ fn main() {
 
             cfg = cfg.with_menu(menu);
         }
-
-        // println!("[4/4] 正在启动 Dioxus 应用...");
-        // dioxus_logger::tracing::info!("正在启动 Dioxus 应用...");
         dioxus::LaunchBuilder::desktop().with_cfg(cfg).launch(App);
-        // println!("[✓] 应用已正常退出");
-        // dioxus_logger::tracing::info!("应用已退出");
-        // dioxus::launch(App);
     }
 }
 
-/// App is the main component of our app. Components are the building blocks of dioxus apps. Each component is a function
-/// that takes some props and returns an Element. In this case, App takes no props because it is the root of our app.
+/// App 是我们应用的主组件。组件是 Dioxus 应用的构建块。每个组件是一个函数，接受一些 props 并返回一个 Element。在这种情况下，App 不接受 props 因为它是应用的根。
 ///
-/// Components should be annotated with `#[component]` to support props, better error messages, and autocomplete
+/// 组件应该用 `#[component]` 注解以支持 props、更好的错误消息和自动完成
 #[component]
 fn App() -> Element {
-    // The `rsx!` macro lets us define HTML inside of rust. It expands to an Element with all of our HTML inside.
+    // `rsx!` 宏让我们在 Rust 中定义 HTML。它扩展为包含所有 HTML 的 Element。
     rsx! {
-        // In addition to element and text (which we will see later), rsx can contain other components. In this case,
-        // we are using the `document::Link` component to add a link to our favicon and main CSS file into the head of our app.
+        // 除了元素和文本（我们稍后会看到），rsx 可以包含其他组件。在这种情况下，
+        // 我们使用 `document::Link` 组件将链接添加到应用的头部，用于主 CSS 文件。
         // document::Link { rel: "svg", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
-        // The router component renders the route enum we defined above. It will handle synchronization of the URL and render
-        // the layouts and components for the active route.
+        // 路由器组件渲染我们上面定义的路由枚举。它将处理 URL 的同步并渲染活动路由的布局和组件。
         Router::<Route> {}
     }
 }
