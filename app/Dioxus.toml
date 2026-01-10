@@ -1,6 +1,5 @@
 [application]
 
-
 [web.app]
 
 # HTML title tag content
@@ -20,3 +19,9 @@ script = []
 # Javascript code file
 # serve: [dev-server] only
 script = []
+
+
+[bundle]
+publisher = "Hughsean"
+identifier = "dev.hughsean.remotehelper"
+icon = ["assets/icon.png"]

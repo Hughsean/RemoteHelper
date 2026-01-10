@@ -15,15 +15,15 @@ enum PageView {
     Test,
 }
 
-impl PageView {
-    fn to_display(&self) -> &'static str {
-        match self {
-            PageView::Home => "仪表板",
-            PageView::Services => "服务管理",
-            PageView::Test => "测试页面",
-        }
-    }
-}
+// impl PageView {
+//     fn to_display(&self) -> &'static str {
+//         match self {
+//             PageView::Home => "主页",
+//             PageView::Services => "服务管理",
+//             PageView::Test => "测试页面",
+//         }
+//     }
+// }
 
 /// 更新间隔选项
 #[derive(Clone, PartialEq, Debug)]
@@ -262,7 +262,7 @@ pub fn Home() -> Element {
             // Header bar with update interval control
             div { class: "home-header",
                 div { class: "title-section",
-                    h1 { class: "home-title", "系统监控仪表板" }
+                    h1 { class: "home-title", "系统监控" }
                     p { class: "powered-by", "Powered by Hughsean" }
                 }
 
@@ -283,13 +283,15 @@ pub fn Home() -> Element {
                         },
                         "服务管理"
                     }
-                    button {
-                        class: "nav-button",
-                        class: if *current_view.read() == PageView::Test { "nav-button active" } else { "nav-button" },
-                        onclick: move |_| {
-                            current_view.set(PageView::Test);
-                        },
-                        "测试页面"
+                    if cfg!(debug_assertions) {
+                        button {
+                            class: "nav-button",
+                            class: if *current_view.read() == PageView::Test { "nav-button active" } else { "nav-button" },
+                            onclick: move |_| {
+                                current_view.set(PageView::Test);
+                            },
+                            "测试页面"
+                        }
                     }
                 }
 

@@ -37,7 +37,7 @@ enum Route {
 
 // We can import assets in dioxus with the `asset!` macro. This macro takes a path to an asset relative to the crate root.
 // The macro returns an `Asset` type that will display as the path to the asset in the browser or a local path in desktop bundles.
-const FAVICON: Asset = asset!("/assets/icon.png");
+// const FAVICON: Asset = asset!("/assets/favicon.svg");
 // The asset macro also minifies some assets like CSS and JS to make bundled smaller
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
@@ -66,8 +66,8 @@ fn main() {
             dioxus::desktop::WindowBuilder::new()
                 .with_title("RemoteHelper - 远程系统监控")
                 .with_resizable(true)
-                .with_inner_size(dioxus::desktop::LogicalSize::new(800, 600))
-                .with_min_inner_size(dioxus::desktop::LogicalSize::new(800, 600)),
+                .with_inner_size(dioxus::desktop::LogicalSize::new(800, 700))
+                .with_min_inner_size(dioxus::desktop::LogicalSize::new(800, 700)),
         );
 
         // 仅在Windows上移除菜单栏
@@ -141,7 +141,7 @@ fn App() -> Element {
     rsx! {
         // In addition to element and text (which we will see later), rsx can contain other components. In this case,
         // we are using the `document::Link` component to add a link to our favicon and main CSS file into the head of our app.
-        document::Link { rel: "icon", href: FAVICON }
+        // document::Link { rel: "svg", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
         // The router component renders the route enum we defined above. It will handle synchronization of the URL and render
