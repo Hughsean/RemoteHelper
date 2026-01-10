@@ -1,7 +1,6 @@
 // Dioxus prelude 包含了 Dioxus 应用中使用的许多常见项。在需要 Dioxus 的地方导入它是好的做法
 use dioxus::prelude::*;
 
-use tracing::Level;
 use views::{Home, Login, Services, Test};
 
 /// 定义一个包含应用所有共享组件的组件模块。
@@ -40,7 +39,7 @@ const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 fn main() {
     // dioxus_logger::init(Level::DEBUG).expect("");
-    let _guard = common::func::tracing_init(Some("logs"), Some("app.log"));
+    let _guard = common::func::tracing_init(None, None);
 
     #[cfg(feature = "desktop")]
     {
