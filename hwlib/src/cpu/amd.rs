@@ -1,12 +1,26 @@
-use crate::core::{Hardware, HardwareResult, HardwareType, Identifier, Sensor, SensorResult};
-use crate::driver::{get_driver, pawn};
+use crate::core::{Hardware, HardwareResult, HardwareType, Identifier, Sensor};
 use crate::cpu::detection::CpuInfo;
-use crate::cpu::sensors::{TemperatureSensor, VoltageSensor, PowerSensor};
+use crate::cpu::sensors::{PowerSensor, TemperatureSensor, VoltageSensor};
+use crate::driver::PawnModuleManager;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use crate::driver::PawnModuleManager;
 
 use tracing;
+/// AMD CPU 硬件监控器。
+///
+/// 支持 AMD Zen 架构处理器（Family 17h, 19h）的监控。
+///
+/// ## 传感器
+///
+/// - **温度**: Tctl（控制温度）和 Tdie（芯片温度）
+/// - **电压**: 核心电压（通过 SVI2 遥测）
+/// - **功率**: 封装功耗
+///
+/// ## 实现说明
+///
+/// - 温度从 MSR 0x590（Family 19h）或 SMN 0x00059800 读取
+/// - 功率从 MSR 能量计数器（0xC001_029B）计算得出
+/// - 需要具有 MSR/SMN 访问权限的 PawnIO 驱动
 pub struct AmdCpu {
     info: CpuInfo,
     identifier: Identifier,
@@ -20,6 +34,15 @@ pub struct AmdCpu {
 }
 
 impl AmdCpu {
+    /// 创建新的 AMD CPU 监控器。
+    ///
+    /// # 参数
+    ///
+    /// * `info` - CPU 标识信息
+    ///
+    /// # 错误
+    ///
+    /// 如果初始化失败则返回 [`HardwareError`](crate::core::HardwareError)。
     pub fn new(info: CpuInfo) -> HardwareResult<Self> {
         let identifier = Identifier::new(HardwareType::CPU, 0, &info.name);
 
@@ -60,39 +83,15 @@ impl AmdCpu {
         })
     }
 
+    /// 设置 PawnIO 驱动管理器。
+    ///
+    /// 在调用 [`update`](#method.update) 之前必须调用此方法以启用传感器读取。
+    ///
+    /// # 参数
+    ///
+    /// * `pm` - 共享的 PawnIO 模块管理器引用
     pub fn set_pawn_manager(&mut self, pm: Arc<Mutex<PawnModuleManager>>) {
         self.pawn_manager = Some(pm);
-    }
-
-    /// Read CPU temperature from SMU
-    fn read_temperature(&mut self, pawn_manager: Option<&mut crate::driver::PawnModuleManager>) -> HardwareResult<f64> {
-        if let Some(pm) = pawn_manager {
-            // TODO: Read Tctl temperature from SMU register 0x00059800
-            // For now, return dummy value
-            Ok(45.0)
-        } else {
-            Ok(0.0) // No driver available
-        }
-    }
-
-    /// Read CPU voltage
-    fn read_voltage(&mut self, pawn_manager: Option<&mut crate::driver::PawnModuleManager>) -> HardwareResult<f64> {
-        if let Some(pm) = pawn_manager {
-            // TODO: Read voltage from MSR 0x198
-            Ok(1.2)
-        } else {
-            Ok(0.0)
-        }
-    }
-
-    /// Read CPU power consumption
-    fn read_power(&mut self, pawn_manager: Option<&mut crate::driver::PawnModuleManager>) -> HardwareResult<f64> {
-        if let Some(pm) = pawn_manager {
-            // TODO: Read PPT from SMU register 0x00059808
-            Ok(65.0)
-        } else {
-            Ok(0.0)
-        }
     }
 }
 
@@ -126,8 +125,10 @@ impl Hardware for AmdCpu {
     }
 
     fn get_report(&self) -> String {
-        format!("AMD CPU: {} ({} cores, {} threads)",
-                self.info.name, self.info.cores, self.info.threads)
+        format!(
+            "AMD CPU: {} ({} cores, {} threads)",
+            self.info.name, self.info.cores, self.info.threads
+        )
     }
 
     fn update(&mut self) -> HardwareResult<()> {
@@ -143,7 +144,10 @@ impl Hardware for AmdCpu {
                     let temp_raw = data & 0xfff;
                     let temp_c = (temp_raw as f64 * 0.0625) - 49.0;
                     tracing::info!("Read temperature MSR: raw={}, temp_c={}", temp_raw, temp_c);
-                    if let Some(sensor) = self.sensors[0].as_any_mut().downcast_mut::<TemperatureSensor>() {
+                    if let Some(sensor) = self.sensors[0]
+                        .as_any_mut()
+                        .downcast_mut::<TemperatureSensor>()
+                    {
                         sensor.update_value(temp_c);
                     }
                 } else {
@@ -155,11 +159,22 @@ impl Hardware for AmdCpu {
                     Ok(raw_temp) => {
                         let tctl_c = ((raw_temp >> 21) * 125) as f64 * 0.001;
                         let tdie_c = tctl_c - 65.0; // Offset for Ryzen 5000/7000
-                        tracing::info!("Read temperature SMN: raw={}, Tctl={}, Tdie={}", raw_temp, tctl_c, tdie_c);
-                        if let Some(sensor) = self.sensors[0].as_any_mut().downcast_mut::<TemperatureSensor>() {
+                        tracing::info!(
+                            "Read temperature SMN: raw={}, Tctl={}, Tdie={}",
+                            raw_temp,
+                            tctl_c,
+                            tdie_c
+                        );
+                        if let Some(sensor) = self.sensors[0]
+                            .as_any_mut()
+                            .downcast_mut::<TemperatureSensor>()
+                        {
                             sensor.update_value(tctl_c);
                         }
-                        if let Some(sensor) = self.sensors[1].as_any_mut().downcast_mut::<TemperatureSensor>() {
+                        if let Some(sensor) = self.sensors[1]
+                            .as_any_mut()
+                            .downcast_mut::<TemperatureSensor>()
+                        {
                             sensor.update_value(tdie_c);
                         }
                     }
@@ -173,34 +188,45 @@ impl Hardware for AmdCpu {
             const MSR_PWR_UNIT: u32 = 0xC001_0299;
             const MSR_PKG_ENERGY_STAT: u32 = 0xC001_029B;
 
-            if self.energy_unit_joule.is_none() {
-                if let Ok(msr) = pm.read_msr_amd(MSR_PWR_UNIT) {
-                    let eax = (msr & 0xFFFF_FFFF) as u32;
-                    let esu = ((eax >> 8) & 0x1F) as i32;
-                    // AMD/Intel convention: energy unit is in joules, as 1 / 2^ESU.
-                    let energy_unit_joule = 0.5_f64.powi(esu);
-                    self.energy_unit_joule = Some(energy_unit_joule);
-                    tracing::debug!(
-                        "Energy unit: esu={}, unit_uJ={}",
-                        esu,
-                        energy_unit_joule * 1_000_000.0
-                    );
-                }
+            if self.energy_unit_joule.is_none()
+                && let Ok(msr) = pm.read_msr_amd(MSR_PWR_UNIT)
+            {
+                let eax = (msr & 0xFFFF_FFFF) as u32;
+                let esu = ((eax >> 8) & 0x1F) as i32;
+                // AMD/Intel convention: energy unit is in joules, as 1 / 2^ESU.
+                let energy_unit_joule = 0.5_f64.powi(esu);
+                self.energy_unit_joule = Some(energy_unit_joule);
+                tracing::debug!(
+                    "Energy unit: esu={}, unit_uJ={}",
+                    esu,
+                    energy_unit_joule * 1_000_000.0
+                );
             }
 
-            if let (Some(energy_unit_joule), Ok(msr)) = (self.energy_unit_joule, pm.read_msr_amd(MSR_PKG_ENERGY_STAT)) {
+            if let (Some(energy_unit_joule), Ok(msr)) =
+                (self.energy_unit_joule, pm.read_msr_amd(MSR_PKG_ENERGY_STAT))
+            {
                 let eax = (msr & 0xFFFF_FFFF) as u32;
                 let now = std::time::Instant::now();
 
-                if let (Some(prev_t), Some(prev_e)) = (self.last_energy_sample_time, self.last_pkg_energy) {
+                if let (Some(prev_t), Some(prev_e)) =
+                    (self.last_energy_sample_time, self.last_pkg_energy)
+                {
                     let dt = now.duration_since(prev_t).as_secs_f64();
                     if dt > 0.0 {
                         let delta = eax.wrapping_sub(prev_e) as f64;
                         let joules = delta * energy_unit_joule;
                         let watts = joules / dt;
 
-                        tracing::info!("Read package power: delta={}, dt_s={}, W={}", delta, dt, watts);
-                        if let Some(sensor) = self.sensors[3].as_any_mut().downcast_mut::<PowerSensor>() {
+                        tracing::info!(
+                            "Read package power: delta={}, dt_s={}, W={}",
+                            delta,
+                            dt,
+                            watts
+                        );
+                        if let Some(sensor) =
+                            self.sensors[3].as_any_mut().downcast_mut::<PowerSensor>()
+                        {
                             sensor.update_value(watts);
                         }
                     }
@@ -224,14 +250,3 @@ impl Hardware for AmdCpu {
         self
     }
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -6,9 +6,8 @@ use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::winnt::SERVICE_DEMAND_START;
 use winapi::um::winsvc::{
     CloseServiceHandle, ControlService, CreateServiceW, DeleteService, OpenSCManagerW,
-    OpenServiceW, QueryServiceStatus, StartServiceW, SC_MANAGER_ALL_ACCESS,
-    SERVICE_STATUS, SERVICE_ALL_ACCESS, SERVICE_CONTROL_STOP,
-    SERVICE_RUNNING, SERVICE_STOPPED, SC_HANDLE,
+    OpenServiceW, QueryServiceStatus, SC_HANDLE, SC_MANAGER_ALL_ACCESS, SERVICE_ALL_ACCESS,
+    SERVICE_CONTROL_STOP, SERVICE_RUNNING, SERVICE_STATUS, SERVICE_STOPPED, StartServiceW,
 };
 
 // Define service constants that might not be available
@@ -48,18 +47,13 @@ impl DriverService {
         tracing::info!("Starting driver service: {}", self.service_name);
 
         // Open Service Control Manager
-        let scm_handle = unsafe {
-            OpenSCManagerW(
-                ptr::null(),
-                ptr::null(),
-                SC_MANAGER_ALL_ACCESS,
-            )
-        };
+        let scm_handle = unsafe { OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_ALL_ACCESS) };
 
         if scm_handle.is_null() {
             let error_code = unsafe { GetLastError() };
             return Err(DriverError::ServiceError(format!(
-                "Failed to open Service Control Manager: error {}", error_code
+                "Failed to open Service Control Manager: error {}",
+                error_code
             )));
         }
 
@@ -67,13 +61,8 @@ impl DriverService {
 
         // Try to open existing service first
         let service_name_wide = to_wide_string(&self.service_name);
-        let mut service_handle = unsafe {
-            OpenServiceW(
-                scm_handle,
-                service_name_wide.as_ptr(),
-                SERVICE_ALL_ACCESS,
-            )
-        };
+        let mut service_handle =
+            unsafe { OpenServiceW(scm_handle, service_name_wide.as_ptr(), SERVICE_ALL_ACCESS) };
 
         // If service doesn't exist, create it
         if service_handle.is_null() {
@@ -104,7 +93,8 @@ impl DriverService {
             if service_handle.is_null() {
                 let error_code = unsafe { GetLastError() };
                 return Err(DriverError::ServiceError(format!(
-                    "Failed to create service: error {}", error_code
+                    "Failed to create service: error {}",
+                    error_code
                 )));
             }
         }
@@ -113,14 +103,13 @@ impl DriverService {
 
         // Check current service status
         let mut status: SERVICE_STATUS = unsafe { std::mem::zeroed() };
-        let status_result = unsafe {
-            QueryServiceStatus(service_handle, &mut status)
-        };
+        let status_result = unsafe { QueryServiceStatus(service_handle, &mut status) };
 
         if status_result == 0 {
             let error_code = unsafe { GetLastError() };
             return Err(DriverError::ServiceError(format!(
-                "Failed to query service status: error {}", error_code
+                "Failed to query service status: error {}",
+                error_code
             )));
         }
 
@@ -128,14 +117,13 @@ impl DriverService {
         if status.dwCurrentState != SERVICE_RUNNING {
             tracing::info!("Starting service...");
 
-            let start_result = unsafe {
-                StartServiceW(service_handle, 0, ptr::null_mut())
-            };
+            let start_result = unsafe { StartServiceW(service_handle, 0, ptr::null_mut()) };
 
             if start_result == 0 {
                 let error_code = unsafe { GetLastError() };
                 return Err(DriverError::ServiceError(format!(
-                    "Failed to start service: error {}", error_code
+                    "Failed to start service: error {}",
+                    error_code
                 )));
             }
 
@@ -154,9 +142,8 @@ impl DriverService {
         if let Some(service_handle) = self.service_handle {
             let mut status: SERVICE_STATUS = unsafe { std::mem::zeroed() };
 
-            let stop_result = unsafe {
-                ControlService(service_handle, SERVICE_CONTROL_STOP, &mut status)
-            };
+            let stop_result =
+                unsafe { ControlService(service_handle, SERVICE_CONTROL_STOP, &mut status) };
 
             if stop_result != 0 || status.dwCurrentState == SERVICE_STOPPED {
                 // Wait for service to stop
@@ -185,14 +172,13 @@ impl DriverService {
 
             loop {
                 let mut status: SERVICE_STATUS = unsafe { std::mem::zeroed() };
-                let query_result = unsafe {
-                    QueryServiceStatus(service_handle, &mut status)
-                };
+                let query_result = unsafe { QueryServiceStatus(service_handle, &mut status) };
 
                 if query_result == 0 {
                     let error_code = unsafe { GetLastError() };
                     return Err(DriverError::ServiceError(format!(
-                        "Failed to query service status during wait: error {}", error_code
+                        "Failed to query service status during wait: error {}",
+                        error_code
                     )));
                 }
 
@@ -208,16 +194,16 @@ impl DriverService {
             }
         }
 
-        Err(DriverError::ServiceError("No service handle found".to_string()))
+        Err(DriverError::ServiceError(
+            "No service handle found".to_string(),
+        ))
     }
 
     /// Check if service is running
     pub fn is_running(&self) -> bool {
         if let Some(service_handle) = self.service_handle {
             let mut status: SERVICE_STATUS = unsafe { std::mem::zeroed() };
-            let result = unsafe {
-                QueryServiceStatus(service_handle, &mut status)
-            };
+            let result = unsafe { QueryServiceStatus(service_handle, &mut status) };
 
             return result != 0 && status.dwCurrentState == SERVICE_RUNNING;
         }
@@ -227,11 +213,15 @@ impl DriverService {
     /// Cleanup handles
     fn cleanup_handles(&mut self) {
         if let Some(service_handle) = self.service_handle.take() {
-            unsafe { CloseServiceHandle(service_handle); }
+            unsafe {
+                CloseServiceHandle(service_handle);
+            }
         }
 
         if let Some(scm_handle) = self.scm_handle.take() {
-            unsafe { CloseServiceHandle(scm_handle); }
+            unsafe {
+                CloseServiceHandle(scm_handle);
+            }
         }
     }
 }
@@ -277,13 +267,3 @@ mod tests {
         assert!(service.driver_path.contains("driver.sys"));
     }
 }
-
-
-
-
-
-
-
-
-
-

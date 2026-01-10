@@ -1,3 +1,4 @@
+use crate::driver::error::{DriverError, DriverResult};
 use std::ffi::CString;
 use std::mem;
 use std::ptr;
@@ -5,8 +6,9 @@ use winapi::ctypes::c_void as WinCVoid;
 use winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::ioapiset::DeviceIoControl;
-use winapi::um::winnt::{FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE, HANDLE};
-use crate::driver::error::{DriverError, DriverResult};
+use winapi::um::winnt::{
+    FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE, HANDLE,
+};
 
 use tracing;
 
@@ -20,30 +22,49 @@ pub mod ioctl_codes {
 
     const FILE_DEVICE_UNKNOWN: u32 = 0x00000022;
     const METHOD_BUFFERED: u32 = 0;
+    #[allow(dead_code)]
     const METHOD_IN_DIRECT: u32 = 1;
+    #[allow(dead_code)]
     const METHOD_OUT_DIRECT: u32 = 2;
+    #[allow(dead_code)]
     const METHOD_NEITHER: u32 = 3;
     const FILE_ANY_ACCESS: u32 = 0;
+    #[allow(dead_code)]
     const FILE_READ_ACCESS: u32 = 1;
+    #[allow(dead_code)]
     const FILE_WRITE_ACCESS: u32 = 2;
 
     // PawnIO IOCTL codes
-    pub const IOCTL_READ_MSR: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_WRITE_MSR: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_READ_PORT_BYTE: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_WRITE_PORT_BYTE: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_READ_PORT_WORD: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_WRITE_PORT_WORD: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x806, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_READ_PORT_DWORD: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x807, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_WRITE_PORT_DWORD: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x808, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_READ_PHYSICAL_MEMORY: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x809, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_WRITE_PHYSICAL_MEMORY: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x80A, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_READ_MSR: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_WRITE_MSR: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_READ_PORT_BYTE: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_WRITE_PORT_BYTE: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_READ_PORT_WORD: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_WRITE_PORT_WORD: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x806, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_READ_PORT_DWORD: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x807, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_WRITE_PORT_DWORD: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x808, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_READ_PHYSICAL_MEMORY: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x809, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_WRITE_PHYSICAL_MEMORY: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x80A, METHOD_BUFFERED, FILE_ANY_ACCESS);
 
     // Enhanced IOCTL codes for PawnIO 0.2.1 features
-    pub const IOCTL_SMU_COMMAND: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x80B, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_SMU_READ_REGISTER: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x80C, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_SMU_WRITE_REGISTER: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x80D, METHOD_BUFFERED, FILE_ANY_ACCESS);
-    pub const IOCTL_ISA_BRIDGE_EC: u32 = ctl_code(FILE_DEVICE_UNKNOWN, 0x80E, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_SMU_COMMAND: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x80B, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_SMU_READ_REGISTER: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x80C, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_SMU_WRITE_REGISTER: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x80D, METHOD_BUFFERED, FILE_ANY_ACCESS);
+    pub const IOCTL_ISA_BRIDGE_EC: u32 =
+        ctl_code(FILE_DEVICE_UNKNOWN, 0x80E, METHOD_BUFFERED, FILE_ANY_ACCESS);
 
     // Pawn script interface IOCTL codes (corrected for PawnIO)
     // DEVICE_TYPE comes from LibreHardwareMonitor's C# implementation:
@@ -62,14 +83,14 @@ pub struct MsrRequest {
 
 /// MSR response structure
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct MsrResponse {
     pub value: u64,
 }
 
 /// Port I/O request structure
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct PortRequest {
     pub port: u16,
     pub value: u8,
@@ -86,7 +107,7 @@ pub struct SmuRequest {
 
 /// SMU response structure
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SmuResponse {
     pub result: u64,
     pub status: u32,
@@ -94,7 +115,7 @@ pub struct SmuResponse {
 
 /// SMU register request structure
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SmuRegisterRequest {
     pub address: u32,
     pub value: u32,
@@ -161,7 +182,8 @@ impl IoctlInterface {
         if device_handle == INVALID_HANDLE_VALUE {
             let error_code = unsafe { winapi::um::errhandlingapi::GetLastError() };
             return Err(DriverError::IoctlError(format!(
-                "Failed to open device {}: error {}", device_name, error_code
+                "Failed to open device {}: error {}",
+                device_name, error_code
             )));
         }
 
@@ -183,10 +205,8 @@ impl IoctlInterface {
             processor_number: processor,
         };
 
-        let response: MsrResponse = self.device_io_control_generic(
-            ioctl_codes::IOCTL_READ_MSR,
-            &request,
-        )?;
+        let response: MsrResponse =
+            self.device_io_control_generic(ioctl_codes::IOCTL_READ_MSR, &request)?;
 
         Ok(response.value)
     }
@@ -197,7 +217,12 @@ impl IoctlInterface {
     }
 
     /// Write MSR register on specific processor
-    pub fn write_msr_on_processor(&self, register: u32, value: u64, processor: u32) -> DriverResult<()> {
+    pub fn write_msr_on_processor(
+        &self,
+        register: u32,
+        value: u64,
+        processor: u32,
+    ) -> DriverResult<()> {
         #[repr(C)]
         struct MsrWriteRequest {
             register: u32,
@@ -217,10 +242,8 @@ impl IoctlInterface {
     /// Read I/O port byte
     pub fn read_port_byte(&self, port: u16) -> DriverResult<u8> {
         let request = PortRequest { port, value: 0 };
-        let response: PortRequest = self.device_io_control_generic(
-            ioctl_codes::IOCTL_READ_PORT_BYTE,
-            &request,
-        )?;
+        let response: PortRequest =
+            self.device_io_control_generic(ioctl_codes::IOCTL_READ_PORT_BYTE, &request)?;
         Ok(response.value)
     }
 
@@ -238,14 +261,13 @@ impl IoctlInterface {
             data,
         };
 
-        let response: SmuResponse = self.device_io_control_generic(
-            ioctl_codes::IOCTL_SMU_COMMAND,
-            &request,
-        )?;
+        let response: SmuResponse =
+            self.device_io_control_generic(ioctl_codes::IOCTL_SMU_COMMAND, &request)?;
 
         if response.status != 0 {
             return Err(DriverError::IoctlError(format!(
-                "SMU command failed with status: {}", response.status
+                "SMU command failed with status: {}",
+                response.status
             )));
         }
 
@@ -255,10 +277,8 @@ impl IoctlInterface {
     /// Read SMU register (PawnIO 0.2.1 feature)
     pub fn read_smu_register(&self, address: u32) -> DriverResult<u32> {
         let request = SmuRegisterRequest { address, value: 0 };
-        let response: SmuRegisterRequest = self.device_io_control_generic(
-            ioctl_codes::IOCTL_SMU_READ_REGISTER,
-            &request,
-        )?;
+        let response: SmuRegisterRequest =
+            self.device_io_control_generic(ioctl_codes::IOCTL_SMU_READ_REGISTER, &request)?;
         Ok(response.value)
     }
 
@@ -315,12 +335,20 @@ impl IoctlInterface {
     }
 
     /// Execute Pawn function
-    pub fn execute_pawn_function(&self, function_name: &str, parameters: &[u64]) -> DriverResult<Vec<u64>> {
+    pub fn execute_pawn_function(
+        &self,
+        function_name: &str,
+        parameters: &[u64],
+    ) -> DriverResult<Vec<u64>> {
         if function_name.len() >= 32 {
-            return Err(DriverError::IoctlError("Function name too long (max 31 chars)".to_string()));
+            return Err(DriverError::IoctlError(
+                "Function name too long (max 31 chars)".to_string(),
+            ));
         }
         if parameters.len() > 8 {
-            return Err(DriverError::IoctlError("Too many parameters (max 8)".to_string()));
+            return Err(DriverError::IoctlError(
+                "Too many parameters (max 8)".to_string(),
+            ));
         }
 
         // Build input buffer like LibreHardwareMonitor PawnIo.cs:
@@ -390,7 +418,8 @@ impl IoctlInterface {
         if result == 0 {
             let error_code = unsafe { winapi::um::errhandlingapi::GetLastError() };
             return Err(DriverError::IoctlError(format!(
-                "Read physical memory failed: error {}", error_code
+                "Read physical memory failed: error {}",
+                error_code
             )));
         }
 
@@ -399,7 +428,11 @@ impl IoctlInterface {
     }
 
     /// Generic device I/O control with input and output
-    fn device_io_control_generic<TInput, TOutput>(&self, ioctl_code: u32, input: &TInput) -> DriverResult<TOutput>
+    fn device_io_control_generic<TInput, TOutput>(
+        &self,
+        ioctl_code: u32,
+        input: &TInput,
+    ) -> DriverResult<TOutput>
     where
         TInput: Sized,
         TOutput: Sized + Default,
@@ -424,13 +457,16 @@ impl IoctlInterface {
             let error_code = unsafe { winapi::um::errhandlingapi::GetLastError() };
             return Err(match error_code {
                 1 => DriverError::NotSupported(format!(
-                    "DeviceIoControl not supported (code: 0x{:X}): error {}", ioctl_code, error_code
+                    "DeviceIoControl not supported (code: 0x{:X}): error {}",
+                    ioctl_code, error_code
                 )),
                 5 => DriverError::PermissionDenied(format!(
-                    "DeviceIoControl permission denied (code: 0x{:X}): error {}", ioctl_code, error_code
+                    "DeviceIoControl permission denied (code: 0x{:X}): error {}",
+                    ioctl_code, error_code
                 )),
                 _ => DriverError::IoctlError(format!(
-                    "DeviceIoControl failed (code: 0x{:X}): error {}", ioctl_code, error_code
+                    "DeviceIoControl failed (code: 0x{:X}): error {}",
+                    ioctl_code, error_code
                 )),
             });
         }
@@ -439,7 +475,11 @@ impl IoctlInterface {
     }
 
     /// Generic device I/O control with input only (no output)
-    fn device_io_control_no_output<TInput>(&self, ioctl_code: u32, input: &TInput) -> DriverResult<()>
+    fn device_io_control_no_output<TInput>(
+        &self,
+        ioctl_code: u32,
+        input: &TInput,
+    ) -> DriverResult<()>
     where
         TInput: Sized,
     {
@@ -462,13 +502,16 @@ impl IoctlInterface {
             let error_code = unsafe { winapi::um::errhandlingapi::GetLastError() };
             return Err(match error_code {
                 1 => DriverError::NotSupported(format!(
-                    "DeviceIoControl not supported (code: 0x{:X}): error {}", ioctl_code, error_code
+                    "DeviceIoControl not supported (code: 0x{:X}): error {}",
+                    ioctl_code, error_code
                 )),
                 5 => DriverError::PermissionDenied(format!(
-                    "DeviceIoControl permission denied (code: 0x{:X}): error {}", ioctl_code, error_code
+                    "DeviceIoControl permission denied (code: 0x{:X}): error {}",
+                    ioctl_code, error_code
                 )),
                 _ => DriverError::IoctlError(format!(
-                    "DeviceIoControl failed (code: 0x{:X}): error {}", ioctl_code, error_code
+                    "DeviceIoControl failed (code: 0x{:X}): error {}",
+                    ioctl_code, error_code
                 )),
             });
         }
@@ -477,7 +520,12 @@ impl IoctlInterface {
     }
 
     /// DeviceIoControl for byte buffers
-    pub fn device_io_control_bytes(&self, ioctl_code: u32, input: &[u8], output: &mut [u8]) -> DriverResult<usize> {
+    pub fn device_io_control_bytes(
+        &self,
+        ioctl_code: u32,
+        input: &[u8],
+        output: &mut [u8],
+    ) -> DriverResult<usize> {
         let mut bytes_returned = 0;
         let result = unsafe {
             DeviceIoControl(
@@ -496,13 +544,16 @@ impl IoctlInterface {
             let error = unsafe { winapi::um::errhandlingapi::GetLastError() };
             return Err(match error {
                 1 => DriverError::NotSupported(format!(
-                    "DeviceIoControl not supported (code: 0x{:X}): error {}", ioctl_code, error
+                    "DeviceIoControl not supported (code: 0x{:X}): error {}",
+                    ioctl_code, error
                 )),
                 5 => DriverError::PermissionDenied(format!(
-                    "DeviceIoControl permission denied (code: 0x{:X}): error {}", ioctl_code, error
+                    "DeviceIoControl permission denied (code: 0x{:X}): error {}",
+                    ioctl_code, error
                 )),
                 _ => DriverError::IoctlError(format!(
-                    "DeviceIoControl failed (code: 0x{:X}): error {}", ioctl_code, error
+                    "DeviceIoControl failed (code: 0x{:X}): error {}",
+                    ioctl_code, error
                 )),
             });
         }
@@ -522,31 +573,6 @@ impl Drop for IoctlInterface {
     }
 }
 
-// Implement Default for response structures
-impl Default for MsrResponse {
-    fn default() -> Self {
-        Self { value: 0 }
-    }
-}
-
-impl Default for SmuResponse {
-    fn default() -> Self {
-        Self { result: 0, status: 0 }
-    }
-}
-
-impl Default for SmuRegisterRequest {
-    fn default() -> Self {
-        Self { address: 0, value: 0 }
-    }
-}
-
-impl Default for PortRequest {
-    fn default() -> Self {
-        Self { port: 0, value: 0 }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -560,21 +586,18 @@ mod tests {
 
     #[test]
     fn test_request_structures() {
-        let msr_req = MsrRequest { register: 0xC0010299, processor_number: 0 };
+        let msr_req = MsrRequest {
+            register: 0xC0010299,
+            processor_number: 0,
+        };
         assert_eq!(msr_req.register, 0xC0010299);
 
-        let smu_req = SmuRequest { command: 1, address: 0x1000, data: 0x12345678 };
+        let smu_req = SmuRequest {
+            command: 1,
+            address: 0x1000,
+            data: 0x12345678,
+        };
         assert_eq!(smu_req.command, 1);
         assert_eq!(smu_req.data, 0x12345678);
     }
 }
-
-
-
-
-
-
-
-
-
-

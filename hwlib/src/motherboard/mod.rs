@@ -10,9 +10,16 @@
 // pub use motherboard::Motherboard;
 // pub use config::MotherboardConfig;
 
-/// Motherboard module placeholder - will be implemented as part of the roadmap
+/// 主板模块占位符 - 将作为路线图的一部分实现
 pub struct MotherboardGroup {
+    #[allow(dead_code)]
     motherboards: Vec<Box<dyn crate::core::Hardware>>,
+}
+
+impl Default for MotherboardGroup {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MotherboardGroup {
@@ -22,16 +29,12 @@ impl MotherboardGroup {
         }
     }
 
+    /// 检测系统中的主板。
+    ///
+    /// 主板检测将在第 4 阶段实现。
     pub fn detect_motherboards(&mut self) -> crate::core::HardwareResult<()> {
         // Motherboard detection will be implemented in stage 4
         tracing::info!("Motherboard detection not yet implemented");
         Ok(())
     }
 }
-
-
-
-
-
-
-

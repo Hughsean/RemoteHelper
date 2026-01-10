@@ -1,4 +1,4 @@
-use crate::core::{Hardware, HardwareResult, HardwareType, Identifier};
+use crate::core::{Hardware, HardwareResult};
 use crate::cpu::amd::AmdCpu;
 
 /// CPU information structure
@@ -54,14 +54,3 @@ impl CpuDetection {
         })
     }
 }
-
-
-
-
-
-
-
-
-
-
-

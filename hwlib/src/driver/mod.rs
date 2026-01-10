@@ -1,20 +1,56 @@
+//! Windows 内核驱动接口模块。
+//!
+//! 为 PawnIO 内核驱动提供安全的 Rust 接口以实现低级硬件访问。
+//!
+//! ## 功能特性
+//!
+//! - 驱动服务管理（安装/启动/停止）
+//! - 与内核驱动的 IOCTL 通信
+//! - MSR（模型特定寄存器）读写
+//! - I/O 端口访问
+//! - AMD CPU 的 SMU（系统管理单元）命令
+//! - Pawn 脚本模块加载和执行
+//!
+//! ## 安全
+//!
+//! 所有操作都需要管理员权限。驱动通过 RAII 模式自动
+//! 提取、加载和清理。
+
 use std::sync::{Arc, Mutex};
 pub mod driver_resource;
-pub mod service_manager;
-pub mod ioctl;
 pub mod error;
+pub mod ioctl;
 pub mod pawn_module;
+pub mod service_manager;
 
 use tracing;
 
 // Re-export main types
 pub use driver_resource::DriverResource;
-pub use service_manager::DriverService;
-pub use ioctl::{IoctlInterface, MsrRequest, PortRequest, SmuRequest};
 pub use error::{DriverError, DriverResult};
+pub use ioctl::{IoctlInterface, MsrRequest, PortRequest, SmuRequest};
 pub use pawn_module::PawnModuleManager;
+pub use service_manager::DriverService;
 
-/// PawnIO driver interface
+/// PawnIO 内核驱动接口。
+///
+/// 管理 PawnIO 内核驱动的生命周期，并提供
+/// 低级硬件访问的方法。
+///
+/// # 示例
+///
+/// ```no_run
+/// use hwlib::driver::PawnIoDriver;
+///
+/// let mut driver = PawnIoDriver::new()?;
+/// driver.start()?;
+///
+/// // 读取 MSR 寄存器
+/// let value = driver.read_msr(0xC0011020)?;
+///
+/// // 清理在 drop 时自动进行
+/// # Ok::<(), hwlib::driver::DriverError>(())
+/// ```
 pub struct PawnIoDriver {
     resource: DriverResource,
     service: Option<DriverService>,
@@ -53,7 +89,10 @@ impl PawnIoDriver {
 
         // Initialize Pawn module manager with path to modules
         let modules_path = "PawnIO"; // Relative to current directory
-        let pawn_manager = Arc::new(Mutex::new(PawnModuleManager::new(ioctl.clone(), modules_path)));
+        let pawn_manager = Arc::new(Mutex::new(PawnModuleManager::new(
+            ioctl.clone(),
+            modules_path,
+        )));
 
         self.service = Some(service);
         self.ioctl = Some(ioctl);
@@ -87,16 +126,16 @@ impl PawnIoDriver {
 
     /// Get IOCTL interface reference
     pub fn ioctl(&self) -> DriverResult<&IoctlInterface> {
-        self.ioctl.as_ref().ok_or_else(|| {
-            DriverError::NotInitialized("Driver not started".to_string())
-        })
+        self.ioctl
+            .as_ref()
+            .ok_or_else(|| DriverError::NotInitialized("Driver not started".to_string()))
     }
 
     /// Get Pawn module manager reference
     pub fn pawn_manager(&self) -> DriverResult<&Arc<Mutex<PawnModuleManager>>> {
-        self.pawn_manager.as_ref().ok_or_else(|| {
-            DriverError::NotInitialized("Driver not started".to_string())
-        })
+        self.pawn_manager
+            .as_ref()
+            .ok_or_else(|| DriverError::NotInitialized("Driver not started".to_string()))
     }
 
     /// Read MSR register
@@ -158,7 +197,10 @@ pub fn init_driver() -> DriverResult<()> {
             Ok(ioctl) => {
                 // Create Pawn module manager for official driver
                 let modules_path = "PawnIO";
-                let pawn_manager = Arc::new(Mutex::new(PawnModuleManager::new(ioctl.clone(), modules_path)));
+                let pawn_manager = Arc::new(Mutex::new(PawnModuleManager::new(
+                    ioctl.clone(),
+                    modules_path,
+                )));
 
                 // Capability probe: many installed "PawnIO" devices don't implement the Pawn script IOCTLs.
                 // If the script interface is not supported, fall back to the embedded driver.
@@ -182,7 +224,9 @@ pub fn init_driver() -> DriverResult<()> {
                     };
 
                     DEFAULT_DRIVER.set(driver).map_err(|_| {
-                        DriverError::InitializationFailed("Failed to set default driver".to_string())
+                        DriverError::InitializationFailed(
+                            "Failed to set default driver".to_string(),
+                        )
                     })?;
 
                     tracing::info!("Successfully connected to official PawnIO driver");
@@ -190,7 +234,10 @@ pub fn init_driver() -> DriverResult<()> {
                 }
             }
             Err(e) => {
-                tracing::warn!("Official PawnIO driver is running but connection failed: {}", e);
+                tracing::warn!(
+                    "Official PawnIO driver is running but connection failed: {}",
+                    e
+                );
                 tracing::info!("Falling back to embedded driver...");
             }
         }
@@ -199,37 +246,41 @@ pub fn init_driver() -> DriverResult<()> {
     }
 
     // Fallback: use embedded driver
-    DEFAULT_DRIVER.get_or_init(|| {
-        match PawnIoDriver::new() {
-            Ok(mut driver) => {
-                if let Err(e) = driver.start() {
-                    tracing::error!("Failed to start embedded driver: {}", e);
-                    PawnIoDriver {
-                        resource: DriverResource::new().unwrap(),
-                        service: None,
-                        ioctl: None,
-                        pawn_manager: None,
-                    }
-                } else {
-                    driver
-                }
-            }
-            Err(e) => {
-                tracing::error!("Failed to create embedded driver: {}", e);
+    DEFAULT_DRIVER.get_or_init(|| match PawnIoDriver::new() {
+        Ok(mut driver) => {
+            if let Err(e) = driver.start() {
+                tracing::error!("Failed to start embedded driver: {}", e);
                 PawnIoDriver {
                     resource: DriverResource::new().unwrap(),
                     service: None,
                     ioctl: None,
                     pawn_manager: None,
                 }
+            } else {
+                driver
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to create embedded driver: {}", e);
+            PawnIoDriver {
+                resource: DriverResource::new().unwrap(),
+                service: None,
+                ioctl: None,
+                pawn_manager: None,
             }
         }
     });
 
-    if DEFAULT_DRIVER.get().and_then(|d| d.ioctl.as_ref()).is_some() {
+    if DEFAULT_DRIVER
+        .get()
+        .and_then(|d| d.ioctl.as_ref())
+        .is_some()
+    {
         Ok(())
     } else {
-        Err(DriverError::InitializationFailed("Driver initialization failed".to_string()))
+        Err(DriverError::InitializationFailed(
+            "Driver initialization failed".to_string(),
+        ))
     }
 }
 
@@ -238,17 +289,13 @@ pub fn check_official_pawnio() -> bool {
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStrExt;
     use winapi::um::winsvc::{
-        CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatus,
-        SC_MANAGER_CONNECT, SERVICE_QUERY_STATUS,
+        CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatus, SC_MANAGER_CONNECT,
+        SERVICE_QUERY_STATUS,
     };
 
     unsafe {
         // Open Service Control Manager
-        let scm_handle = OpenSCManagerW(
-            std::ptr::null(),
-            std::ptr::null(),
-            SC_MANAGER_CONNECT,
-        );
+        let scm_handle = OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT);
 
         if scm_handle.is_null() {
             tracing::debug!("Failed to open Service Control Manager");
@@ -261,11 +308,7 @@ pub fn check_official_pawnio() -> bool {
             .chain(std::iter::once(0))
             .collect();
 
-        let service_handle = OpenServiceW(
-            scm_handle,
-            service_name.as_ptr(),
-            SERVICE_QUERY_STATUS,
-        );
+        let service_handle = OpenServiceW(scm_handle, service_name.as_ptr(), SERVICE_QUERY_STATUS);
 
         if service_handle.is_null() {
             tracing::debug!("PawnIO service not found");
@@ -277,9 +320,14 @@ pub fn check_official_pawnio() -> bool {
         let mut status = std::mem::zeroed();
         let result = QueryServiceStatus(service_handle, &mut status);
 
-        let is_running = result != 0 && status.dwCurrentState == winapi::um::winsvc::SERVICE_RUNNING;
+        let is_running =
+            result != 0 && status.dwCurrentState == winapi::um::winsvc::SERVICE_RUNNING;
 
-        tracing::debug!("PawnIO service query result: {}, state: {}", result, status.dwCurrentState);
+        tracing::debug!(
+            "PawnIO service query result: {}, state: {}",
+            result,
+            status.dwCurrentState
+        );
 
         CloseServiceHandle(service_handle);
         CloseServiceHandle(scm_handle);
@@ -307,9 +355,9 @@ pub fn connect_official_pawnio() -> DriverResult<IoctlInterface> {
 
 /// Get default driver instance
 pub fn get_driver() -> DriverResult<&'static PawnIoDriver> {
-    DEFAULT_DRIVER.get().ok_or_else(|| {
-        DriverError::NotInitialized("Driver not initialized".to_string())
-    })
+    DEFAULT_DRIVER
+        .get()
+        .ok_or_else(|| DriverError::NotInitialized("Driver not initialized".to_string()))
 }
 
 /// Convenience functions for Pawn module operations
@@ -322,17 +370,29 @@ pub mod pawn {
     }
 
     /// Read SMU register using RyzenSMU module
-    pub fn read_smu_register(pawn_manager: &mut PawnModuleManager, address: u32) -> DriverResult<u32> {
+    pub fn read_smu_register(
+        pawn_manager: &mut PawnModuleManager,
+        address: u32,
+    ) -> DriverResult<u32> {
         pawn_manager.read_smu_register(address)
     }
 
     /// Write SMU register using RyzenSMU module
-    pub fn write_smu_register(pawn_manager: &mut PawnModuleManager, address: u32, value: u32) -> DriverResult<()> {
+    pub fn write_smu_register(
+        pawn_manager: &mut PawnModuleManager,
+        address: u32,
+        value: u32,
+    ) -> DriverResult<()> {
         pawn_manager.write_smu_register(address, value)
     }
 
     /// Send SMU command using RyzenSMU module
-    pub fn send_smu_command(pawn_manager: &mut PawnModuleManager, command: u32, address: u32, data: u32) -> DriverResult<u32> {
+    pub fn send_smu_command(
+        pawn_manager: &mut PawnModuleManager,
+        command: u32,
+        address: u32,
+        data: u32,
+    ) -> DriverResult<u32> {
         pawn_manager.send_smu_command(command, address, data)
     }
 
@@ -342,18 +402,11 @@ pub mod pawn {
     }
 
     /// Write I/O port byte using LpcIO module
-    pub fn write_port_byte(pawn_manager: &mut PawnModuleManager, port: u16, value: u8) -> DriverResult<()> {
+    pub fn write_port_byte(
+        pawn_manager: &mut PawnModuleManager,
+        port: u16,
+        value: u8,
+    ) -> DriverResult<()> {
         pawn_manager.write_port_byte(port, value)
     }
 }
-
-
-
-
-
-
-
-
-
-
-

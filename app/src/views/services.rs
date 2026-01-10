@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
-use common::{Request, Response, ServiceAction};
 use crate::components::AddServiceDialog;
+use common::{Request, Response, ServiceAction};
+use dioxus::prelude::*;
 
 const SERVICES_CSS: Asset = asset!("/assets/styling/services.css");
 
@@ -39,7 +39,8 @@ pub fn Services() -> Element {
                 action: action.clone(),
                 user_name: None,
                 user_password: None,
-            }).await;
+            })
+            .await;
 
             match result {
                 Ok(Response::Ok) => {

@@ -1,7 +1,7 @@
-use dioxus::prelude::*;
 use crate::components::card::*;
 use crate::components::progress::*;
 use crate::components::separator::*;
+use dioxus::prelude::*;
 
 const METRIC_CARD_CSS: Asset = asset!("/assets/components/metric_card/style.css");
 

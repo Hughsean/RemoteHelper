@@ -1,6 +1,6 @@
-use crate::core::{Sensor, SensorType, SensorValue, Identifier, Control, Parameter};
-use std::time::Duration;
+use crate::core::{Control, Identifier, Parameter, Sensor, SensorType, SensorValue};
 use std::collections::VecDeque;
+use std::time::Duration;
 
 /// Temperature sensor for CPU
 #[derive(Clone)]
@@ -56,11 +56,17 @@ impl Sensor for TemperatureSensor {
     }
 
     fn min_value(&self) -> Option<f32> {
-        self.values.iter().map(|v| v.value).min_by(|a, b| a.partial_cmp(b).unwrap())
+        self.values
+            .iter()
+            .map(|v| v.value)
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
     }
 
     fn max_value(&self) -> Option<f32> {
-        self.values.iter().map(|v| v.value).max_by(|a, b| a.partial_cmp(b).unwrap())
+        self.values
+            .iter()
+            .map(|v| v.value)
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
     }
 
     fn value(&self) -> Option<f32> {
@@ -160,11 +166,17 @@ impl Sensor for VoltageSensor {
     }
 
     fn min_value(&self) -> Option<f32> {
-        self.values.iter().map(|v| v.value).min_by(|a, b| a.partial_cmp(b).unwrap())
+        self.values
+            .iter()
+            .map(|v| v.value)
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
     }
 
     fn max_value(&self) -> Option<f32> {
-        self.values.iter().map(|v| v.value).max_by(|a, b| a.partial_cmp(b).unwrap())
+        self.values
+            .iter()
+            .map(|v| v.value)
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
     }
 
     fn value(&self) -> Option<f32> {
@@ -264,11 +276,17 @@ impl Sensor for PowerSensor {
     }
 
     fn min_value(&self) -> Option<f32> {
-        self.values.iter().map(|v| v.value).min_by(|a, b| a.partial_cmp(b).unwrap())
+        self.values
+            .iter()
+            .map(|v| v.value)
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
     }
 
     fn max_value(&self) -> Option<f32> {
-        self.values.iter().map(|v| v.value).max_by(|a, b| a.partial_cmp(b).unwrap())
+        self.values
+            .iter()
+            .map(|v| v.value)
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
     }
 
     fn value(&self) -> Option<f32> {
@@ -313,14 +331,3 @@ impl Sensor for PowerSensor {
         self
     }
 }
-
-
-
-
-
-
-
-
-
-
-

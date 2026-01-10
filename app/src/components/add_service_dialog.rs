@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
 use common::{PathItem, Request, Response};
 use dioxus::document::eval;
+use dioxus::prelude::*;
 
 const DIALOG_CSS: Asset = asset!("/assets/styling/add_service_dialog.css");
 
@@ -78,10 +78,7 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
         is_submitting.set(true);
         let desc = description().clone();
         let path = exe_path().clone();
-        let args_vec: Vec<String> = args()
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect();
+        let args_vec: Vec<String> = args().split_whitespace().map(|s| s.to_string()).collect();
         let run_user = run_as_user();
 
         spawn(async move {

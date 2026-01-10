@@ -1,7 +1,7 @@
+use crate::driver::error::{DriverError, DriverResult};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
-use crate::driver::error::{DriverError, DriverResult};
 
 use tracing;
 
@@ -81,7 +81,12 @@ impl DriverResource {
     }
 
     /// Generic binary extraction with hash verification
-    fn extract_binary(&mut self, filename: &str, data: &[u8], expected_hash: &str) -> DriverResult<PathBuf> {
+    fn extract_binary(
+        &mut self,
+        filename: &str,
+        data: &[u8],
+        expected_hash: &str,
+    ) -> DriverResult<PathBuf> {
         // Verify hash of embedded data
         let mut hasher = Sha256::new();
         hasher.update(data);
@@ -118,10 +123,10 @@ impl DriverResource {
         self.extracted_paths.clear();
 
         // Remove temp directory if empty
-        if self.temp_dir.exists() {
-            if let Err(e) = fs::remove_dir(&self.temp_dir) {
-                tracing::debug!("Failed to remove temp directory (may not be empty): {}", e);
-            }
+        if self.temp_dir.exists()
+            && let Err(e) = fs::remove_dir(&self.temp_dir)
+        {
+            tracing::debug!("Failed to remove temp directory (may not be empty): {}", e);
         }
 
         Ok(())
@@ -145,11 +150,15 @@ const AMD_FAMILY_17_BIN: &[u8] = include_bytes!("../../../PawnIO/AMDFamily17.bin
 const AMD_FAMILY_17_HASH: &str = "374d4bc3e88284d08f2c65e292df5340c6a034affc30b614db6e780d7094d117";
 
 // AMD Family 0F driver (legacy)
+#[allow(dead_code)]
 const AMD_FAMILY_0F_BIN: &[u8] = include_bytes!("../../../PawnIO/AMDFamily0F.bin");
+#[allow(dead_code)]
 const AMD_FAMILY_0F_HASH: &str = "1788550c02100ad6bbc91604399ed6e055058ea0f6c0c828c02d9b01a09ad27f";
 
 // AMD Family 10h driver (legacy)
+#[allow(dead_code)]
 const AMD_FAMILY_10_BIN: &[u8] = include_bytes!("../../../PawnIO/AMDFamily10.bin");
+#[allow(dead_code)]
 const AMD_FAMILY_10_HASH: &str = "79be1396621aa44eb149c5dc6d1bab4519b9cfa49a32af5e022cb9f9ca887658";
 
 // Ryzen SMU driver (enhanced in 0.2.1)
@@ -214,16 +223,9 @@ mod tests {
         let hash = format!("{:x}", hasher.finalize());
 
         // Known SHA256 of "hello world"
-        assert_eq!(hash, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+        assert_eq!(
+            hash,
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
     }
 }
-
-
-
-
-
-
-
-
-
-

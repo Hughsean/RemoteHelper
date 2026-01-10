@@ -1,8 +1,7 @@
-use hwlib::cpu::CpuGroup;
-use hwlib::motherboard::MotherboardGroup;
 use anyhow::Result;
 use clap::Parser;
-use tracing_subscriber;
+use hwlib::cpu::CpuGroup;
+use hwlib::motherboard::MotherboardGroup;
 use tracing::{info, warn};
 
 #[derive(Parser)]
@@ -111,7 +110,7 @@ async fn main() -> Result<()> {
 
     // Initialize hardware groups
     let mut cpu_group = CpuGroup::new();
-    let motherboard_group = MotherboardGroup::new();
+    let _motherboard_group = MotherboardGroup::new();
 
     // Detect CPUs
     if let Err(e) = cpu_group.detect_cpus() {
@@ -119,10 +118,10 @@ async fn main() -> Result<()> {
     }
 
     // Set pawn manager if driver is available
-    if let Some(driver) = driver_opt {
-        if let Ok(pm) = driver.pawn_manager() {
-            cpu_group.set_pawn_manager(pm.clone());
-        }
+    if let Some(driver) = driver_opt
+        && let Ok(pm) = driver.pawn_manager()
+    {
+        cpu_group.set_pawn_manager(pm.clone());
     }
 
     info!("Hardware groups initialized");

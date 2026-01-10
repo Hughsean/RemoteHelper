@@ -72,7 +72,11 @@ impl Identifier {
 
 impl fmt::Display for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}#{}/{}", self.hardware_type, self.instance, self.name)
+        write!(
+            f,
+            "{:?}#{}/{}",
+            self.hardware_type, self.instance, self.name
+        )
     }
 }
 
@@ -111,9 +115,8 @@ impl SensorValues {
 
     pub fn add_value(&mut self, value: SensorValue) {
         let now = std::time::SystemTime::now();
-        self.values.retain(|v| {
-            now.duration_since(v.timestamp).unwrap_or_default() < self.time_window
-        });
+        self.values
+            .retain(|v| now.duration_since(v.timestamp).unwrap_or_default() < self.time_window);
         self.values.push(value);
     }
 
@@ -133,9 +136,8 @@ impl SensorValues {
         self.time_window = time_window;
         // Clean up old values
         let now = std::time::SystemTime::now();
-        self.values.retain(|v| {
-            now.duration_since(v.timestamp).unwrap_or_default() < self.time_window
-        });
+        self.values
+            .retain(|v| now.duration_since(v.timestamp).unwrap_or_default() < self.time_window);
     }
 }
 
@@ -286,10 +288,3 @@ pub type HardwareResult<T> = Result<T, HardwareError>;
 pub type ComputerResult<T> = Result<T, ComputerError>;
 pub type ControlResult<T> = Result<T, ControlError>;
 pub type ParameterResult<T> = Result<T, ParameterError>;
-
-
-
-
-
-
-
