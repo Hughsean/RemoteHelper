@@ -63,7 +63,11 @@ async fn main() -> Result<()> {
     } else {
         tracing_subscriber::EnvFilter::from("info")
     };
-    tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_file(true)
+        .with_line_number(true)
+        .init();
 
     info!("Starting LibreHardwareMonitor CLI");
 

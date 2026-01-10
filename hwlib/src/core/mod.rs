@@ -1,9 +1,17 @@
+/// 硬件监控核心模块
+///
+/// 本模块定义了硬件监控系统的核心类型和接口，包括：
+/// - 硬件类型和传感器类型的枚举
+/// - 标识符、传感器值等数据结构
+/// - 传感器、硬件、计算机等 trait
+/// - 各种操作错误类型
+
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt;
 use thiserror::Error;
 
-/// Hardware types enumeration
+/// 硬件类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HardwareType {
     CPU,
@@ -18,7 +26,7 @@ pub enum HardwareType {
     Controller,
 }
 
-/// Sensor types enumeration
+/// 传感器类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SensorType {
     Voltage,      // V
@@ -44,7 +52,7 @@ pub enum SensorType {
     Humidity,     // %
 }
 
-/// Control modes enumeration
+/// 控制模式枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ControlMode {
     Undefined,
@@ -52,7 +60,7 @@ pub enum ControlMode {
     Default,
 }
 
-/// Hardware identifier
+/// 硬件标识符
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Identifier {
     pub hardware_type: HardwareType,
@@ -80,7 +88,7 @@ impl fmt::Display for Identifier {
     }
 }
 
-/// Sensor value with unit and timestamp
+/// 带单位和时间戳的传感器值
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SensorValue {
     pub value: f32,
@@ -98,7 +106,7 @@ impl SensorValue {
     }
 }
 
-/// Sensor values collection with time window
+/// 带时间窗口的传感器值集合
 #[derive(Debug, Clone)]
 pub struct SensorValues {
     values: Vec<SensorValue>,
@@ -141,7 +149,7 @@ impl SensorValues {
     }
 }
 
-/// Sensor trait defining basic sensor interface
+/// 传感器 trait，定义基本的传感器接口
 pub trait Sensor {
     fn identifier(&self) -> &Identifier;
     fn sensor_type(&self) -> SensorType;
@@ -165,7 +173,7 @@ pub trait Sensor {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
-/// Control trait defining sensor control interface
+/// 控制 trait，定义传感器控制接口
 pub trait Control {
     fn identifier(&self) -> &Identifier;
     fn control_mode(&self) -> ControlMode;
@@ -177,7 +185,7 @@ pub trait Control {
     fn set_software(&mut self, value: f32) -> Result<(), ControlError>;
 }
 
-/// Parameter trait defining sensor parameter interface
+/// 参数 trait，定义传感器参数接口
 pub trait Parameter {
     fn identifier(&self) -> &Identifier;
     fn name(&self) -> &str;
@@ -190,7 +198,7 @@ pub trait Parameter {
     fn sensor(&self) -> &dyn Sensor;
 }
 
-/// Hardware trait defining basic hardware interface
+/// 硬件 trait，定义基本的硬件接口
 pub trait Hardware {
     fn identifier(&self) -> &Identifier;
     fn hardware_type(&self) -> HardwareType;
@@ -205,17 +213,17 @@ pub trait Hardware {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
-/// Computer trait defining the main interface
+/// 计算机 trait，定义主接口
 pub trait Computer {
     fn hardware(&self) -> &[Box<dyn Hardware>];
     fn update(&mut self) -> Result<(), ComputerError>;
     fn close(&mut self);
 }
 
-/// Sensor event handler type
+/// 传感器事件处理器类型
 pub type SensorEventHandler = Box<dyn Fn(&dyn Sensor) + Send + Sync>;
 
-/// Hardware with event handling capabilities
+/// 具有事件处理能力的硬件
 pub trait HardwareEvents {
     fn on_sensor_added(&mut self, handler: SensorEventHandler);
     fn on_sensor_removed(&mut self, handler: SensorEventHandler);
@@ -223,7 +231,7 @@ pub trait HardwareEvents {
     fn trigger_sensor_removed(&self, sensor: &dyn Sensor);
 }
 
-/// Sensor operation errors
+/// 传感器操作错误
 #[derive(Error, Debug)]
 pub enum SensorError {
     #[error("Hardware access denied: {0}")]
@@ -236,7 +244,7 @@ pub enum SensorError {
     Timeout(String),
 }
 
-/// Hardware operation errors
+/// 硬件操作错误
 #[derive(Error, Debug)]
 pub enum HardwareError {
     #[error("Driver initialization failed: {0}")]
@@ -249,7 +257,7 @@ pub enum HardwareError {
     CommunicationError(String),
 }
 
-/// Computer operation errors
+/// 计算机操作错误
 #[derive(Error, Debug)]
 pub enum ComputerError {
     #[error("Hardware error: {0}")]
@@ -260,7 +268,7 @@ pub enum ComputerError {
     PermissionDenied(String),
 }
 
-/// Control operation errors
+/// 控制操作错误
 #[derive(Error, Debug)]
 pub enum ControlError {
     #[error("Control not supported: {0}")]
@@ -271,7 +279,7 @@ pub enum ControlError {
     AccessDenied(String),
 }
 
-/// Parameter operation errors
+/// 参数操作错误
 #[derive(Error, Debug)]
 pub enum ParameterError {
     #[error("Parameter not supported: {0}")]
@@ -282,7 +290,7 @@ pub enum ParameterError {
     AccessDenied(String),
 }
 
-/// Result types for convenience
+/// 便捷的结果类型
 pub type SensorResult<T> = Result<T, SensorError>;
 pub type HardwareResult<T> = Result<T, HardwareError>;
 pub type ComputerResult<T> = Result<T, ComputerError>;
