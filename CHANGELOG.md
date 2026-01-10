@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 凭据加密存储机制
 - **UI/UX 全面升级**:
   - 新增登录视图 (`views/login.rs`)
-  - 新增仪表板视图 (`views/dashboard.rs`)
+  - 新增仪表板视图 (`views/home.rs`)
   - 重构应用状态管理系统 (`state/auth.rs`, `state/services.rs`, `state/system.rs`)
   - 新增顶部导航栏组件 (`components/header.rs`)
   - 新增服务添加模态框 (`components/add_service_modal.rs`)
@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 技术细节
 
-- 路由系统：支持 `/login` 和 `/dashboard` 视图
+- 路由系统：支持 `/login` 和 `/home` 视图
 - 状态管理：分离认证、服务和系统状态
 - 组件化：模块化的 UI 组件设计
 - 样式：CSS 模块化，提升可维护性

@@ -5,7 +5,7 @@ mod metric_card;
 pub use metric_card::{MetricCard, MetricCardData, MetricItem};
 
 mod trend_chart;
-pub use trend_chart::{TrendChart, TrendChartData, DataPoint, DataSeries};
+pub use trend_chart::{TrendChart, TrendChartData, DataPoint, DataSeries, TimeWindow};
 
 mod add_service_dialog;
 pub use add_service_dialog::AddServiceDialog;

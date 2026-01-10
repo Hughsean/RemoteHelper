@@ -1,4 +1,4 @@
-.dashboard-container {
+.home-container {
     min-height: 100vh;
     height: 100vh;
     overflow-y: auto;
@@ -8,7 +8,7 @@
     user-select: none;
 }
 
-.dashboard-title {
+.home-title {
     font-size: 32px;
     font-weight: 700;
     color: #ffffff;
@@ -21,7 +21,7 @@
 }
 
 /* Header bar styles */
-.dashboard-header {
+.home-header {
     position: fixed;
     top: 0;
     left: 0;
@@ -118,7 +118,7 @@
     margin: 10px auto 0 auto;
 }
 
-.dashboard-footer {
+.home-footer {
     margin-top: 60px;
     padding: 20px;
     text-align: center;
@@ -126,7 +126,7 @@
     font-size: 14px;
 }
 
-.dashboard-footer p {
+.home-footer p {
     margin: 0;
 }
 
@@ -138,17 +138,17 @@
 
 /* 响应式调整 */
 @media (max-width: 768px) {
-    .dashboard-container {
+    .home-container {
         padding: 20px;
     }
 
-    .dashboard-title {
+    .home-title {
         font-size: 24px;
         margin-bottom: 24px;
     }
 
     /* Header bar responsive */
-    .dashboard-header {
+    .home-header {
         flex-direction: column;
         gap: 20px;
         align-items: stretch;

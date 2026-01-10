@@ -1,16 +1,16 @@
 use crate::components::{
     DataSeries, MetricCard, MetricCardData, MetricItem, Select, SelectList, SelectOption,
-    SelectTrigger, SelectValue, TrendChart, TrendChartData,
+    SelectTrigger, SelectValue, TimeWindow, TrendChart, TrendChartData,
 };
 use dioxus::prelude::*;
 use crate::views::{Services, Test};
 
-const DASHBOARD_CSS: Asset = asset!("/assets/styling/home.css");
+const HOME_CSS: Asset = asset!("/assets/styling/home.css");
 
 /// 页面视图选项
 #[derive(Clone, PartialEq, Debug)]
 enum PageView {
-    Dashboard,
+    Home,
     Services,
     Test,
 }
@@ -18,7 +18,7 @@ enum PageView {
 impl PageView {
     fn to_display(&self) -> &'static str {
         match self {
-            PageView::Dashboard => "仪表板",
+            PageView::Home => "仪表板",
             PageView::Services => "服务管理",
             PageView::Test => "测试页面",
         }
@@ -57,7 +57,7 @@ impl UpdateInterval {
 #[component]
 pub fn Home() -> Element {
     // 当前页面视图状态
-    let mut current_view = use_signal(|| PageView::Dashboard);
+    let mut current_view = use_signal(|| PageView::Home);
 
     // 更新间隔状态
     let mut update_interval = use_signal(|| UpdateInterval::OneSecond);
@@ -126,7 +126,7 @@ pub fn Home() -> Element {
                 visible: true,
             },
         ],
-        max_points: 60,
+        time_window: TimeWindow::Minute5,
     });
 
     // 实时数据更新
@@ -256,22 +256,22 @@ pub fn Home() -> Element {
     });
 
     rsx! {
-        document::Link { rel: "stylesheet", href: DASHBOARD_CSS }
+        document::Link { rel: "stylesheet", href: HOME_CSS }
 
-        div { class: "dashboard-container",
+        div { class: "home-container",
             // Header bar with update interval control
-            div { class: "dashboard-header",
+            div { class: "home-header",
                 div { class: "title-section",
-                    h1 { class: "dashboard-title", "系统监控仪表板" }
+                    h1 { class: "home-title", "系统监控仪表板" }
                     p { class: "powered-by", "Powered by Hughsean" }
                 }
 
                 div { class: "header-navigation",
                     button {
                         class: "nav-button",
-                        class: if *current_view.read() == PageView::Dashboard { "nav-button active" } else { "nav-button" },
+                        class: if *current_view.read() == PageView::Home { "nav-button active" } else { "nav-button" },
                         onclick: move |_| {
-                            current_view.set(PageView::Dashboard);
+                            current_view.set(PageView::Home);
                         },
                         "仪表板"
                     }
@@ -339,7 +339,7 @@ pub fn Home() -> Element {
 
             // 根据当前视图显示不同内容
             match current_view() {
-                PageView::Dashboard => rsx! {
+                PageView::Home => rsx! {
                     div { class: "metrics-grid",
                         MetricCard { data: cpu_data }
                         MetricCard { data: gpu_data }
@@ -351,7 +351,7 @@ pub fn Home() -> Element {
                         TrendChart { data: system_trend }
                     }
 
-                    div { class: "dashboard-footer",
+                    div { class: "home-footer",
                         p { "💡 实时数据自动更新 • 当前间隔: {update_interval().to_display()}" }
                         p { class: "powered-by", "Powered by Hughsean" }
                     }
