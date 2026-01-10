@@ -58,16 +58,7 @@ async fn main() -> Result<()> {
     // Initialize logger
     // NOTE: default env_logger target is stderr; some wrappers only surface stdout.
     // Logging to stdout makes diagnostics visible in more environments.
-    let env_filter = if args.verbose {
-        tracing_subscriber::EnvFilter::from("debug")
-    } else {
-        tracing_subscriber::EnvFilter::from("info")
-    };
-    tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
-        .with_file(true)
-        .with_line_number(true)
-        .init();
+    let _guard = common::func::tracing_init(None, None);
 
     info!("Starting LibreHardwareMonitor CLI");
 

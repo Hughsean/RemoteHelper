@@ -5,7 +5,6 @@
 /// - 标识符、传感器值等数据结构
 /// - 传感器、硬件、计算机等 trait
 /// - 各种操作错误类型
-
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt;

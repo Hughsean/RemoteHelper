@@ -21,6 +21,7 @@ tokio = { version = "1", features = [
 toml = "0.9"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 ed25519-dalek = { version = "2.2", features = ["rand_core"] }
 rand = "0.8"
 base64 = "0.22"
@@ -29,7 +30,6 @@ pbkdf2 = "0.12"
 hmac = "0.12"
 sha2 = "0.10"
 uuid = { version = "1.11", features = ["v4"] }
-tracing-appender = "0.2"
 rcgen = "0.14"
 anyhow = "1"
 x25519-dalek = "2.0"
@@ -44,6 +44,7 @@ thiserror = { version = "2.0" }
 # workspace members
 common = { path = "common" }
 client = { path = "client" }
+hwlib = { path = "hwlib" }
 
 [package]
 name = "RemoteHelperServer"

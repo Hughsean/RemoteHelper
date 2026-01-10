@@ -8,32 +8,11 @@ use crate::config::AppConfig;
 use crate::state::AppState;
 use std::net::SocketAddr;
 use std::time::Duration;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    let file_appender = tracing_appender::rolling::never("logs", "server.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_file(true)
-                .with_line_number(true)
-                .with_writer(std::io::stdout),
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_file(true)
-                .with_line_number(true)
-                .with_ansi(false)
-                .with_writer(non_blocking),
-        )
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
+    let _guard = common::func::tracing_init(Some("logs"), Some("server.log"));
 
     // tracing::info!("\n\n================================================================================");
     tracing::info!("正在启动 RemoteHelper 服务器实例");
