@@ -1,0 +1,189 @@
+/* 趋势图卡片样式 */
+.trend-chart-card {
+    background: linear-gradient(135deg, rgba(45, 52, 72, 0.95), rgba(30, 35, 50, 0.95)) !important;
+    border-radius: 16px !important;
+    padding: 0 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    color: #ffffff !important;
+    min-width: 300px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+/* Header 样式 */
+.trend-chart-card .trend-chart-header {
+    padding: 24px 24px 16px 24px !important;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Header 顶部行 - 标题和时间窗口 */
+.trend-chart-header-top {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.trend-chart-title {
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    color: #a8b2d1 !important;
+    margin: 0 !important;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+/* 时间窗口选择器样式 */
+.time-window-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.time-window-selector .select-trigger {
+    min-width: 95px;
+    background: rgba(135, 7, 173, 0.788);
+    border: 1x solid rgba(100, 116, 139, 0.3);
+    padding: 4px 12px;
+    /* justify-content: flex-end !important; */
+    /* text-align: right !important; */
+}
+
+.time-window-label {
+    font-size: 13px;
+    color: #8892b0;
+    white-space: nowrap;
+}
+
+/* 图例样式 */
+.trend-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(100, 116, 139, 0.1);
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: background 0.2s, opacity 0.2s;
+    cursor: pointer;
+    user-select: none;
+}
+
+.legend-item:hover {
+    background: rgba(100, 116, 139, 0.2);
+}
+
+.legend-item-hidden {
+    opacity: 0.5;
+}
+
+.legend-item-hidden:hover {
+    opacity: 0.7;
+}
+
+.legend-item:hover {
+    background: rgba(100, 116, 139, 0.2);
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.legend-color-hidden {
+    opacity: 0.3;
+}
+
+.legend-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #ffffff;
+}
+
+.legend-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-left: 4px;
+    text-align: right;
+    width: 60px;
+    white-space: pre;
+}
+
+.trend-chart-value {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.value-number {
+    font-size: 36px;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1;
+}
+
+.value-unit {
+    font-size: 18px;
+    font-weight: 500;
+    color: #8892b0;
+}
+
+/* Content 样式 */
+.trend-chart-content {
+    padding: 0 0 8px 0 !important;
+}
+
+.trend-chart-svg {
+    width: 100%;
+    height: 200px;
+    display: block;
+}
+
+.trend-chart-placeholder {
+    width: 100%;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* Footer 样式 */
+.trend-chart-footer {
+    font-size: 12px !important;
+    color: #64748b !important;
+    padding: 12px 24px !important;
+    border-top: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+/* 下拉框磨砂玻璃背景 */
+.trend-chart-card .select-list {
+    background: rgba(0, 0, 0, 0.3) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .trend-chart-svg {
+        height: 150px;
+    }
+
+    .value-number {
+        font-size: 28px;
+    }
+}

@@ -1,55 +1,48 @@
-//! UI 组件模块
-//!
-//! 所有组件都使用新的状态管理模式（hooks + Signal）
+//! The components module contains all shared components for our app. Components are the building blocks of dioxus apps.
+//! This module provides reusable UI components.
 
-pub mod add_service_modal;
-pub mod credential_modal;
-pub mod header;
-pub mod login;
-pub mod service_list;
-pub mod system_status;
-pub mod trend_chart;
+mod metric_card;
+pub use metric_card::{MetricCard, MetricCardData, MetricItem};
 
-pub use add_service_modal::AddServiceModal;
-pub use credential_modal::CredentialModal;
-pub use header::Header;
-pub use login::Login;
-pub use service_list::ServiceList;
-pub use system_status::SystemStatusDisplay;
-pub use trend_chart::TrendChart;
-pub mod button;
+mod trend_chart;
+pub use trend_chart::{DataSeries, TrendChart, TrendChartData};
+
+mod add_service_dialog;
+pub use add_service_dialog::AddServiceDialog;
+
+pub mod calendar;
 pub mod card;
-pub mod tooltip;
-pub mod textarea;
-pub mod form;
-pub mod context_menu;
-pub mod collapsible;
-pub mod skeleton;
-pub mod hover_card;
-pub mod popover;
 pub mod date_picker;
-pub mod switch;
-pub mod slider;
-pub mod label;
-pub mod scroll_area;
+pub mod dialog;
+pub mod dropdown_menu;
+pub mod hover_card;
 pub mod radio_group;
-pub mod toolbar;
+pub mod scroll_area;
 pub mod select;
-pub mod input;
-pub mod menubar;
+pub mod toggle_group;
+pub mod tooltip;
+pub use select::*;
+pub mod accordion;
+pub mod alert_dialog;
 pub mod aspect_ratio;
 pub mod avatar;
-pub mod toggle;
-pub mod toggle_group;
-pub mod navbar;
-pub mod toast;
+pub mod button;
 pub mod checkbox;
+pub mod collapsible;
+pub mod context_menu;
+pub mod form;
+pub mod input;
+pub mod label;
+pub mod menubar;
+pub mod popover;
 pub mod progress;
-pub mod dialog;
-pub mod alert_dialog;
-pub mod accordion;
-pub mod calendar;
-pub mod dropdown_menu;
-pub mod sheet;
 pub mod separator;
+pub mod sheet;
+pub mod skeleton;
+pub mod slider;
+pub mod switch;
 pub mod tabs;
+pub mod textarea;
+pub mod toast;
+pub mod toggle;
+pub mod toolbar;

@@ -1,0 +1,108 @@
+/* 覆盖默认卡片样式 */
+.metric-card {
+    background: linear-gradient(135deg, rgba(45, 52, 72, 0.95), rgba(30, 35, 50, 0.95)) !important;
+    border-radius: 16px !important;
+    padding: 0 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    color: #ffffff !important;
+    min-width: 300px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+/* 覆盖 CardHeader 默认样式 */
+.metric-card .card-header {
+    padding: 24px 24px 0 24px;
+}
+
+.metric-card-title {
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    color: #a8b2d1 !important;
+    margin: 0 0 16px 0 !important;
+    letter-spacing: 0.5px;
+}
+
+.metric-card-main-value {
+    font-size: 48px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1;
+}
+
+/* 覆盖 CardContent 默认样式 */
+.metric-card-items {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px !important;
+}
+
+.metric-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.metric-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.metric-item-label {
+    font-size: 14px;
+    color: #8892b0;
+}
+
+.metric-item-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccd6f6;
+}
+
+/* 覆盖 Progress 组件样式 */
+.metric-card .progress,
+.metric-card .metric-progress-bar {
+    width: 100% !important;
+    height: 6px !important;
+    background: rgba(100, 110, 140, 0.3) !important;
+    border-radius: 3px !important;
+    overflow: hidden !important;
+}
+
+.metric-card .progress-indicator,
+.metric-card .metric-progress-fill {
+    width: var(--progress-value, 0%) !important;
+    height: 100% !important;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    border-radius: 3px !important;
+    transition: width 0.3s ease !important;
+}
+
+/* CPU 使用率特殊配色（红色） */
+.metric-item:first-child .progress-indicator,
+.metric-item:first-child .metric-progress-fill {
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+/* 内存使用特殊配色（蓝色） */
+.metric-item:nth-child(2) .progress-indicator,
+.metric-item:nth-child(2) .metric-progress-fill {
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+
+/* 覆盖 Separator 样式 */
+.metric-card .separator {
+    margin: 0 24px;
+    width: calc(100% - 48px) !important;
+    background: rgba(100, 116, 139, 0.2) !important;
+}
+
+/* 覆盖 CardFooter 样式 */
+.metric-card-footer {
+    font-size: 13px !important;
+    color: #64748b !important;
+    padding: 16px 24px 24px 24px !important;
+    font-family: 'LXGW WenKai', monospace;
+}

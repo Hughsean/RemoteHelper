@@ -1,26 +1,27 @@
 [application]
-name = "RemoteHelper"
-default_platform = "desktop"
-out_dir = "dist"
-asset_dir = "assets"
 
-# 桌面应用配置
-[desktop.app]
-title = "RemoteHelper - 远程系统监控"
+[web.app]
 
-# 桌面窗口配置
-[desktop.window]
-resizable = true
-decorations = false
-transparent = false
+# HTML title tag content
+title = "App"
 
-# 打包配置
+# include `assets` in web platform
+[web.resource]
+
+# Additional CSS style files
+style = []
+
+# Additional JavaScript files
+script = []
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []
+
+
 [bundle]
-identifier = "dev.hughsean.remotehelper"
 publisher = "Hughsean"
+identifier = "dev.hughsean.remotehelper"
 icon = ["assets/icon.png"]
-resources = ["assets/**/*"]
-
-# 开发服务器配置
-[desktop.watcher]
-watch_path = ["src", "assets"]

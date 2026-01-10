@@ -1,324 +1,350 @@
-//! 主页面 - Dashboard
-//!
-//! 整合所有组件，展示完整的监控界面
-
-use crate::backend;
 use crate::components::{
-    AddServiceModal, Header, Login, ServiceList, SystemStatusDisplay, TrendChart,
+    DataSeries, MetricCard, MetricCardData, MetricItem, Select, SelectList, SelectOption,
+    SelectTrigger, SelectValue, TrendChart, TrendChartData,
 };
-use crate::state::{use_auth_state, use_services_state, use_system_state};
+use crate::views::{Services, Test};
 use dioxus::prelude::*;
-use std::time::Duration;
 
-/// 多功能弹窗类型
-#[derive(Clone, PartialEq)]
-pub enum ModalType {
-    None,
-    Error(String),
-    Form,
+const HOME_CSS: Asset = asset!("/assets/styling/home.css");
+
+/// 页面视图选项
+#[derive(Clone, PartialEq, Debug)]
+enum PageView {
+    Home,
+    Services,
+    Test,
+}
+
+// impl PageView {
+//     fn to_display(&self) -> &'static str {
+//         match self {
+//             PageView::Home => "主页",
+//             PageView::Services => "服务管理",
+//             PageView::Test => "测试页面",
+//         }
+//     }
+// }
+
+/// 更新间隔选项
+#[derive(Clone, PartialEq, Debug)]
+enum UpdateInterval {
+    HalfSecond,
+    OneSecond,
+    ThreeSeconds,
+    Paused,
+}
+
+impl UpdateInterval {
+    fn to_millis(&self) -> Option<u64> {
+        match self {
+            UpdateInterval::HalfSecond => Some(500),
+            UpdateInterval::OneSecond => Some(1000),
+            UpdateInterval::ThreeSeconds => Some(3000),
+            UpdateInterval::Paused => None,
+        }
+    }
+
+    fn to_display(&self) -> &'static str {
+        match self {
+            UpdateInterval::HalfSecond => "0.5秒",
+            UpdateInterval::OneSecond => "1秒",
+            UpdateInterval::ThreeSeconds => "3秒",
+            UpdateInterval::Paused => "暂停",
+        }
+    }
 }
 
 #[component]
 pub fn Home() -> Element {
-    let auth = use_auth_state();
-    let mut system = use_system_state();
-    let mut services = use_services_state();
+    // 当前页面视图状态
+    let mut current_view = use_signal(|| PageView::Home);
 
-    // 多功能弹窗状态
-    let mut modal_type = use_signal(|| ModalType::None);
-    let mut form_input = use_signal(String::new);
+    // 更新间隔状态
+    let mut update_interval = use_signal(|| UpdateInterval::OneSecond);
 
-    // 如果未认证，显示登录界面
-    if !auth.read().authenticated {
-        return rsx! {
-            Login {}
-        };
-    }
+    // 使用 Signal 存储实时数据
+    let mut cpu_data = use_signal(|| MetricCardData {
+        title: "CPU & 内存".to_string(),
+        main_value: "加载中...".to_string(),
+        items: vec![
+            MetricItem {
+                label: "CPU 利用率".to_string(),
+                value: "-- %".to_string(),
+                progress: Some(0.0),
+            },
+            MetricItem {
+                label: "内存使用".to_string(),
+                value: "-- / -- GB".to_string(),
+                progress: Some(0.0),
+            },
+        ],
+        footer: Some("正在获取硬件信息...".to_string()),
+    });
 
-    // 自动刷新数据
-    use_resource(move || {
-        async move {
-            loop {
-                let interval = system.read().refresh_interval;
+    let mut gpu_data = use_signal(|| MetricCardData {
+        title: "GPU 状态".to_string(),
+        main_value: "加载中...".to_string(),
+        items: vec![
+            MetricItem {
+                label: "利用率".to_string(),
+                value: "-- %".to_string(),
+                progress: Some(0.0),
+            },
+            MetricItem {
+                label: "显存".to_string(),
+                value: "-- / -- GB".to_string(),
+                progress: Some(0.0),
+            },
+        ],
+        footer: Some("正在获取硬件信息...".to_string()),
+    });
 
-                // 如果间隔为0，暂停刷新
-                if interval == 0 {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
+    // 综合趋势图数据 - 包含 CPU、内存、GPU 三个系列
+    let mut system_trend = use_signal(|| {
+        let mut chart_data = TrendChartData::new("系统资源使用率趋势".to_string(), "%".to_string());
+
+        chart_data.add_series(DataSeries::new("CPU".to_string(), "#ef4444".to_string()));
+        chart_data.add_series(DataSeries::new("内存".to_string(), "#3b82f6".to_string()));
+        chart_data.add_series(DataSeries::new("GPU".to_string(), "#10b981".to_string()));
+
+        chart_data
+    });
+
+    // 实时数据更新
+    use_future(move || async move {
+        loop {
+            // 检查是否暂停
+            let current_interval = update_interval();
+            if let Some(interval_ms) = current_interval.to_millis() {
+                match client::send_request(common::Request::GetStatus { interval_ms: None }).await {
+                    Ok(common::Response::Status(info)) => {
+                        let timestamp = info.timestamp;
+
+                        // 更新 CPU 数据
+                        let cpu_usage = info.cpu_usage;
+                        let mem_used_gb = info.memory_usage as f64 / 1024.0 / 1024.0 / 1024.0;
+                        let mem_total_gb = info.total_memory as f64 / 1024.0 / 1024.0 / 1024.0;
+                        let mem_usage_ratio = info.memory_usage as f32 / info.total_memory as f32;
+                        let mem_usage_percent = mem_usage_ratio * 100.0;
+
+                        *cpu_data.write() = MetricCardData {
+                            title: "CPU & 内存".to_string(),
+                            main_value: format!("{:.1}%", cpu_usage),
+                            items: vec![
+                                MetricItem {
+                                    label: "CPU 利用率".to_string(),
+                                    value: format!("{:.1}%", cpu_usage),
+                                    progress: Some(cpu_usage / 100.0),
+                                },
+                                MetricItem {
+                                    label: "内存使用".to_string(),
+                                    value: format!("{:.1}/{:.1} GB", mem_used_gb, mem_total_gb),
+                                    progress: Some(mem_usage_ratio),
+                                },
+                            ],
+                            footer: Some(info.cpu_model.clone()),
+                        };
+
+                        // 更新系统趋势图 - CPU (系列 0)
+                        system_trend
+                            .write()
+                            .add_point_to_series(0, cpu_usage, timestamp);
+                        system_trend.write().series[0].current_value = format!("{:.1}", cpu_usage);
+
+                        // 更新系统趋势图 - 内存 (系列 1)
+                        system_trend
+                            .write()
+                            .add_point_to_series(1, mem_usage_percent, timestamp);
+                        system_trend.write().series[1].current_value =
+                            format!("{:.1}", mem_usage_percent);
+
+                        // 更新 GPU 数据
+                        if let (
+                            Some(gpu_usage),
+                            Some(gpu_mem_used),
+                            Some(gpu_mem_total),
+                            Some(gpu_model),
+                        ) = (
+                            info.gpu_usage,
+                            info.gpu_memory_usage,
+                            info.gpu_total_memory,
+                            info.gpu_model,
+                        ) {
+                            let gpu_mem_used_gb = gpu_mem_used as f64 / 1024.0 / 1024.0 / 1024.0;
+                            let gpu_mem_total_gb = gpu_mem_total as f64 / 1024.0 / 1024.0 / 1024.0;
+                            let gpu_mem_ratio = gpu_mem_used as f32 / gpu_mem_total as f32;
+
+                            *gpu_data.write() = MetricCardData {
+                                title: "GPU 状态".to_string(),
+                                main_value: format!("{}%", gpu_usage),
+                                items: vec![
+                                    MetricItem {
+                                        label: "利用率".to_string(),
+                                        value: format!("{}%", gpu_usage),
+                                        progress: Some(gpu_usage as f32 / 100.0),
+                                    },
+                                    MetricItem {
+                                        label: "显存".to_string(),
+                                        value: format!(
+                                            "{:.1}/{:.1} GB",
+                                            gpu_mem_used_gb, gpu_mem_total_gb
+                                        ),
+                                        progress: Some(gpu_mem_ratio),
+                                    },
+                                ],
+                                footer: Some(gpu_model),
+                            };
+
+                            // 更新系统趋势图 - GPU (系列 2)
+                            system_trend.write().add_point_to_series(
+                                2,
+                                gpu_usage as f32,
+                                timestamp,
+                            );
+                            system_trend.write().series[2].current_value = format!("{}", gpu_usage);
+                        } else {
+                            *gpu_data.write() = MetricCardData {
+                                title: "GPU 状态".to_string(),
+                                main_value: "不可用".to_string(),
+                                items: vec![],
+                                footer: Some("未检测到 GPU 或驱动未安装".to_string()),
+                            };
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("获取系统状态失败: {}", e);
+                    }
+                    _ => {
+                        tracing::warn!("收到意外的响应类型");
+                    }
                 }
 
-                // 获取系统状态
-                if let Ok(status) = backend::get_status(Some(interval)).await {
-                    system.write().update_status(status);
-                }
+                // 根据选择的间隔休眠
+                #[cfg(feature = "web")]
+                gloo_timers::future::TimeoutFuture::new(interval_ms as u32).await;
 
-                // 获取服务列表
-                if let Ok(services_list) = backend::list_services().await {
-                    services.write().update_services(services_list);
-                }
+                #[cfg(feature = "desktop")]
+                tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
+            } else {
+                // 暂停状态，等待一秒后重新检查
+                #[cfg(feature = "web")]
+                gloo_timers::future::TimeoutFuture::new(1000).await;
 
-                tokio::time::sleep(Duration::from_millis(interval)).await;
+                #[cfg(feature = "desktop")]
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
         }
     });
 
     rsx! {
-        div { class: "app-container",
-            Header {}
+        document::Link { rel: "stylesheet", href: HOME_CSS }
 
-            div { class: "main-content",
-                // 系统状态卡片
-                if let Some(status) = &system.read().current_status {
-                    SystemStatusDisplay { status: status.clone() }
-                } else {
-                    div { class: "loading-state", "正在加载系统状态..." }
+        div { class: "home-container",
+            // Header bar with update interval control
+            div { class: "home-header",
+                div { class: "title-section",
+                    h1 { class: "home-title", "系统监控" }
+                    p { class: "powered-by", "Powered by Hughsean" }
                 }
 
-                // 趋势图表
-                TrendChart { history: system.read().history.clone() }
-
-                // 服务列表
-                ServiceList {}
-            }
-
-            // 添加服务模态框
-            if services.read().show_add_modal {
-                AddServiceModal {}
-            }
-
-            // 凭据输入模态框 - 使用插槽组件
-            {
-                // 在 rsx 块内读取以确保响应式订阅
-                let show_modal = services.read().show_credential_modal;
-                tracing::info!("检查凭据弹窗状态: show_modal={}", show_modal);
-
-                if show_modal {
-                    tracing::info!("渲染凭据弹窗");
-                    let services_data = services.read();
-                    let pending_action = services_data.pending_credential_action.clone();
-                    let username = services_data.credential_username.clone();
-                    let password = services_data.credential_password.clone();
-                    let pending_service = pending_action
-                        .as_ref()
-                        .and_then(|(id, _)| services_data.find_service(*id));
-
-                    let action = pending_action
-                        .as_ref()
-                        // 头部
-
-                        // 内容
-
-                        // 底部
-                        .map(|(_, a)| a.clone())
-                        .unwrap_or_default();
-                    let service_name = pending_service
-                        .as_ref()
-                        .map(|s| s.description.clone())
-                        .unwrap_or_default();
-                    let service_id = pending_service.as_ref().map(|s| s.id).unwrap_or(0);
-                    drop(services_data);
-                    let handle_credential_submit = {
-                        let username = username.clone();
-                        let password = password.clone();
-                        let action = action.clone();
-                        move |_| {
-                            let user_name = username.clone();
-                            let pwd = password.clone();
-                            let action_str = action.clone();
-                            if user_name.trim().is_empty() || pwd.is_empty() {
-                                tracing::error!("用户名和密码不能为空");
-                                return;
-                            }
-                            services.write().hide_credential_modal();
-                            services.write().set_operating(service_id);
-                            spawn(async move {
-                                let result = backend::control_service(
-                                        service_id,
-                                        action_str,
-                                        Some(user_name),
-                                        Some(pwd),
-                                    )
-                                    .await;
-                                if let Err(e) = result {
-                                    tracing::error!("控制服务失败: {}", e);
-                                }
-                                if let Ok(new_services) = backend::list_services().await {
-                                    services.write().update_services(new_services);
-                                }
-                                services.write().clear_operating();
-                            });
+                div { class: "header-navigation",
+                    button {
+                        class: "nav-button",
+                        class: if *current_view.read() == PageView::Home { "nav-button active" } else { "nav-button" },
+                        onclick: move |_| {
+                            current_view.set(PageView::Home);
+                        },
+                        "仪表板"
+                    }
+                    button {
+                        class: "nav-button",
+                        class: if *current_view.read() == PageView::Services { "nav-button active" } else { "nav-button" },
+                        onclick: move |_| {
+                            current_view.set(PageView::Services);
+                        },
+                        "服务管理"
+                    }
+                    if cfg!(debug_assertions) {
+                        button {
+                            class: "nav-button",
+                            class: if *current_view.read() == PageView::Test { "nav-button active" } else { "nav-button" },
+                            onclick: move |_| {
+                                current_view.set(PageView::Test);
+                            },
+                            "测试页面"
                         }
-                    };
-                    let is_disabled = username.trim().is_empty() || password.is_empty();
-                    rsx! {
-                        div {
-                            class: "modal-overlay",
-                            onclick: move |_| services.write().hide_credential_modal(),
-                            div { class: "modal", onclick: move |e| e.stop_propagation(),
-                                div { class: "modal-header",
-                                    h3 { class: "modal-title", "用户模式服务需要凭据" }
-                                    button {
-                                        class: "btn-close",
-                                        onclick: move |_| services.write().hide_credential_modal(),
-                                        "×"
-                                    }
-                                }
+                    }
+                }
 
-                                div { class: "modal-body",
-                                    p {
-                                        class: "credential-hint",
-                                        style: "color: var(--text-slate-400); font-size: 0.875rem; margin-bottom: 1rem; line-height: 1.5;",
-                                        "服务「{service_name}」需要以用户模式运行，请输入 Windows 用户凭据："
-                                    }
-
-                                    div { class: "form-group",
-                                        label { class: "form-label", "用户名" }
-                                        input {
-                                            r#type: "text",
-                                            class: "form-input",
-                                            placeholder: "例如: Administrator 或 .\\用户名",
-                                            value: "{username}",
-                                            oninput: move |e| services.write().set_credential_username(e.value()),
-                                        }
-                                    }
-
-                                    div { class: "form-group",
-                                        label { class: "form-label", "密码" }
-                                        input {
-                                            r#type: "password",
-                                            class: "form-input",
-                                            placeholder: "Windows 用户密码",
-                                            value: "{password}",
-                                            oninput: move |e| services.write().set_credential_password(e.value()),
-                                        }
-                                    }
-                                }
-
-                                div { class: "modal-footer",
-                                    button {
-                                        class: "btn btn-secondary",
-                                        onclick: move |_| services.write().hide_credential_modal(),
-                                        "取消"
-                                    }
-                                    button {
-                                        class: "btn btn-primary",
-                                        onclick: handle_credential_submit,
-                                        disabled: is_disabled,
-                                        if action == "start" {
-                                            "启动服务"
-                                        } else {
-                                            "重启服务"
-                                        }
-                                    }
-                                }
+                div { class: "header-controls",
+                    label { class: "update-interval-label", "更新间隔:" }
+                    Select {
+                        value: use_memo(move || Some(Some(update_interval().to_display().to_string()))),
+                        on_value_change: move |value: Option<String>| {
+                            if let Some(v) = value {
+                                let interval = match v.as_str() {
+                                    "0.5秒" => UpdateInterval::HalfSecond,
+                                    "1秒" => UpdateInterval::OneSecond,
+                                    "3秒" => UpdateInterval::ThreeSeconds,
+                                    "暂停" => UpdateInterval::Paused,
+                                    _ => UpdateInterval::OneSecond,
+                                };
+                                update_interval.set(interval);
+                            }
+                        },
+                        placeholder: "".to_string(),
+                        SelectTrigger { SelectValue {} }
+                        SelectList {
+                            SelectOption::<String> {
+                                index: use_signal(|| 0),
+                                value: "0.5秒".to_string(),
+                                "0.5秒"
+                            }
+                            SelectOption::<String> {
+                                index: use_signal(|| 1),
+                                value: "1秒".to_string(),
+                                "1秒"
+                            }
+                            SelectOption::<String> {
+                                index: use_signal(|| 2),
+                                value: "3秒".to_string(),
+                                "3秒"
+                            }
+                            SelectOption::<String> {
+                                index: use_signal(|| 3),
+                                value: "暂停".to_string(),
+                                "暂停"
                             }
                         }
                     }
-                } else {
-                    rsx! {}
                 }
             }
 
-            // 多功能弹窗示例 - 根据类型显示不同内容
-            match modal_type() {
-                ModalType::Error(ref msg) => rsx! {
-                    div { class: "modal-overlay", onclick: move |_| modal_type.set(ModalType::None),
-                        div { class: "modal", onclick: move |e| e.stop_propagation(),
-                            // 头部
-                            div { class: "modal-header",
-                                h3 { class: "modal-title", "错误提示" }
-                                button {
-                                    class: "btn-close",
-                                    onclick: move |_| modal_type.set(ModalType::None),
-                                    "×"
-                                }
-                            }
-
-                    // 内容
+            // 根据当前视图显示不同内容
+            match current_view() {
+                PageView::Home => rsx! {
+                    div { class: "metrics-grid",
+                        MetricCard { data: cpu_data }
+                        MetricCard { data: gpu_data }
+                    }
 
 
-                            // 底部
-                            // 头部
 
-                            // 内容
-                            div { class: "modal-body",
+                    div { class: "trends-single",
+                        TrendChart { data: system_trend }
+                    }
 
-                                // 底部
-                                div { class: "error-message",
-                                    p { "{msg}" }
-                                }
-                            }
-
-                            div { class: "modal-footer",
-                                button {
-                                    class: "btn btn-primary",
-                                    onclick: move |_| modal_type.set(ModalType::None),
-                                    "确定"
-                                }
-                            }
-                        }
+                    div { class: "home-footer",
+                        p { "💡 实时数据自动更新 • 当前间隔: {update_interval().to_display()}" }
+                        p { class: "powered-by", "Powered by Hughsean" }
                     }
                 },
-                ModalType::Form => rsx! {
-                    div { class: "modal-overlay", onclick: move |_| modal_type.set(ModalType::None),
-                        div { class: "modal", onclick: move |e| e.stop_propagation(),
-                            div { class: "modal-header",
-                                h3 { class: "modal-title", "填写表单" }
-                                button {
-                                    class: "btn-close",
-                                    onclick: move |_| modal_type.set(ModalType::None),
-                                    "×"
-                                }
-                            }
-
-                            div { class: "modal-body",
-                                div { class: "form-group",
-                                    label { class: "form-label", "请输入内容" }
-                                    input {
-                                        r#type: "text",
-                                        class: "form-input",
-                                        value: "{form_input}",
-                                        oninput: move |e| form_input.set(e.value()),
-                                        placeholder: "在这里输入...",
-                                    }
-                                }
-                            }
-
-                            div { class: "modal-footer",
-                                button {
-                                    class: "btn btn-secondary",
-                                    onclick: move |_| modal_type.set(ModalType::None),
-                                    "取消"
-                                }
-                                button {
-                                    class: "btn btn-primary",
-                                    onclick: move |_| {
-                                        tracing::info!("表单提交: {}", form_input());
-                                        modal_type.set(ModalType::None);
-                                    },
-                                    "提交"
-                                }
-                            }
-                        }
-                    }
+                PageView::Services => rsx! {
+                    div { class: "content-section", Services {} }
                 },
-                ModalType::None => rsx! {},
-            }
-
-            // 测试按钮 - 可以删除
-            div { style: "position: fixed; bottom: 20px; right: 20px; display: flex; gap: 10px; z-index: 100;",
-                button {
-                    class: "btn btn-primary",
-                    onclick: move |_| {
-                        modal_type.set(ModalType::Error("这是一个错误消息示例！".to_string()))
-                    },
-                    "显示错误"
-                }
-                button {
-                    class: "btn btn-primary",
-                    onclick: move |_| modal_type.set(ModalType::Form),
-                    "显示表单"
-                }
+                PageView::Test => rsx! {
+                    div { class: "content-section", Test {} }
+                },
             }
         }
     }

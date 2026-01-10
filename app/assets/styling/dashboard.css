@@ -1,0 +1,204 @@
+.home-container {
+    min-height: 100vh;
+    height: 100vh;
+    overflow-y: auto;
+    background: linear-gradient(135deg, #0f1116 0%, #1a1d2e 100%);
+    padding: 120px 40px 40px 40px;
+    color: #ffffff;
+    user-select: none;
+}
+
+.home-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    text-align: center;
+}
+
+.title-section {
+    text-align: left;
+}
+
+/* Header bar styles */
+.home-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+    background: rgba(15, 17, 22, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(136, 146, 176, 0.2);
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-navigation {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-button {
+    padding: 8px 16px;
+    background: rgba(136, 146, 176, 0.1);
+    border: 1px solid rgba(136, 146, 176, 0.2);
+    border-radius: 6px;
+    color: #8892b0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-button:hover {
+    background: rgba(136, 146, 176, 0.2);
+    border-color: rgba(136, 146, 176, 0.4);
+    color: #ffffff;
+}
+
+.nav-button:active {
+    background: rgba(136, 146, 176, 0.3);
+    transform: translateY(1px);
+}
+
+.nav-button.active {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #ffffff;
+}
+
+.content-section {
+    padding: 20px 0;
+}
+
+.update-interval-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #8892b0;
+    white-space: nowrap;
+}
+
+.section-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 60px 0 30px 0;
+    text-align: center;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.trends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* 单个趋势图容器 */
+.trends-single {
+    max-width: 1400px;
+    margin: 10px auto 0 auto;
+}
+
+.home-footer {
+    margin-top: 60px;
+    padding: 20px;
+    text-align: center;
+    color: #8892b0;
+    font-size: 14px;
+}
+
+.home-footer p {
+    margin: 0;
+}
+
+.powered-by {
+    font-size: 12px;
+    margin-top: 0;
+    color: #8892b0;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .home-container {
+        padding: 20px;
+    }
+
+    .home-title {
+        font-size: 24px;
+        margin-bottom: 24px;
+    }
+
+    /* Header bar responsive */
+    .home-header {
+        flex-direction: column;
+        gap: 20px;
+        align-items: stretch;
+        margin-bottom: 24px;
+    }
+
+    .header-controls {
+        justify-content: center;
+    }
+
+    .update-interval-label {
+        font-size: 13px;
+    }
+
+    .section-title {
+        font-size: 20px;
+        margin: 10px 0 10px 0;
+    }
+
+    .metrics-grid,
+    .trends-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 确保 header-controls 内的字体 */
+.header-controls * {
+    font-family: 'LXGW WenKai' !important;
+}
+
+/* 固定 Select 触发器的样式，防止闪烁和移动 */
+.header-controls .select-trigger {
+    min-width: 80px;
+    width: auto;
+    text-align: right;
+    transition: none !important;
+    transform: none !important;
+    border: 1px solid rgba(136, 146, 176, 0.3);
+    border-radius: 6px;
+    background: rgba(26, 29, 46, 0.8);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    padding: 4px 8px;
+}
+
+/* 下拉框磨砂玻璃背景 */
+.header-controls .select-list {
+    background: rgba(0, 0, 0, 0.5) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+.header-controls .select-item:hover {
+    background: rgba(162, 20, 20, 0.71) !important;
+}
