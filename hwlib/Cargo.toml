@@ -54,6 +54,8 @@ sha2.workspace = true
 clap = { version = "4.5", features = ["derive"] }
 
 
+common.workspace = true
+
 [[bin]]
 name = "hw-cli"
 path = "src/bin/cli.rs"
