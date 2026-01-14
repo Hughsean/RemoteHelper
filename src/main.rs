@@ -135,16 +135,27 @@ async fn main() -> anyhow::Result<()> {
 
     // Auto-start services
     tracing::info!("正在启动自动启动服务...");
-    let auto_start_count = state.config.service.iter().filter(|s| s.auto_start).count();
+    let auto_start_count = state.config.service.iter().filter(|s| s.auto_start != crate::config::AutoStart::None).count();
     tracing::info!("发现 {} 个标记为自动启动的服务", auto_start_count);
 
     for (id, svc) in state.config.service.iter().enumerate() {
-        if svc.auto_start {
-            tracing::info!("自动启动服务 ID {}: {}", id, svc.description);
-            if let Err(e) = process::start_service(&state, id, None, None).await {
-                tracing::error!("自动启动服务失败 {} ({}): {}", id, svc.description, e);
-            } else {
-                tracing::info!("成功自动启动服务 ID {}", id);
+        match svc.auto_start.clone() {
+            crate::config::AutoStart::None => {}
+            crate::config::AutoStart::OneShot => {
+                tracing::info!("OneShot 自动启动服务 ID {}: {}", id, svc.description);
+                if let Err(e) = process::start_service(&state, id).await {
+                    tracing::error!("自动启动服务失败 {} ({}): {}", id, svc.description, e);
+                } else {
+                    tracing::info!("成功 OneShot 启动服务 ID {}", id);
+                }
+            }
+            crate::config::AutoStart::Continuous => {
+                tracing::info!("Continuous 自动启动服务 ID {}: {}（持久运行，保留 PID 以便后续销毁）", id, svc.description);
+                if let Err(e) = process::start_service(&state, id).await {
+                    tracing::error!("自动启动服务失败 {} ({}): {}", id, svc.description, e);
+                } else {
+                    tracing::info!("成功 Continuous 启动服务 ID {}", id);
+                }
             }
         }
     }

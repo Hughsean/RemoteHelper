@@ -34,13 +34,7 @@ pub fn Services() -> Element {
     let control_service = move |id: usize, action: ServiceAction| {
         let load_services_clone = load_services.clone();
         spawn(async move {
-            let result = client::send_request(Request::ControlService {
-                id,
-                action: action.clone(),
-                user_name: None,
-                user_password: None,
-            })
-            .await;
+            let result = client::send_request(Request::ControlService { id, action: action.clone() }).await;
 
             match result {
                 Ok(Response::Ok) => {
@@ -92,12 +86,7 @@ pub fn Services() -> Element {
                                 }
                             }
                             div { class: "service-info",
-                                div { class: "service-title",
-                                    if service.run_as_user {
-                                        span { class: "icon", "⚙️" }
-                                    }
-                                    "{service.description}"
-                                }
+                                div { class: "service-title", "{service.description}" }
                                 div { class: "service-meta",
                                     span { class: if service.running { "status-text running" } else { "status-text stopped" },
                                         if service.running {

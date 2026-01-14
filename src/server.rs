@@ -408,7 +408,6 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                     description: svc_config.description.clone(),
                     running,
                     pid,
-                    run_as_user: svc_config.run_as_user,
                 });
             }
 
@@ -428,18 +427,12 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                     description: svc_config.description.clone(),
                     running,
                     pid,
-                    run_as_user: svc_config.run_as_user,
                 });
             }
 
             Response::Services(services)
         }
-        Request::ControlService {
-            id,
-            action,
-            user_name,
-            user_password,
-        } => {
+        Request::ControlService { id, action } => {
             tracing::info!("服务控制请求 - ID: {}, 操作: {:?}", id, action);
             let static_count = state.config.service.len();
             let dynamic_count = state.dynamic_services.read().await.len();
@@ -459,49 +452,29 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             }
 
             match action {
-                ServiceAction::Start => {
-                    match crate::process::start_service(state, id, user_name, user_password).await {
-                        Ok(_) => Response::Ok,
-                        Err(e) => Response::Error(e.to_string()),
-                    }
-                }
+                ServiceAction::Start => match crate::process::start_service(state, id).await {
+                    Ok(_) => Response::Ok,
+                    Err(e) => Response::Error(e.to_string()),
+                },
                 ServiceAction::Stop => match crate::process::stop_service(state, id).await {
                     Ok(_) => Response::Ok,
                     Err(e) => Response::Error(e.to_string()),
                 },
-                ServiceAction::Restart => {
-                    match crate::process::restart_service(state, id, user_name, user_password).await
-                    {
-                        Ok(_) => Response::Ok,
-                        Err(e) => Response::Error(e.to_string()),
-                    }
-                }
+                ServiceAction::Restart => match crate::process::restart_service(state, id).await {
+                    Ok(_) => Response::Ok,
+                    Err(e) => Response::Error(e.to_string()),
+                },
             }
         }
-        Request::AddService {
-            description,
-            exe_path,
-            args,
-            run_as_user,
-            user_name,
-            user_password,
-        } => {
-            tracing::info!(
-                "正在添加新服务: {} (可执行文件: {}, 用户模式: {})",
-                description,
-                exe_path,
-                run_as_user
-            );
+        Request::AddService { description, exe_path, args } => {
+            tracing::info!("正在添加新服务: {} (可执行文件: {})", description, exe_path);
             let mut dynamic = state.dynamic_services.write().await;
             dynamic.push(crate::config::ServiceConfig {
                 description,
                 exe_path,
                 args,
-                auto_start: false,
+                auto_start: crate::config::AutoStart::None,
                 allow_web_control: true,
-                run_as_user,
-                user_name,
-                user_password,
             });
 
             // Return actual service ID: static count + new dynamic index

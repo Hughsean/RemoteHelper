@@ -1,5 +1,5 @@
 use anyhow::Context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -44,13 +44,31 @@ fn default_connection_timeout() -> u64 {
     300 // 5 minutes
 }
 
-// fn default_cert_path() -> String {
-//     "cert.pem".to_string()
-// }
+use std::fmt;
 
-// fn default_key_path() -> String {
-//     "key.pem".to_string()
-// }
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum AutoStart {
+    None,
+    OneShot,
+    Continuous,
+}
+
+impl Default for AutoStart {
+    fn default() -> Self {
+        AutoStart::None
+    }
+}
+
+impl fmt::Display for AutoStart {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AutoStart::None => write!(f, "None"),
+            AutoStart::OneShot => write!(f, "OneShot"),
+            AutoStart::Continuous => write!(f, "Continuous"),
+        }
+    }
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServiceConfig {
@@ -59,15 +77,9 @@ pub struct ServiceConfig {
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
-    pub auto_start: bool,
+    pub auto_start: AutoStart,
     #[serde(default)]
     pub allow_web_control: bool,
-    #[serde(default)]
-    pub run_as_user: bool,
-    #[serde(default)]
-    pub user_name: Option<String>,
-    #[serde(default)]
-    pub user_password: Option<String>,
 }
 
 impl AppConfig {
