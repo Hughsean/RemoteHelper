@@ -1,4 +1,4 @@
-use crate::state::{AppState, ProcessHandle};
+use crate::state::{AppState, ServiceProcess};
 use anyhow::{Context, Result};
 use std::fs;
 use std::process::Stdio;
@@ -7,7 +7,7 @@ use tokio::process::Command;
 fn get_log_file(name: &str) -> Result<std::fs::File> {
     fs::create_dir_all("logs")?;
 
-    // Implement simple log rotation: if file > 10MB, rotate it
+    // 实现简单的日志轮转：如果文件 > 10MB，则进行轮转
     let log_path = format!("logs/{}.log", name);
     if let Ok(metadata) = fs::metadata(&log_path)
         && metadata.len() > 10 * 1024 * 1024
@@ -34,10 +34,7 @@ fn get_log_file(name: &str) -> Result<std::fs::File> {
     Ok(file)
 }
 
-pub async fn start_service(
-    state: &AppState,
-    id: usize,
-) -> Result<()> {
+pub async fn start_service(state: &AppState, id: usize) -> Result<()> {
     let static_count = state.config.service.len();
     let config = if id < static_count {
         state.config.service[id].clone()
@@ -51,7 +48,7 @@ pub async fn start_service(
 
     if is_service_running(state, id).await {
         tracing::info!("服务 ID {} ({}) 已在运行，跳过启动", id, config.description);
-        return Ok(()); // Already running
+        return Ok(()); // 已在运行
     }
 
     tracing::info!(
@@ -67,11 +64,11 @@ pub async fn start_service(
     );
 
     let log_name = format!("service_id({})_{}", id, config.description);
-    // We need separate handles for stdout and stderr because Stdio::from consumes the file
+    // 需要为 stdout 和 stderr 使用独立的文件句柄，因为 Stdio::from 会消费文件
     let stdout_file = get_log_file(&log_name).context("无法创建日志文件")?;
     let stderr_file = get_log_file(&log_name).context("无法创建日志文件")?;
 
-// 系统服务模式：直接启动（不再支持用户模式）
+    // 系统服务模式：直接启动（不再支持用户模式）
     tracing::info!("以系统服务模式启动 (直接生成)");
     let mut cmd = Command::new(&config.exe_path);
     cmd.args(&config.args)
@@ -85,11 +82,20 @@ pub async fn start_service(
     let pid = child.id();
 
     if config.auto_start == crate::config::AutoStart::OneShot {
-        tracing::info!("OneShot 系统模式启动器已生成: {}（PID {:?}），开始监控其退出", config.description, pid);
+        tracing::info!(
+            "OneShot 系统模式启动器已生成: {}（PID {:?}），开始监控其退出",
+            config.description,
+            pid
+        );
         let desc = config.description.clone();
         tokio::spawn(async move {
             match child.wait().await {
-                Ok(status) => tracing::info!("OneShot 服务 {} PID {:?} 已退出，状态: {:?}", desc, pid, status),
+                Ok(status) => tracing::info!(
+                    "OneShot 服务 {} PID {:?} 已退出，状态: {:?}",
+                    desc,
+                    pid,
+                    status
+                ),
                 Err(e) => tracing::error!("等待 OneShot 服务 {} PID {:?} 时出错: {}", desc, pid, e),
             }
         });
@@ -102,7 +108,7 @@ pub async fn start_service(
     // 将 Child 句柄存储到进程表
     {
         let mut processes = state.service_processes.write().await;
-        processes.insert(id, ProcessHandle::Child(child));
+        processes.insert(id, ServiceProcess::new(child));
     }
 
     tracing::info!("服务 ID {} ({}) 启动成功", id, config.description);
@@ -118,101 +124,42 @@ pub async fn stop_service(state: &AppState, id: usize) -> Result<()> {
         processes.remove(&id)
     };
 
-    if let Some(handle) = handle_opt {
+    if let Some(mut sp) = handle_opt {
         tracing::info!("找到服务 ID {} 的运行中进程，正在终止...", id);
 
-        match handle {
-            ProcessHandle::Child(mut child) => {
-                let pid = child.id();
-                tracing::debug!("正在终止 Child 进程，PID: {:?}", pid);
-                // 系统模式：使用 Child 句柄 kill
-                if let Ok(Some(status)) = child.try_wait() {
-                    tracing::info!("服务 ID {} 已终止，状态: {:?}", id, status);
-                    return Ok(());
-                }
+        let pid = sp.pid();
+        tracing::debug!("正在终止 Child 进程，PID: {:?}", pid);
+        // 系统模式：使用 Child 句柄 kill
+        if let Ok(Some(status)) = sp.try_wait() {
+            tracing::info!("服务 ID {} 已终止，状态: {:?}", id, status);
+            return Ok(());
+        }
 
-                child.kill().await.context("无法终止进程")?;
-                tracing::info!("已发送终止信号到 Child 进程 PID: {:?}", pid);
+        sp.kill().await.context("无法终止进程")?;
+        tracing::info!("已发送终止信号到 Child 进程 PID: {:?}", pid);
 
-                let wait_result =
-                    tokio::time::timeout(tokio::time::Duration::from_secs(5), child.wait()).await;
+        let wait_result =
+            tokio::time::timeout(tokio::time::Duration::from_secs(5), sp.wait()).await;
 
-                match wait_result {
-                    Ok(Ok(status)) => {
-                        tracing::info!("服务 ID {} 退出，状态: {:?}", id, status)
-                    }
-                    Ok(Err(e)) => tracing::warn!("等待服务 ID {} 时出错: {}", id, e),
-                    Err(_) => tracing::warn!("等待服务 ID {} 退出超时", id),
-                }
+        match wait_result {
+            Ok(Ok(status)) => {
+                tracing::info!("服务 ID {} 退出，状态: {:?}", id, status)
             }
-            ProcessHandle::Pid(pid) => {
-                // 用户模式：先尝试优雅关闭，失败后强制终止
-                tracing::info!("正在优雅关闭用户模式进程，PID: {}", pid);
-
-                // 第一步：不带 /F 的 taskkill（发送 WM_CLOSE 或 CTRL_C_EVENT）
-                let gentle_result = Command::new("taskkill")
-                    .args(&["/PID", &pid.to_string()])
-                    .output()
-                    .await
-                    .context("无法执行 taskkill")?;
-
-                if gentle_result.status.success() {
-                    tracing::info!("已发送优雅关闭信号到进程 {}", pid);
-
-                    // 等待最多 5 秒让进程优雅退出
-                    for i in 0..10 {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-                        // 检查进程是否已退出
-                        let check = Command::new("tasklist")
-                            .args(&["/FI", &format!("PID eq {}", pid), "/NH"])
-                            .output()
-                            .await;
-
-                        if let Ok(output) = check {
-                            let stdout = String::from_utf8_lossy(&output.stdout);
-                            if !stdout.contains(&pid.to_string()) {
-                                tracing::info!("进程 {} 在 {} 毫秒后优雅退出", pid, (i + 1) * 500);
-                                return Ok(());
-                            }
-                        }
-                    }
-
-                    tracing::warn!("进程 {} 在 5 秒内未优雅退出，强制终止", pid);
-                }
-
-                // 第二步：进程未响应优雅关闭，强制终止
-                tracing::info!("强制终止进程 {}", pid);
-                let force_result = Command::new("taskkill")
-                    .args(&["/F", "/PID", &pid.to_string()])
-                    .output()
-                    .await
-                    .context("无法执行 taskkill /F")?;
-
-                if !force_result.status.success() {
-                    let stderr = String::from_utf8_lossy(&force_result.stderr);
-                    tracing::warn!("强制终止失败: {}", stderr);
-                    return Err(anyhow::anyhow!("无法强制终止进程 {}: {}", pid, stderr));
-                }
-
-                tracing::info!("成功强制终止进程 {}", pid);
-            }
+            Ok(Err(e)) => tracing::warn!("等待服务 ID {} 时出错: {}", id, e),
+            Err(_) => tracing::warn!("等待服务 ID {} 退出超时", id),
         }
     }
 
     Ok(())
 }
 
-pub async fn restart_service(
-    state: &AppState,
-    id: usize,
-) -> Result<()> {
+pub async fn restart_service(state: &AppState, id: usize) -> Result<()> {
     tracing::info!("正在重启服务 ID: {}", id);
 
     stop_service(state, id).await?;
     tracing::debug!("服务已停止，等待 500ms 后重启...");
 
-    // Wait for process to fully terminate to avoid port conflicts
+    // 等待进程完全终止以避免端口冲突
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     start_service(state, id).await?;
@@ -221,7 +168,7 @@ pub async fn restart_service(
 }
 
 pub async fn is_service_running(state: &AppState, id: usize) -> bool {
-    // First check if process exists with a read lock
+    // 首先使用读锁检查进程是否存在
     let has_process = {
         let processes = state.service_processes.read().await;
         processes.contains_key(&id)
@@ -231,45 +178,18 @@ pub async fn is_service_running(state: &AppState, id: usize) -> bool {
         return false;
     }
 
-    // Only acquire write lock if we need to check/clean up
+    // 仅在需要检查/清理时获取写锁
     let mut processes = state.service_processes.write().await;
-    if let Some(handle) = processes.get_mut(&id) {
-        match handle {
-            ProcessHandle::Child(child) => {
-                // 系统模式：使用 try_wait 检查
-                match child.try_wait() {
-                    Ok(None) => true,
-                    Ok(Some(_)) => {
-                        // Process exited, remove it from map (cleanup)
-                        processes.remove(&id);
-                        false
-                    }
-                    Err(_) => false,
-                }
+    if let Some(sp) = processes.get_mut(&id) {
+        // 系统模式：使用 try_wait 检查
+        match sp.try_wait() {
+            Ok(None) => true,
+            Ok(Some(_)) => {
+                // 进程已退出，从 map 中移除（清理）
+                processes.remove(&id);
+                false
             }
-            ProcessHandle::Pid(pid) => {
-                // 用户模式：使用 tasklist 检查进程是否存在
-                let output = std::process::Command::new("tasklist")
-                    .args(&["/FI", &format!("PID eq {}", pid), "/NH"])
-                    .output();
-
-                match output {
-                    Ok(output) => {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        // 如果输出包含 PID，说明进程还在运行
-                        let running = stdout.contains(&pid.to_string());
-                        if !running {
-                            processes.remove(&id);
-                        }
-                        running
-                    }
-                    Err(_) => {
-                        // 无法检查，假定已停止
-                        processes.remove(&id);
-                        false
-                    }
-                }
-            }
+            Err(_) => false,
         }
     } else {
         false

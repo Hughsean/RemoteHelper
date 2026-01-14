@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Initialize logger
-    // NOTE: default env_logger target is stderr; some wrappers only surface stdout.
+    // 注意：默认的 env_logger 输出目标为 stderr；某些封装器仅显示 stdout。
     // Logging to stdout makes diagnostics visible in more environments.
     let _guard = common::func::tracing_init(None, None);
 

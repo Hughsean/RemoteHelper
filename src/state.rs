@@ -7,10 +7,46 @@ use sysinfo::{Networks, System};
 use tokio::process::Child;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-/// 进程句柄：可能是直接的 Child 句柄（系统模式），或者是 PID（用户模式）
-pub enum ProcessHandle {
-    Child(Child),
-    Pid(u32),
+/// 服务进程信息（系统模式）
+///
+/// 目前项目以系统服务模式管理进程，持有 `tokio::process::Child`。使用结构体而不是枚举
+/// 便于记录元数据（例如启动时间）并提供统一的操作方法。
+pub struct ServiceProcess {
+    pub child: Child,
+    #[allow(dead_code)]
+    pub started_at: std::time::SystemTime,
+}
+
+impl ServiceProcess {
+    pub fn new(child: Child) -> Self {
+        Self {
+            child,
+            started_at: std::time::SystemTime::now(),
+        }
+    }
+
+    pub fn pid(&self) -> Option<u32> {
+        self.child.id()
+    }
+
+    pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+
+    pub async fn kill(&mut self) -> anyhow::Result<()> {
+        self.child
+            .kill()
+            .await
+            .map_err(|e| anyhow::anyhow!("kill failed: {}", e))
+    }
+
+    pub fn start_kill(&mut self) -> std::io::Result<()> {
+        self.child.start_kill()
+    }
+
+    pub async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        self.child.wait().await
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -32,7 +68,7 @@ pub struct AppState {
     pub refresh_interval: Arc<RwLock<u64>>,
     pub last_read_time: Arc<RwLock<std::time::Instant>>,
     pub update_notify: Arc<Notify>,
-    pub service_processes: Arc<RwLock<HashMap<usize, ProcessHandle>>>,
+    pub service_processes: Arc<RwLock<HashMap<usize, ServiceProcess>>>,
     pub web_tunnel_process: Arc<Mutex<Option<Child>>>,
     pub active_connections: Arc<AtomicUsize>,
 }
@@ -46,7 +82,7 @@ impl AppState {
             networks: Arc::new(RwLock::new(Networks::new_with_refreshed_list())),
             nvml: Arc::new(RwLock::new(Nvml::init().ok())),
             gpu_cache: Arc::new(RwLock::new(GpuCache::default())),
-            refresh_interval: Arc::new(RwLock::new(1000)), // Default 1s
+            refresh_interval: Arc::new(RwLock::new(1000)), // 默认 1 秒
             last_read_time: Arc::new(RwLock::new(std::time::Instant::now())),
             update_notify: Arc::new(Notify::new()),
             service_processes: Arc::new(RwLock::new(HashMap::new())),

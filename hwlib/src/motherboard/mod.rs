@@ -1,10 +1,10 @@
-// Module declarations - to be implemented
+// 模块声明 - 待实现
 // pub mod smbios;
 // pub mod superio;
 // pub mod motherboard;
 // pub mod config;
 
-// Re-export main types (placeholders)
+// 重新导出主要类型（占位）
 // pub use smbios::SmbiosParser;
 // pub use superio::{SuperIoChip, SuperIoDetection};
 // pub use motherboard::Motherboard;

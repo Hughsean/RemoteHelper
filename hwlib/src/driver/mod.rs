@@ -75,7 +75,7 @@ impl PawnIoDriver {
         tracing::info!("Starting PawnIO driver...");
 
         // Extract driver binary to temp location
-        // Note: File must have .sys extension for Windows to load it as a driver
+        // 注意：文件必须具有 .sys 扩展名，Windows 才能将其加载为驱动程序
         let driver_path = self.resource.extract_driver()?;
 
         tracing::debug!("Driver path: {:?}", driver_path);

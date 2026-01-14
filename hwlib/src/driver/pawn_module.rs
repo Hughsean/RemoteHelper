@@ -79,7 +79,7 @@ impl PawnModuleManager {
             ));
         }
 
-        // Construct module file path
+        // 构造模块文件路径
         let module_path = Path::new(&self.modules_path).join(format!("{}.bin", module_name));
 
         if !module_path.exists() {
@@ -89,7 +89,7 @@ impl PawnModuleManager {
             )));
         }
 
-        // Read module binary data
+        // 读取模块二进制数据
         let binary_data = fs::read(&module_path).map_err(|e| {
             DriverError::IoctlError(format!(
                 "Failed to read module file {:?}: {}",
@@ -103,13 +103,13 @@ impl PawnModuleManager {
             binary_data.len()
         );
 
-        // PawnIO associates a loaded module with the handle.
-        // Keep a dedicated handle per module, like LibreHardwareMonitor's C# wrappers.
+        // PawnIO 将已加载的模块与句柄关联。
+        // 为每个模块保留专用句柄，类似 LibreHardwareMonitor 的 C# 封装。
         let module_ioctl = self.ioctl.clone();
 
-        // Load the binary into the driver
+        // 将二进制加载到驱动中
         if let Err(e) = module_ioctl.load_pawn_binary(module_name, &binary_data) {
-            // Official PawnIO driver may not implement Pawn script IOCTLs.
+            // 官方的 PawnIO 驱动可能未实现 Pawn 脚本的 IOCTL。
             if matches!(e, DriverError::NotSupported(_)) {
                 self.pawn_script_supported = false;
             }
@@ -121,7 +121,7 @@ impl PawnModuleManager {
         self.module_ioctls
             .insert(module_name.to_string(), module_ioctl);
 
-        // Mark as loaded
+        // 标记为已加载
         self.loaded_modules.insert(module_name.to_string(), true);
 
         tracing::info!("Successfully loaded Pawn module: {}", module_name);

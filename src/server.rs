@@ -21,7 +21,7 @@ pub async fn handle_connection(socket: TcpStream, state: AppState) {
     )
     .await;
 
-    // Decrement connection counter
+    // 递减连接计数器
     state.active_connections.fetch_sub(1, Ordering::Relaxed);
 
     match result {
@@ -35,13 +35,13 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
     let peer_addr = socket.peer_addr().ok();
     tracing::info!("正在处理来自 {:?} 的连接", peer_addr);
 
-    // Increment connection counter when actually starting to handle connection
+    // 在实际开始处理连接时递增连接计数器
     state.active_connections.fetch_add(1, Ordering::Relaxed);
 
-    // --- Handshake Phase ---
+    // --- 握手阶段 ---
     let mut buf = [0u8; 1024];
 
-    // 1. Read ClientHello
+    // 1. 读取 ClientHello
     let len = socket.read_u32().await? as usize;
     if len > buf.len() {
         return Err(anyhow::anyhow!("Handshake message too large"));
@@ -54,11 +54,11 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
         _ => return Err(anyhow::anyhow!("Expected ClientHello")),
     };
 
-    // 2. Generate Server Key & Shared Secret
+    // 2. 生成服务器密钥与共享密钥
     let (secret, server_public) = common::crypto::generate_ephemeral();
     let server_pub_b64 = BASE64_STANDARD.encode(server_public.as_bytes());
 
-    // 3. Send ServerHello
+    // 3. 发送 ServerHello
     let resp = Handshake::ServerHello {
         public_key: server_pub_b64,
     };
@@ -66,7 +66,7 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
     socket.write_u32(resp_bytes.len() as u32).await?;
     socket.write_all(&resp_bytes).await?;
 
-    // 4. Initialize Crypto Session
+    // 4. 初始化加密会话
     let client_pub_array: [u8; 32] = client_pub_bytes
         .try_into()
         .map_err(|_| anyhow::anyhow!("Invalid client public key length"))?;
@@ -76,23 +76,23 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
 
     tracing::info!("与 {:?} 建立加密会话", peer_addr);
 
-    // --- Split socket into reader and writer ---
+    // --- 将 socket 拆分为读/写 ---
     let (socket_read, socket_write) = socket.into_split();
 
-    // Wrap writer in Arc<Mutex> for shared access
+    // 将写端包装在 Arc<Mutex> 以便共享访问
     let socket_write = std::sync::Arc::new(tokio::sync::Mutex::new(socket_write));
     let crypto = std::sync::Arc::new(tokio::sync::Mutex::new(crypto));
 
-    // --- Encrypted Loop with Async Request Processing ---
+    // --- 加密循环与异步请求处理 ---
     let mut authenticated = false;
     let mut current_challenge: Option<(String, Instant)> = None;
-    let mut read_buf = [0u8; 10 * 1024]; // 10 KB buffer for encrypted frames
+    let mut read_buf = [0u8; 10 * 1024]; // 用于加密帧的 10 KB 缓冲区
     const CHALLENGE_TIMEOUT: Duration = Duration::from_secs(30);
 
     // 创建响应发送队列
     let (resp_tx, mut resp_rx) = mpsc::channel::<Response>(32);
 
-    // Spawn dedicated response sender task
+    // 启动专用响应发送任务
     let socket_write_clone = socket_write.clone();
     let crypto_clone = crypto.clone();
     let resp_sender_handle = tokio::spawn(async move {
@@ -106,13 +106,13 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
         }
     });
 
-    // Main request reading loop
+    // 主请求读取循环
     let mut socket_read = socket_read;
     loop {
-        // Read encrypted length
+        // 读取加密长度
         let len = match socket_read.read_u32().await {
             Ok(n) => n as usize,
-            Err(_) => break, // Connection closed
+            Err(_) => break, // 连接已关闭
         };
 
         if len > read_buf.len() {
@@ -120,12 +120,12 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
             break;
         }
 
-        // Read encrypted body
+        // 读取加密主体
         if socket_read.read_exact(&mut read_buf[..len]).await.is_err() {
             break;
         }
 
-        // Decrypt
+        // 解密
         let plaintext = {
             let mut cry = crypto.lock().await;
             match cry.decrypt(&read_buf[..len]) {
@@ -137,7 +137,7 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
             }
         };
 
-        // Deserialize request
+        // 反序列化请求
         tracing::debug!("收到加密请求，大小: {} 字节", len);
         let req: Request = match serde_json::from_slice(&plaintext) {
             Ok(r) => r,
@@ -151,7 +151,7 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
             }
         };
 
-        // Process request - differentiate auth requests from business requests
+        // 处理请求 - 区分认证请求与业务请求
         tracing::debug!(
             "Processing request type: {:?}",
             std::mem::discriminant(&req)
@@ -193,7 +193,7 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
                 }
             }
             _ => {
-                // Business request - process asynchronously
+                // 业务请求 - 异步处理
                 if !authenticated {
                     if resp_tx
                         .send(Response::Error("未授权".to_string()))
@@ -205,7 +205,7 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
                     continue;
                 }
 
-                // Spawn async task to process request without blocking main loop
+                // 启动异步任务处理请求，避免阻塞主循环
                 let state_clone = state.clone();
                 let resp_tx_clone = resp_tx.clone();
                 tokio::spawn(async move {
@@ -216,7 +216,7 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
         }
     }
 
-    // Wait for response sender to finish
+    // 等待响应发送器完成
     drop(resp_tx);
     let _ = resp_sender_handle.await;
 
@@ -256,7 +256,7 @@ fn verify_login(state: &AppState, pub_key_b64: &str, sig_b64: &str, challenge: &
         &pub_key_b64.chars().take(16).collect::<String>()
     );
 
-    // Check if key is authorized
+    // 检查密钥是否被授权
     if !state
         .config
         .web_panel
@@ -309,20 +309,28 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
     tracing::debug!("正在处理已认证请求");
     match req {
         Request::GetStatus { interval_ms } => {
-            // Update last read time
+            // 更新最后读取时间
             {
                 let mut last_read = state.last_read_time.write().await;
                 *last_read = std::time::Instant::now();
             }
 
-            // Update refresh interval if provided
+            // 如果提供了刷新间隔，则更新
             if let Some(ms) = interval_ms
                 && ms >= 100
             {
-                let mut lock = state.refresh_interval.write().await;
-                if *lock != ms {
-                    *lock = ms;
-                    state.update_notify.notify_one();
+                // 先使用读锁以避免不必要的写锁争用。
+                let current = {
+                    let r = state.refresh_interval.read().await;
+                    *r
+                };
+
+                if current != ms {
+                    let mut lock = state.refresh_interval.write().await;
+                    if *lock != ms {
+                        *lock = ms;
+                        state.update_notify.notify_one();
+                    }
                 }
             }
 
@@ -395,13 +403,10 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
             let mut services = Vec::new();
             let processes = state.service_processes.read().await;
 
-            // Static services
+            // 静态服务
             for (id, svc_config) in state.config.service.iter().enumerate() {
                 let running = processes.contains_key(&id);
-                let pid = processes.get(&id).and_then(|handle| match handle {
-                    crate::state::ProcessHandle::Child(c) => c.id(),
-                    crate::state::ProcessHandle::Pid(p) => Some(*p),
-                });
+                let pid = processes.get(&id).and_then(|sp| sp.pid());
 
                 services.push(ServiceInfo {
                     id,
@@ -411,16 +416,13 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 });
             }
 
-            // Dynamic services
+            // 动态服务
             let dynamic = state.dynamic_services.read().await;
             let offset = state.config.service.len();
             for (i, svc_config) in dynamic.iter().enumerate() {
                 let id = offset + i;
                 let running = processes.contains_key(&id);
-                let pid = processes.get(&id).and_then(|handle| match handle {
-                    crate::state::ProcessHandle::Child(c) => c.id(),
-                    crate::state::ProcessHandle::Pid(p) => Some(*p),
-                });
+                let pid = processes.get(&id).and_then(|sp| sp.pid());
 
                 services.push(ServiceInfo {
                     id,
@@ -466,7 +468,11 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 },
             }
         }
-        Request::AddService { description, exe_path, args } => {
+        Request::AddService {
+            description,
+            exe_path,
+            args,
+        } => {
             tracing::info!("正在添加新服务: {} (可执行文件: {})", description, exe_path);
             let mut dynamic = state.dynamic_services.write().await;
             dynamic.push(crate::config::ServiceConfig {
@@ -477,7 +483,7 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 allow_web_control: true,
             });
 
-            // Return actual service ID: static count + new dynamic index
+            // 返回实际的服务 ID：静态数量 + 新增动态索引
             let id = state.config.service.len() + dynamic.len() - 1;
             Response::ServiceAdded(id)
         }

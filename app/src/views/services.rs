@@ -34,7 +34,11 @@ pub fn Services() -> Element {
     let control_service = move |id: usize, action: ServiceAction| {
         let load_services_clone = load_services.clone();
         spawn(async move {
-            let result = client::send_request(Request::ControlService { id, action: action.clone() }).await;
+            let result = client::send_request(Request::ControlService {
+                id,
+                action: action.clone(),
+            })
+            .await;
 
             match result {
                 Ok(Response::Ok) => {

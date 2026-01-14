@@ -10,7 +10,7 @@ use winapi::um::winsvc::{
     SERVICE_CONTROL_STOP, SERVICE_RUNNING, SERVICE_STATUS, SERVICE_STOPPED, StartServiceW,
 };
 
-// Define service constants that might not be available
+// 定义可能不可用的服务常量
 use tracing;
 
 const SERVICE_KERNEL_DRIVER: u32 = 0x00000001;
@@ -46,7 +46,7 @@ impl DriverService {
     pub fn start(&mut self) -> DriverResult<()> {
         tracing::info!("Starting driver service: {}", self.service_name);
 
-        // Open Service Control Manager
+        // 打开服务控制管理器
         let scm_handle = unsafe { OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_ALL_ACCESS) };
 
         if scm_handle.is_null() {
@@ -59,12 +59,12 @@ impl DriverService {
 
         self.scm_handle = Some(scm_handle);
 
-        // Try to open existing service first
+        // 先尝试打开现有服务
         let service_name_wide = to_wide_string(&self.service_name);
         let mut service_handle =
             unsafe { OpenServiceW(scm_handle, service_name_wide.as_ptr(), SERVICE_ALL_ACCESS) };
 
-        // If service doesn't exist, create it
+        // 如果服务不存在，则创建它
         if service_handle.is_null() {
             tracing::info!("Service does not exist, creating new service");
 
@@ -101,7 +101,7 @@ impl DriverService {
 
         self.service_handle = Some(service_handle);
 
-        // Check current service status
+        // 检查当前服务状态
         let mut status: SERVICE_STATUS = unsafe { std::mem::zeroed() };
         let status_result = unsafe { QueryServiceStatus(service_handle, &mut status) };
 
@@ -113,7 +113,7 @@ impl DriverService {
             )));
         }
 
-        // Start service if not already running
+        // 如果尚未运行，则启动服务
         if status.dwCurrentState != SERVICE_RUNNING {
             tracing::info!("Starting service...");
 
@@ -127,7 +127,7 @@ impl DriverService {
                 )));
             }
 
-            // Wait for service to start (with timeout)
+            // 等待服务启动（带超时）
             self.wait_for_service_state(SERVICE_RUNNING, 10000)?;
         }
 
@@ -146,13 +146,13 @@ impl DriverService {
                 unsafe { ControlService(service_handle, SERVICE_CONTROL_STOP, &mut status) };
 
             if stop_result != 0 || status.dwCurrentState == SERVICE_STOPPED {
-                // Wait for service to stop
+                // 等待服务停止
                 if let Err(e) = self.wait_for_service_state(SERVICE_STOPPED, 5000) {
                     tracing::warn!("Service stop timeout: {}", e);
                 }
             }
 
-            // Delete the service
+            // 删除服务
             let delete_result = unsafe { DeleteService(service_handle) };
             if delete_result == 0 {
                 let error_code = unsafe { GetLastError() };
@@ -235,7 +235,7 @@ impl Drop for DriverService {
     }
 }
 
-/// Convert string to wide string (UTF-16)
+/// 将字符串转换为宽字符串（UTF-16）
 fn to_wide_string(s: &str) -> Vec<u16> {
     OsString::from(s)
         .encode_wide()
@@ -252,7 +252,7 @@ mod tests {
         let test_str = "TestService";
         let wide = to_wide_string(test_str);
 
-        // Should be non-empty and null-terminated
+        // 应非空且以空字符结尾
         assert!(!wide.is_empty());
         assert_eq!(wide[wide.len() - 1], 0);
     }

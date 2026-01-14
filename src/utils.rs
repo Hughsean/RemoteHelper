@@ -2,10 +2,10 @@ use anyhow::Result;
 
 /// 测试指定 URL 是否返回 503 状态码
 ///
-/// # Arguments
+/// # 参数
 /// * `url` - 要测试的 URL
 ///
-/// # Returns
+/// # 返回值
 /// * `Ok(true)` - 如果返回 503 状态码
 /// * `Ok(false)` - 如果返回其他状态码
 /// * `Err` - 如果请求失败

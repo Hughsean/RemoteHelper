@@ -17,7 +17,6 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
     // 监听选中索引变化，自动滚动
     use_effect(move || {
         if show_suggestions() && !path_suggestions().is_empty() {
-
             spawn(async move {
                 let script = format!(
                     r#"
@@ -228,7 +227,7 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
                             oninput: move |e| args.set(e.value().clone()),
                         }
                     }
-                
+
                 }
 
                 div { class: "dialog-footer",

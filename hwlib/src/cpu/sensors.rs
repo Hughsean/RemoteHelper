@@ -2,7 +2,7 @@ use crate::core::{Control, Identifier, Parameter, Sensor, SensorType, SensorValu
 use std::collections::VecDeque;
 use std::time::Duration;
 
-/// Temperature sensor for CPU
+/// CPU 的温度传感器
 #[derive(Clone)]
 pub struct TemperatureSensor {
     identifier: Identifier,
@@ -112,7 +112,7 @@ impl Sensor for TemperatureSensor {
     }
 }
 
-/// Voltage sensor for CPU
+/// CPU 的电压传感器
 #[derive(Clone)]
 pub struct VoltageSensor {
     identifier: Identifier,
@@ -222,7 +222,7 @@ impl Sensor for VoltageSensor {
     }
 }
 
-/// Power sensor for CPU
+/// CPU 的功率传感器
 #[derive(Clone)]
 pub struct PowerSensor {
     identifier: Identifier,
