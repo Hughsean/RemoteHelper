@@ -90,7 +90,11 @@ connection_timeout_secs = 300
 description = "Remote Desktop Access"
 exe_path = "frpc.exe"
 args = ["-f", "token:port"]
-auto_start = false
+# 服务启动模式："none" | "oneshot" | "continuous"
+# - "none"      : 不自动启动
+# - "oneshot"   : 启动后会立即结束（不保留 PID）
+# - "continuous": 启动后会持续运行（保留 PID 以便后续销毁）
+auto_start = "none"
 allow_web_control = true
 ```
 
@@ -203,7 +207,7 @@ cargo run --bin gen_cert
 description = "服务描述"
 exe_path = "可执行文件路径"
 args = ["参数1", "参数2"]
-auto_start = false           # 服务器启动时自动启动
+auto_start = "none"           # 服务启动模式："none" | "oneshot" | "continuous"
 allow_web_control = true     # 允许 Web 控制
 ```
 

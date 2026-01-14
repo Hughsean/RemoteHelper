@@ -22,16 +22,11 @@ pub enum Request {
     ControlService {
         id: usize,
         action: ServiceAction,
-        user_name: Option<String>,
-        user_password: Option<String>,
     },
     AddService {
         description: String,
         exe_path: String,
         args: Vec<String>,
-        run_as_user: bool,
-        user_name: Option<String>,
-        user_password: Option<String>,
     },
     QueryPath {
         path: String,
@@ -84,7 +79,6 @@ pub struct ServiceInfo {
     pub description: String,
     pub running: bool,
     pub pid: Option<u32>,
-    pub run_as_user: bool,
 }
 
 impl PartialEq for SystemInfo {

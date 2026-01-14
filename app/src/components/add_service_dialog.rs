@@ -9,7 +9,6 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
     let mut description = use_signal(|| String::new());
     let mut exe_path = use_signal(|| String::new());
     let mut args = use_signal(|| String::new());
-    let mut run_as_user = use_signal(|| false);
     let mut path_suggestions = use_signal(|| Vec::<PathItem>::new());
     let mut show_suggestions = use_signal(|| false);
     let mut is_submitting = use_signal(|| false);
@@ -18,7 +17,7 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
     // 监听选中索引变化，自动滚动
     use_effect(move || {
         if show_suggestions() && !path_suggestions().is_empty() {
-            let idx = selected_index();
+
             spawn(async move {
                 let script = format!(
                     r#"
@@ -79,16 +78,12 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
         let desc = description().clone();
         let path = exe_path().clone();
         let args_vec: Vec<String> = args().split_whitespace().map(|s| s.to_string()).collect();
-        let run_user = run_as_user();
 
         spawn(async move {
             match client::send_request(Request::AddService {
                 description: desc,
                 exe_path: path,
                 args: args_vec,
-                run_as_user: run_user,
-                user_name: None,
-                user_password: None,
             })
             .await
             {
@@ -233,18 +228,7 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
                             oninput: move |e| args.set(e.value().clone()),
                         }
                     }
-
-                    // 以用户模式运行
-                    div { class: "form-group checkbox-group",
-                        label {
-                            input {
-                                r#type: "checkbox",
-                                checked: run_as_user(),
-                                onchange: move |e| run_as_user.set(e.checked()),
-                            }
-                            span { "以用户模式运行（可显示界面）" }
-                        }
-                    }
+                
                 }
 
                 div { class: "dialog-footer",
