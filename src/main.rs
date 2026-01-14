@@ -70,6 +70,7 @@ async fn main() -> anyhow::Result<()> {
     // 启动后台监控任务
     let monitor_state = state.clone();
     tokio::spawn(async move {
+        let mut first_pause = false;
         loop {
             let interval_ms = *monitor_state.refresh_interval.read().await;
 
@@ -81,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
 
             let timeout = tokio::select! {
                 _ = if should_pause {
-                    tokio::time::sleep(Duration::from_secs(1))
+                    tokio::time::sleep(Duration::from_secs(3))
                 }
                 else {
                     tokio::time::sleep(Duration::from_millis(interval_ms))
@@ -97,9 +98,14 @@ async fn main() -> anyhow::Result<()> {
 
             if timeout && should_pause {
                 // 跳过本次周期
-                tracing::info!("监控已暂停 - 无最近读取");
+                if first_pause {
+                    tracing::info!("监控已暂停 - 无最近读取");
+                }
+                first_pause = false;
                 continue;
             }
+
+            first_pause = true;
 
             tracing::trace!("正在刷新系统指标...");
             {
