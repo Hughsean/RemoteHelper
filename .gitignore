@@ -67,3 +67,4 @@ yd*
 *.lock
 
 config.toml
+Temp/
