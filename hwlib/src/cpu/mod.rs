@@ -15,7 +15,7 @@ pub mod sensors;
 // Re-export main types
 pub use amd::AmdCpu;
 pub use detection::{CpuDetection, CpuInfo};
-pub use sensors::{PowerSensor, TemperatureSensor, VoltageSensor};
+pub use sensors::{PowerSensor, TemperatureSensor};
 
 use crate::driver::PawnModuleManager;
 use std::sync::{Arc, Mutex};

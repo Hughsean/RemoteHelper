@@ -1,6 +1,6 @@
 use crate::core::{Hardware, HardwareResult, HardwareType, Identifier, Sensor};
 use crate::cpu::detection::CpuInfo;
-use crate::cpu::sensors::{PowerSensor, TemperatureSensor, VoltageSensor};
+use crate::cpu::sensors::{PowerSensor, TemperatureSensor};
 use crate::driver::PawnModuleManager;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -48,18 +48,15 @@ impl AmdCpu {
 
         let tctl_id = Identifier::new(HardwareType::CPU, 0, "Core (Tctl)");
         let tdie_id = Identifier::new(HardwareType::CPU, 0, "Core (Tdie)");
-        let voltage_id = Identifier::new(HardwareType::CPU, 0, "CPU Core Voltage");
         let power_id = Identifier::new(HardwareType::CPU, 0, "CPU Package Power");
 
-        let tctl_sensor = TemperatureSensor::new(tctl_id, "CPU Package".to_string());
+        let tctl_sensor = TemperatureSensor::new(tctl_id, "CPU Package (Tctl)".to_string());
         let tdie_sensor = TemperatureSensor::new(tdie_id, "CPU Package (socket)".to_string());
-        let voltage_sensor = VoltageSensor::new(voltage_id, "CPU Core".to_string());
-        let power_sensor = PowerSensor::new(power_id, "CPU Package".to_string());
+        let power_sensor = PowerSensor::new(power_id, "CPU Package Power".to_string());
 
         let sensors: Vec<Box<dyn Sensor>> = vec![
             Box::new(tctl_sensor) as Box<dyn Sensor>,
             Box::new(tdie_sensor) as Box<dyn Sensor>,
-            Box::new(voltage_sensor) as Box<dyn Sensor>,
             Box::new(power_sensor) as Box<dyn Sensor>,
         ];
 
@@ -267,10 +264,12 @@ impl Hardware for AmdCpu {
                             dt,
                             watts
                         );
-                        if let Some(sensor) =
-                            self.sensors[3].as_any_mut().downcast_mut::<PowerSensor>()
-                        {
-                            sensor.update_value(watts);
+                        // Find PowerSensor dynamically to avoid relying on fixed index
+                        for s in &mut self.sensors {
+                            if let Some(sensor) = s.as_any_mut().downcast_mut::<PowerSensor>() {
+                                sensor.update_value(watts);
+                                break;
+                            }
                         }
                     }
                 }
