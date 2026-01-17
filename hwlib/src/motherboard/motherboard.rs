@@ -30,7 +30,7 @@ impl Motherboard {
     }
 
     pub fn set_pawn_manager(&mut self, pm: Arc<Mutex<PawnModuleManager>>) {
-        tracing::info!("Setting pawn_manager for Motherboard {}", self.name);
+        tracing::debug!("Setting pawn_manager for Motherboard {}", self.name);
         self.pawn_manager = Some(pm);
     }
 }
@@ -76,7 +76,7 @@ impl Hardware for Motherboard {
 
             // Try detecting SuperIO chip (placeholder implementation)
             if let Some(chip) = crate::motherboard::superio::detect_superio(&mut pm) {
-                tracing::info!("Detected SuperIO chip: {}", chip.name);
+                tracing::debug!("Detected SuperIO chip: {}", chip.name);
                 self.properties.insert("SuperIO".to_string(), chip.name);
             } else {
                 tracing::debug!("No SuperIO detected (or detection not implemented)");
@@ -84,7 +84,7 @@ impl Hardware for Motherboard {
                 // Try IsaBridge EC MMIO probing as a fallback
                 match crate::motherboard::ec::find_superio_mmio(&mut pm) {
                     Some(vec) => {
-                        tracing::info!("IsaBridgeEC reported potential MMIO regions: {:?}", vec);
+                        tracing::debug!("IsaBridgeEC reported potential MMIO regions: {:?}", vec);
                         self.properties
                             .insert("IsaBridgeMMIO".to_string(), format!("{:?}", vec));
                     }

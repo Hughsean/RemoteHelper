@@ -56,9 +56,9 @@ impl CpuGroup {
     ///
     /// 如果检测失败则返回 [`HardwareError`](crate::core::HardwareError)。
     pub fn detect_cpus(&mut self) -> crate::core::HardwareResult<()> {
-        tracing::info!("Detecting CPUs...");
+        tracing::debug!("Detecting CPUs...");
         self.cpus = crate::cpu::detection::CpuDetection::detect_cpus()?;
-        tracing::info!("Detected {} CPU(s)", self.cpus.len());
+        tracing::debug!("Detected {} CPU(s)", self.cpus.len());
         Ok(())
     }
 
@@ -74,7 +74,7 @@ impl CpuGroup {
     ///
     /// * `pm` - 共享的 PawnIO 模块管理器引用
     pub fn set_pawn_manager(&mut self, pm: Arc<Mutex<PawnModuleManager>>) {
-        tracing::info!("Setting pawn_manager for CpuGroup");
+        tracing::debug!("Setting pawn_manager for CpuGroup");
         self.pawn_manager = Some(pm);
     }
 

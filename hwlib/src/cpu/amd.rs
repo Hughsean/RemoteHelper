@@ -141,7 +141,7 @@ impl Hardware for AmdCpu {
                     let temp_raw = data & 0xfff;
                     // Use package temperature (raw * 1/16)
                     let package_c = temp_raw as f64 * 0.0625;
-                    tracing::info!(
+                    tracing::debug!(
                         "Read temperature MSR: raw={}, package_c={}",
                         temp_raw,
                         package_c
@@ -191,7 +191,7 @@ impl Hardware for AmdCpu {
                             name_offset = -10.0;
                         }
 
-                        tracing::info!(
+                        tracing::debug!(
                             "Read temperature SMN: raw={}, t={}, flag={}, name_offset={}",
                             raw_temp,
                             t,
@@ -267,7 +267,7 @@ impl Hardware for AmdCpu {
                         let joules = delta * energy_unit_joule;
                         let watts = joules / dt;
 
-                        tracing::info!(
+                        tracing::debug!(
                             "Read package power: delta={}, dt_s={}, W={}",
                             delta,
                             dt,
