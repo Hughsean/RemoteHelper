@@ -197,6 +197,24 @@ const SMBUS_NCT6793_HASH: &str = "385bd1b229faa44aefe2eb1f938ac629f6d897f1a4931d
 const SMBUS_PIIX4_BIN: &[u8] = include_bytes!("../../../PawnIO/SmbusPIIX4.bin");
 const SMBUS_PIIX4_HASH: &str = "3f8b44c93eb030d59fb68c6fdc6857c61313eab2b6aa0ed64595396d71bf3ea3";
 
+/// Return embedded PawnIO module binary if available
+///
+/// Module names are expected without suffix (e.g. "AMDFamily17", "RyzenSMU").
+pub fn embedded_module_bytes(module_name: &str) -> Option<&'static [u8]> {
+    match module_name {
+        "AMDFamily17" => Some(AMD_FAMILY_17_BIN),
+        "RyzenSMU" => Some(RYZEN_SMU_BIN),
+        "IsaBridgeEC" => Some(ISA_BRIDGE_EC_BIN),
+        "IntelMSR" => Some(INTEL_MSR_BIN),
+        "LpcACPIEC" => Some(LPC_ACPI_EC_BIN),
+        "LpcIO" => Some(LPC_IO_BIN),
+        "SmbusI801" => Some(SMBUS_I801_BIN),
+        "SmbusNCT6793" => Some(SMBUS_NCT6793_BIN),
+        "SmbusPIIX4" => Some(SMBUS_PIIX4_BIN),
+        _ => None,
+    }
+}
+
 /// Helper function to calculate SHA256 hash of a file
 pub fn calculate_file_hash<P: AsRef<Path>>(path: P) -> DriverResult<String> {
     let data = fs::read(path)?;
@@ -227,5 +245,15 @@ mod tests {
             hash,
             "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
         );
+    }
+
+    #[test]
+    fn test_embedded_module_exists() {
+        assert!(embedded_module_bytes("AMDFamily17").is_some());
+    }
+
+    #[test]
+    fn test_embedded_module_unknown() {
+        assert!(embedded_module_bytes("NonExistentModule").is_none());
     }
 }

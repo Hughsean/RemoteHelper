@@ -82,20 +82,42 @@ impl PawnModuleManager {
         // 构造模块文件路径
         let module_path = Path::new(&self.modules_path).join(format!("{}.bin", module_name));
 
-        if !module_path.exists() {
+        // 尝试从磁盘读取模块二进制；如果不存在或读取失败，回退到嵌入数据（如果可用）
+        let binary_data: Vec<u8> = if module_path.exists() {
+            match fs::read(&module_path) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to read module file {:?}: {}, falling back to embedded",
+                        module_path,
+                        e
+                    );
+                    if let Some(embedded) =
+                        crate::driver::driver_resource::embedded_module_bytes(module_name)
+                    {
+                        embedded.to_vec()
+                    } else {
+                        return Err(DriverError::IoctlError(format!(
+                            "Failed to read module file {:?}: {}",
+                            module_path, e
+                        )));
+                    }
+                }
+            }
+        } else if let Some(embedded) =
+            crate::driver::driver_resource::embedded_module_bytes(module_name)
+        {
+            tracing::info!(
+                "Module file {:?} not found, using embedded binary",
+                module_path
+            );
+            embedded.to_vec()
+        } else {
             return Err(DriverError::IoctlError(format!(
                 "Module file not found: {:?}",
                 module_path
             )));
-        }
-
-        // 读取模块二进制数据
-        let binary_data = fs::read(&module_path).map_err(|e| {
-            DriverError::IoctlError(format!(
-                "Failed to read module file {:?}: {}",
-                module_path, e
-            ))
-        })?;
+        };
 
         tracing::info!(
             "Loading Pawn module: {} ({} bytes)",

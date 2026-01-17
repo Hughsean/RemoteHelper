@@ -129,7 +129,7 @@ impl Hardware for AmdCpu {
     }
 
     fn update(&mut self) -> HardwareResult<()> {
-        tracing::info!("Update called, family = {}", self.info.family);
+        tracing::debug!("Update called, family = {}", self.info.family);
         if let Some(pm) = &self.pawn_manager {
             let mut pm = pm.lock().unwrap();
 

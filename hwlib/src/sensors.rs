@@ -10,6 +10,7 @@
 use crate::core::{Identifier, SensorType, SensorValue};
 use crate::cpu::CpuGroup;
 use crate::driver::PawnModuleManager;
+#[cfg(feature = "motherboard_sensors")]
 use crate::motherboard::MotherboardGroup;
 use std::sync::{Arc, Mutex};
 
@@ -26,6 +27,7 @@ pub struct SensorReading {
 /// 传感器管理器，封装 CPU 与主板的检测、更新与读取
 pub struct SensorHub {
     cpu_group: CpuGroup,
+    #[cfg(feature = "motherboard_sensors")]
     mb_group: MotherboardGroup,
     pawn_manager: Option<Arc<Mutex<PawnModuleManager>>>,
 }
@@ -35,6 +37,7 @@ impl SensorHub {
     pub fn new() -> Self {
         Self {
             cpu_group: CpuGroup::new(),
+            #[cfg(feature = "motherboard_sensors")]
             mb_group: MotherboardGroup::new(),
             pawn_manager: None,
         }
@@ -44,12 +47,14 @@ impl SensorHub {
     pub fn set_pawn_manager(&mut self, pm: Arc<Mutex<PawnModuleManager>>) {
         self.pawn_manager = Some(pm.clone());
         self.cpu_group.set_pawn_manager(pm.clone());
+        #[cfg(feature = "motherboard_sensors")]
         self.mb_group.set_pawn_manager(pm);
     }
 
     /// 检测硬件（CPU / Motherboard）
     pub fn detect(&mut self) -> crate::core::HardwareResult<()> {
         self.cpu_group.detect_cpus()?;
+        #[cfg(feature = "motherboard_sensors")]
         self.mb_group.detect_motherboards()?;
         Ok(())
     }
@@ -57,6 +62,7 @@ impl SensorHub {
     /// 更新并读取所有传感器。返回 (cpu_sensors, motherboard_sensors)
     ///
     /// 注意：主板传感器的 `value` 被强制置为 `None`（当前主板实现不稳定）。
+    #[cfg(feature = "motherboard_sensors")]
     pub fn read_all(
         &mut self,
     ) -> crate::core::HardwareResult<(Vec<SensorReading>, Vec<SensorReading>)> {
@@ -100,6 +106,38 @@ impl SensorHub {
             }
         }
 
+        Ok((cpu_readings, mb_readings))
+    }
+
+    #[cfg(not(feature = "motherboard_sensors"))]
+    pub fn read_all(
+        &mut self,
+    ) -> crate::core::HardwareResult<(Vec<SensorReading>, Vec<SensorReading>)> {
+        // ensure pawn manager set on CPU group if present
+        if let Some(pm) = &self.pawn_manager {
+            self.cpu_group.set_pawn_manager(pm.clone());
+        }
+
+        // update CPU sensors only
+        let _ = self.cpu_group.update_all();
+
+        // gather CPU sensors
+        let mut cpu_readings: Vec<SensorReading> = Vec::new();
+        for cpu in self.cpu_group.cpus() {
+            for s in cpu.sensors() {
+                let value = s.values().last().cloned();
+                let reading = SensorReading {
+                    identifier: s.identifier().clone(),
+                    name: s.name().to_string(),
+                    sensor_type: s.sensor_type(),
+                    value,
+                };
+                cpu_readings.push(reading);
+            }
+        }
+
+        // No motherboard support: return empty list
+        let mb_readings: Vec<SensorReading> = Vec::new();
         Ok((cpu_readings, mb_readings))
     }
 }

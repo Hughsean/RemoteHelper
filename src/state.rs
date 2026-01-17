@@ -102,7 +102,6 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use nvml_wrapper::Nvml;
     use nvml_wrapper::enum_wrappers::device::TemperatureSensor;
     use nvml_wrapper::error::NvmlError;

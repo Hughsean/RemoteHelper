@@ -60,3 +60,7 @@ common.workspace = true
 [[bin]]
 name = "cli"
 path = "src/bin/cli.rs"
+
+[features]
+# Enable motherboard sensor support (experimental)
+motherboard_sensors = []

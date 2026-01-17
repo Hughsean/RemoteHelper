@@ -38,7 +38,7 @@ impl MotherboardGroup {
 
     /// 设置 PawnIO 驱动管理器以实现低级硬件访问。
     pub fn set_pawn_manager(&mut self, pm: Arc<Mutex<PawnModuleManager>>) {
-        tracing::info!("Setting pawn_manager for MotherboardGroup");
+        tracing::debug!("Setting pawn_manager for MotherboardGroup");
         self.pawn_manager = Some(pm);
     }
 
