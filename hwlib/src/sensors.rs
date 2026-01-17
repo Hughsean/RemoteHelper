@@ -33,7 +33,6 @@ pub struct SensorHub {
     pawn_manager: Option<Arc<Mutex<PawnModuleManager>>>,
 }
 
-
 impl SensorHub {
     /// 创建新的 `SensorHub`。
     pub fn new() -> Self {

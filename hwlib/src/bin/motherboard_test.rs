@@ -25,29 +25,30 @@ fn main() -> Result<()> {
     let mut mb_group = MotherboardGroup::new();
 
     if let Some(driver) = driver_opt
-        && let Ok(pm) = driver.pawn_manager() {
-            mb_group.set_pawn_manager(pm.clone());
+        && let Ok(pm) = driver.pawn_manager()
+    {
+        mb_group.set_pawn_manager(pm.clone());
 
-            // Run SuperIO diagnostic and print summary
-            if let Ok(pm_ref) = driver.pawn_manager() {
-                let pm_arc = pm_ref.clone();
-                let mut pm = pm_arc.lock().unwrap();
-                let diag = hwlib::motherboard::superio::diagnose(&mut pm);
-                println!("\n--- SuperIO Diagnostic ---");
-                for line in diag {
-                    println!("  {}", line);
-                }
-                println!("--- End SuperIO Diagnostic ---\n");
-
-                // Run EC (IsaBridge) diagnostic if available
-                let ec_diag = hwlib::motherboard::ec::diagnose_ec(&mut pm);
-                println!("\n--- EC (IsaBridge) Diagnostic ---");
-                for line in ec_diag {
-                    println!("  {}", line);
-                }
-                println!("--- End EC Diagnostic ---\n");
+        // Run SuperIO diagnostic and print summary
+        if let Ok(pm_ref) = driver.pawn_manager() {
+            let pm_arc = pm_ref.clone();
+            let mut pm = pm_arc.lock().unwrap();
+            let diag = hwlib::motherboard::superio::diagnose(&mut pm);
+            println!("\n--- SuperIO Diagnostic ---");
+            for line in diag {
+                println!("  {}", line);
             }
+            println!("--- End SuperIO Diagnostic ---\n");
+
+            // Run EC (IsaBridge) diagnostic if available
+            let ec_diag = hwlib::motherboard::ec::diagnose_ec(&mut pm);
+            println!("\n--- EC (IsaBridge) Diagnostic ---");
+            for line in ec_diag {
+                println!("  {}", line);
+            }
+            println!("--- End EC Diagnostic ---\n");
         }
+    }
 
     if let Err(e) = mb_group.detect_motherboards() {
         warn!("Failed to detect motherboards: {}", e);

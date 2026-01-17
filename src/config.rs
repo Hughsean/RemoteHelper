@@ -56,7 +56,6 @@ pub enum AutoStart {
     Continuous,
 }
 
-
 impl fmt::Display for AutoStart {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
