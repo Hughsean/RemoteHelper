@@ -1,8 +1,8 @@
-use crate::components::{
-    DataSeries, MetricCard, MetricCardData, MetricItem, Select, SelectList, SelectOption,
-    SelectTrigger, SelectValue, TrendChart, TrendChartData,
-};
+use crate::components::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 use crate::views::{Services, Test};
+use crate::widgets::{
+    DataSeries, MetricCard, MetricCardData, MetricItem, TrendChart, TrendChartData,
+};
 use dioxus::prelude::*;
 
 const HOME_CSS: Asset = asset!("/assets/styling/home.css");

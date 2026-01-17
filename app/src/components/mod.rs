@@ -1,15 +1,6 @@
 //! The components module contains all shared components for our app. Components are the building blocks of dioxus apps.
 //! This module provides reusable UI components.
 
-mod metric_card;
-pub use metric_card::{MetricCard, MetricCardData, MetricItem};
-
-mod trend_chart;
-pub use trend_chart::{DataSeries, TrendChart, TrendChartData};
-
-mod add_service_dialog;
-pub use add_service_dialog::AddServiceDialog;
-
 pub mod calendar;
 pub mod card;
 pub mod date_picker;

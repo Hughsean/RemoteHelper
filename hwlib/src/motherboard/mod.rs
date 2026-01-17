@@ -49,6 +49,12 @@ impl MotherboardGroup {
     pub fn detect_motherboards(&mut self) -> crate::core::HardwareResult<()> {
         tracing::info!("Detecting motherboards...");
 
+        // If we've already detected motherboards, skip to avoid duplicate instances
+        if !self.motherboards.is_empty() {
+            tracing::debug!("Motherboards already detected; skipping detect");
+            return Ok(());
+        }
+
         // Try to parse SMBIOS for board info
         let board_name = match smbios::get_baseboard_info() {
             Some(info) => {

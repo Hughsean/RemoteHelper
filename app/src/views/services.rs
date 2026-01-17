@@ -1,4 +1,4 @@
-use crate::components::AddServiceDialog;
+use crate::widgets::AddServiceDialog;
 use common::{Request, Response, ServiceAction};
 use dioxus::prelude::*;
 
