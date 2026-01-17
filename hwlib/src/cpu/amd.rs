@@ -141,7 +141,11 @@ impl Hardware for AmdCpu {
                     let temp_raw = data & 0xfff;
                     // Use package temperature (raw * 1/16)
                     let package_c = temp_raw as f64 * 0.0625;
-                    tracing::info!("Read temperature MSR: raw={}, package_c={}", temp_raw, package_c);
+                    tracing::info!(
+                        "Read temperature MSR: raw={}, package_c={}",
+                        temp_raw,
+                        package_c
+                    );
                     if let Some(sensor) = self.sensors[0]
                         .as_any_mut()
                         .downcast_mut::<TemperatureSensor>()
@@ -174,9 +178,14 @@ impl Hardware for AmdCpu {
                         // Apply known model-specific offsets (from LibreHardwareMonitor / k10temp)
                         let mut name_offset: f64 = 0.0;
                         let cpu_name = self.info.name.as_str();
-                        if cpu_name.contains("1600X") || cpu_name.contains("1700X") || cpu_name.contains("1800X") {
+                        if cpu_name.contains("1600X")
+                            || cpu_name.contains("1700X")
+                            || cpu_name.contains("1800X")
+                        {
                             name_offset = -20.0;
-                        } else if cpu_name.contains("Threadripper 19") || cpu_name.contains("Threadripper 29") {
+                        } else if cpu_name.contains("Threadripper 19")
+                            || cpu_name.contains("Threadripper 29")
+                        {
                             name_offset = -27.0;
                         } else if cpu_name.contains("2700X") {
                             name_offset = -10.0;

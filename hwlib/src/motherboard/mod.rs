@@ -1,17 +1,17 @@
 // 模块声明 - 已实现基础骨架
-pub mod smbios;
-pub mod superio;
 pub mod ec;
 pub mod motherboard;
+pub mod smbios;
+pub mod superio;
 // pub mod config; // config 支持待完善
 
 // 重新导出主要类型
+pub use motherboard::Motherboard;
 pub use smbios::SmbiosInfo;
 pub use superio::SuperIoChip;
-pub use motherboard::Motherboard;
 
-use crate::driver::PawnModuleManager;
 use crate::core::Hardware;
+use crate::driver::PawnModuleManager;
 use std::sync::{Arc, Mutex};
 
 /// 主板组管理器。
@@ -52,7 +52,11 @@ impl MotherboardGroup {
         // Try to parse SMBIOS for board info
         let board_name = match smbios::get_baseboard_info() {
             Some(info) => {
-                tracing::info!("Detected motherboard: {} {}", info.manufacturer, info.product);
+                tracing::info!(
+                    "Detected motherboard: {} {}",
+                    info.manufacturer,
+                    info.product
+                );
                 format!("{} {}", info.manufacturer, info.product)
             }
             None => {
@@ -75,7 +79,10 @@ impl MotherboardGroup {
         }
 
         self.motherboards.push(Box::new(m));
-        tracing::info!("Motherboard detection completed: {} found", self.motherboards.len());
+        tracing::info!(
+            "Motherboard detection completed: {} found",
+            self.motherboards.len()
+        );
         Ok(())
     }
 

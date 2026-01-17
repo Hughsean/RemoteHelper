@@ -30,6 +30,26 @@
     line-height: 1;
 }
 
+.metric-card .card-header { position: relative; }
+.metric-card-right {
+    position: absolute;
+    right: 24px;
+    top: 24px;
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    font-size: 12px;
+    color: #cbd5e1;
+}
+
+.metric-right-power {
+    font-weight: 600;
+}
+
+.metric-right-temp {
+    font-weight: 600;
+}
+
 /* 覆盖 CardContent 默认样式 */
 .metric-card-items {
     display: flex;

@@ -10,7 +10,10 @@ pub struct SuperIoChip {
 /// 实现基于常用的进入配置模式 (0x87,0x87)，读取芯片 ID/Revision 的策略。
 pub fn detect_superio(pm: &mut PawnModuleManager) -> Option<SuperIoChip> {
     // Reuse the diagnostic function and return the first detected chip
-    if let Some(chip) = diagnose(pm).into_iter().find(|s| s.starts_with("Detected SuperIO")) {
+    if let Some(chip) = diagnose(pm)
+        .into_iter()
+        .find(|s| s.starts_with("Detected SuperIO"))
+    {
         // Parse a simple name from the diagnostic line
         // Format: "Detected SuperIO chip: <name> (details: [...])"
         if let Some(rest) = chip.splitn(4, ':').nth(1) {
@@ -31,7 +34,10 @@ pub fn diagnose(pm: &mut PawnModuleManager) -> Vec<String> {
     out.push("Starting SuperIO diagnostic via LPC ports".to_string());
 
     for &(idx, data_port) in INDEX_PORTS {
-        out.push(format!("Trying LPC index=0x{:X}, data=0x{:X}", idx, data_port));
+        out.push(format!(
+            "Trying LPC index=0x{:X}, data=0x{:X}",
+            idx, data_port
+        ));
 
         // Try simple reads first
         match pm.read_port_byte(idx) {
@@ -44,12 +50,18 @@ pub fn diagnose(pm: &mut PawnModuleManager) -> Vec<String> {
         }
 
         for &(a, b) in ENTER_SEQS {
-            out.push(format!("Attempting enter sequence: 0x{:02X},0x{:02X}", a, b));
+            out.push(format!(
+                "Attempting enter sequence: 0x{:02X},0x{:02X}",
+                a, b
+            ));
 
             match pm.write_port_byte(idx, a) {
                 Ok(()) => out.push(format!("WritePortByte(idx=0x{:X}, {:#02X}) ok", idx, a)),
                 Err(e) => {
-                    out.push(format!("WritePortByte(idx=0x{:X}, {:#02X}) failed: {}", idx, a, e));
+                    out.push(format!(
+                        "WritePortByte(idx=0x{:X}, {:#02X}) failed: {}",
+                        idx, a, e
+                    ));
                     continue;
                 }
             }
@@ -57,7 +69,10 @@ pub fn diagnose(pm: &mut PawnModuleManager) -> Vec<String> {
             match pm.write_port_byte(idx, b) {
                 Ok(()) => out.push(format!("WritePortByte(idx=0x{:X}, {:#02X}) ok", idx, b)),
                 Err(e) => {
-                    out.push(format!("WritePortByte(idx=0x{:X}, {:#02X}) failed: {} (exit)", idx, b, e));
+                    out.push(format!(
+                        "WritePortByte(idx=0x{:X}, {:#02X}) failed: {} (exit)",
+                        idx, b, e
+                    ));
                     let _ = pm.write_port_byte(idx, 0xAA);
                     continue;
                 }
@@ -90,7 +105,10 @@ pub fn diagnose(pm: &mut PawnModuleManager) -> Vec<String> {
                 .collect();
 
             if !meaningful.is_empty() {
-                out.push(format!("Detected SuperIO chip: {:?} at idx=0x{:X}", meaningful, idx));
+                out.push(format!(
+                    "Detected SuperIO chip: {:?} at idx=0x{:X}",
+                    meaningful, idx
+                ));
                 return out;
             }
         }

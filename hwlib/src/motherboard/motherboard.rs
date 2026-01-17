@@ -85,9 +85,12 @@ impl Hardware for Motherboard {
                 match crate::motherboard::ec::find_superio_mmio(&mut pm) {
                     Some(vec) => {
                         tracing::info!("IsaBridgeEC reported potential MMIO regions: {:?}", vec);
-                        self.properties.insert("IsaBridgeMMIO".to_string(), format!("{:?}", vec));
+                        self.properties
+                            .insert("IsaBridgeMMIO".to_string(), format!("{:?}", vec));
                     }
-                    None => tracing::debug!("IsaBridgeEC did not find MMIO regions or module unavailable"),
+                    None => tracing::debug!(
+                        "IsaBridgeEC did not find MMIO regions or module unavailable"
+                    ),
                 }
             }
 

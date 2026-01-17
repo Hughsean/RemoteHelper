@@ -8,9 +8,9 @@
 //! - 由于当前主板传感器实现仍有问题（未完成寄存器读取等），所有来自主板的 sensor 返回值都**强制**为 `None`，以避免错误依赖
 
 use crate::core::{Identifier, SensorType, SensorValue};
+use crate::cpu::CpuGroup;
 use crate::driver::PawnModuleManager;
 use crate::motherboard::MotherboardGroup;
-use crate::cpu::CpuGroup;
 use std::sync::{Arc, Mutex};
 
 /// 单个传感器的统一读数表示
@@ -57,7 +57,9 @@ impl SensorHub {
     /// 更新并读取所有传感器。返回 (cpu_sensors, motherboard_sensors)
     ///
     /// 注意：主板传感器的 `value` 被强制置为 `None`（当前主板实现不稳定）。
-    pub fn read_all(&mut self) -> crate::core::HardwareResult<(Vec<SensorReading>, Vec<SensorReading>)> {
+    pub fn read_all(
+        &mut self,
+    ) -> crate::core::HardwareResult<(Vec<SensorReading>, Vec<SensorReading>)> {
         // ensure pawn manager set on groups if present
         if let Some(pm) = &self.pawn_manager {
             self.cpu_group.set_pawn_manager(pm.clone());

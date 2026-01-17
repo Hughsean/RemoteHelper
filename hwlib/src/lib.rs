@@ -32,4 +32,4 @@ pub mod motherboard;
 pub mod sensors;
 
 // Re-export key types from sensors for convenience
-pub use sensors::{Sensors, Sensor};
+pub use sensors::{Sensor, Sensors};

@@ -20,6 +20,10 @@ pub struct MetricCardData {
     pub main_value: String,
     pub items: Vec<MetricItem>,
     pub footer: Option<String>,
+    /// 右侧小字 - 封装功率，格式 (text, css_color)
+    pub right_small_power: Option<(String, String)>,
+    /// 右侧小字 - CPU 温度，格式 (text, css_color)
+    pub right_small_temp: Option<(String, String)>,
 }
 
 /// 指标卡片组件 - 用于显示系统监控数据
@@ -37,6 +41,22 @@ pub fn MetricCard(
             CardHeader {
                 CardTitle { class: "metric-card-title", "{card_data.title}" }
                 div { class: "metric-card-main-value", "{card_data.main_value}" }
+                div { class: "metric-card-right",
+                    if let Some((text, color)) = card_data.right_small_power {
+                        span {
+                            class: "metric-right-power",
+                            style: format!("color: {}", color),
+                            "{text}"
+                        }
+                    }
+                    if let Some((text, color)) = card_data.right_small_temp {
+                        span {
+                            class: "metric-right-temp",
+                            style: format!("color: {}", color),
+                            "{text}"
+                        }
+                    }
+                }
             }
 
             CardContent { class: "metric-card-items",

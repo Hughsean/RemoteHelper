@@ -210,7 +210,9 @@ async fn main() -> Result<()> {
                         println!("  Sensors:");
                         for s in sensors {
                             match s.value() {
-                                Some(v) => println!("    {}: {:.2} {:?}", s.name(), v, s.sensor_type()),
+                                Some(v) => {
+                                    println!("    {}: {:.2} {:?}", s.name(), v, s.sensor_type())
+                                }
                                 None => println!("    {}: No value available", s.name()),
                             }
                         }
@@ -316,7 +318,9 @@ async fn main() -> Result<()> {
                         println!("  Sensors:");
                         for s in sensors {
                             match s.value() {
-                                Some(v) => println!("    {}: {:.2} {:?}", s.name(), v, s.sensor_type()),
+                                Some(v) => {
+                                    println!("    {}: {:.2} {:?}", s.name(), v, s.sensor_type())
+                                }
                                 None => println!("    {}: No value available", s.name()),
                             }
                         }

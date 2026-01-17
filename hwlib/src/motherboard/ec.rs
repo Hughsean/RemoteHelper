@@ -12,7 +12,11 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
     match pm.call_function("IsaBridgeEC", "ioctl_find_superio_mmio", &[]) {
         Ok(vec) => {
             let hexs: Vec<String> = vec.iter().map(|v| format!("0x{:X}", v)).collect();
-            out.push(format!("ioctl_find_superio_mmio returned {} values: {:?}", vec.len(), hexs));
+            out.push(format!(
+                "ioctl_find_superio_mmio returned {} values: {:?}",
+                vec.len(),
+                hexs
+            ));
             if vec.len() >= 6 {
                 let f_base = vec[0];
                 let f_size = vec[1];
@@ -20,8 +24,14 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
                 let s_base = vec[3];
                 let s_size = vec[4];
                 let s_chip = vec[5];
-                out.push(format!("First MMIO: base=0x{:X}, size=0x{:X}, chip=0x{:X}", f_base, f_size, f_chip));
-                out.push(format!("Second MMIO: base=0x{:X}, size=0x{:X}, chip=0x{:X}", s_base, s_size, s_chip));
+                out.push(format!(
+                    "First MMIO: base=0x{:X}, size=0x{:X}, chip=0x{:X}",
+                    f_base, f_size, f_chip
+                ));
+                out.push(format!(
+                    "Second MMIO: base=0x{:X}, size=0x{:X}, chip=0x{:X}",
+                    s_base, s_size, s_chip
+                ));
             }
         }
         Err(e) => out.push(format!("ioctl_find_superio_mmio failed: {}", e)),
@@ -32,7 +42,11 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
     match pm.call_function("IsaBridgeEC", "ioctl_map_superio_mmio", &[]) {
         Ok(vec) => {
             let hexs: Vec<String> = vec.iter().map(|v| format!("0x{:X}", v)).collect();
-            out.push(format!("ioctl_map_superio_mmio returned {} values: {:?}", vec.len(), hexs));
+            out.push(format!(
+                "ioctl_map_superio_mmio returned {} values: {:?}",
+                vec.len(),
+                hexs
+            ));
             if !vec.is_empty() {
                 map_handles = vec;
             }
@@ -48,17 +62,29 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
     candidates.push(1);
 
     for &handle in &candidates {
-        out.push(format!("-- Testing access with first-param handle 0x{:X}", handle));
+        out.push(format!(
+            "-- Testing access with first-param handle 0x{:X}",
+            handle
+        ));
         for &offset in &offsets {
             // params: firstParam (maybe mapping handle or index), offset, size, is_write (0), value
             let params = [handle, offset, 1u64, 0u64, 0u64];
             match pm.call_function("IsaBridgeEC", "ioctl_access_superio_mmio", &params) {
                 Ok(v) if !v.is_empty() => {
                     let hexs: Vec<String> = v.iter().map(|x| format!("0x{:X}", x)).collect();
-                    out.push(format!("ioctl_access_superio_mmio handle 0x{:X} read offset 0x{:X} => {:?}", handle, offset, hexs));
+                    out.push(format!(
+                        "ioctl_access_superio_mmio handle 0x{:X} read offset 0x{:X} => {:?}",
+                        handle, offset, hexs
+                    ));
                 }
-                Ok(_) => out.push(format!("ioctl_access_superio_mmio handle 0x{:X} read offset 0x{:X} => empty response", handle, offset)),
-                Err(e) => out.push(format!("ioctl_access_superio_mmio handle 0x{:X} offset 0x{:X} failed: {}", handle, offset, e)),
+                Ok(_) => out.push(format!(
+                    "ioctl_access_superio_mmio handle 0x{:X} read offset 0x{:X} => empty response",
+                    handle, offset
+                )),
+                Err(e) => out.push(format!(
+                    "ioctl_access_superio_mmio handle 0x{:X} offset 0x{:X} failed: {}",
+                    handle, offset, e
+                )),
             }
         }
     }
@@ -66,22 +92,37 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
     // 4) Try alternate calling convention where the map handle is passed as last parameter (some implementations use this)
     if !map_handles.is_empty() {
         for &map_h in &map_handles {
-            out.push(format!("-- Testing access with map handle as last param 0x{:X}", map_h));
+            out.push(format!(
+                "-- Testing access with map handle as last param 0x{:X}",
+                map_h
+            ));
             for &offset in &offsets {
                 let params = [0u64, offset, 1u64, 0u64, map_h];
                 match pm.call_function("IsaBridgeEC", "ioctl_access_superio_mmio", &params) {
                     Ok(v) if !v.is_empty() => {
                         let hexs: Vec<String> = v.iter().map(|x| format!("0x{:X}", x)).collect();
-                        out.push(format!("ioctl_access_superio_mmio (map-last) read offset 0x{:X} => {:?}", offset, hexs));
+                        out.push(format!(
+                            "ioctl_access_superio_mmio (map-last) read offset 0x{:X} => {:?}",
+                            offset, hexs
+                        ));
                     }
-                    Ok(_) => out.push(format!("ioctl_access_superio_mmio (map-last) read offset 0x{:X} => empty response", offset)),
-                    Err(e) => out.push(format!("ioctl_access_superio_mmio (map-last) offset 0x{:X} failed: {}", offset, e)),
+                    Ok(_) => out.push(format!(
+                        "ioctl_access_superio_mmio (map-last) read offset 0x{:X} => empty response",
+                        offset
+                    )),
+                    Err(e) => out.push(format!(
+                        "ioctl_access_superio_mmio (map-last) offset 0x{:X} failed: {}",
+                        offset, e
+                    )),
                 }
             }
 
             // Additional attempts: try reversed-byte handle and varying sizes
             let rev = map_h.swap_bytes();
-            out.push(format!("-- Testing access with reversed-byte handle 0x{:X}", rev));
+            out.push(format!(
+                "-- Testing access with reversed-byte handle 0x{:X}",
+                rev
+            ));
             for &size in &[1u64, 2u64, 4u64] {
                 for &offset in &offsets {
                     let params = [rev, offset, size, 0u64, 0u64];
@@ -97,7 +138,10 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
             }
 
             // Try reversed handle as last param too
-            out.push(format!("-- Testing access with reversed handle as last param 0x{:X}", rev));
+            out.push(format!(
+                "-- Testing access with reversed handle as last param 0x{:X}",
+                rev
+            ));
             for &size in &[1u64, 2u64, 4u64] {
                 for &offset in &offsets {
                     let params = [0u64, offset, size, 0u64, rev];
@@ -121,27 +165,41 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
             let rev = map_h.swap_bytes();
             // candidate param orders to try (read-only: is_write=0)
             let permutations: Vec<Vec<u64>> = vec![
-                vec![map_h, 0, 1, 0, 0],           // handle, offset, size, is_write, value
-                vec![map_h, 0, 0, 1, 0],           // handle, offset, is_write, size, value
-                vec![0, 0, 1, 0, map_h],           // offset, size, is_write, value, handle
-                vec![0, 1, 0, map_h, 0],           // offset, size, is_write, handle, value
-                vec![0, map_h, 1, 0, 0],           // offset, handle, size, is_write, value
-                vec![1, map_h, 0, 0, 0],           // size, handle, offset, is_write, value
-                vec![map_h, 1, 0, 0, 0],           // handle, size, is_write, is_writeFlag, dummy
-                vec![rev, 0, 1, 0, 0],             // reversed handle variants
+                vec![map_h, 0, 1, 0, 0], // handle, offset, size, is_write, value
+                vec![map_h, 0, 0, 1, 0], // handle, offset, is_write, size, value
+                vec![0, 0, 1, 0, map_h], // offset, size, is_write, value, handle
+                vec![0, 1, 0, map_h, 0], // offset, size, is_write, handle, value
+                vec![0, map_h, 1, 0, 0], // offset, handle, size, is_write, value
+                vec![1, map_h, 0, 0, 0], // size, handle, offset, is_write, value
+                vec![map_h, 1, 0, 0, 0], // handle, size, is_write, is_writeFlag, dummy
+                vec![rev, 0, 1, 0, 0],   // reversed handle variants
                 vec![0, rev, 1, 0, 0],
                 vec![0, 0, 1, 0, rev],
             ];
 
             for params in permutations {
-                out.push(format!("-- Perm test params: {:?}", params.iter().map(|p| format!("0x{:X}", p)).collect::<Vec<_>>()));
+                out.push(format!(
+                    "-- Perm test params: {:?}",
+                    params
+                        .iter()
+                        .map(|p| format!("0x{:X}", p))
+                        .collect::<Vec<_>>()
+                ));
                 match pm.call_function("IsaBridgeEC", "ioctl_access_superio_mmio", &params) {
                     Ok(v) if !v.is_empty() => {
                         let hexs: Vec<String> = v.iter().map(|x| format!("0x{:X}", x)).collect();
-                        out.push(format!("ioctl_access_superio_mmio permutation read => {:?}", hexs));
+                        out.push(format!(
+                            "ioctl_access_superio_mmio permutation read => {:?}",
+                            hexs
+                        ));
                     }
-                    Ok(_) => out.push(format!("ioctl_access_superio_mmio permutation read => empty response")),
-                    Err(e) => out.push(format!("ioctl_access_superio_mmio permutation failed: {}", e)),
+                    Ok(_) => out.push(format!(
+                        "ioctl_access_superio_mmio permutation read => empty response"
+                    )),
+                    Err(e) => out.push(format!(
+                        "ioctl_access_superio_mmio permutation failed: {}",
+                        e
+                    )),
                 }
             }
         }
@@ -154,7 +212,10 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
     } else {
         for &h in &map_handles {
             let _ = pm.call_function("IsaBridgeEC", "ioctl_unmap_superio_mmio", &[h]);
-            out.push(format!("ioctl_unmap_superio_mmio attempted for handle 0x{:X}", h));
+            out.push(format!(
+                "ioctl_unmap_superio_mmio attempted for handle 0x{:X}",
+                h
+            ));
         }
     }
 

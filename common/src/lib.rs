@@ -63,6 +63,18 @@ pub struct SystemInfo {
     pub gpu_total_memory: Option<u64>,
     pub cpu_model: String,
     pub gpu_model: Option<String>,
+    /// GPU 温度（摄氏度），如不可用则为 None
+    #[serde(default)]
+    pub gpu_temperature: Option<f32>,
+    /// GPU 功率（瓦特），如不可用则为 None
+    #[serde(default)]
+    pub gpu_power_watts: Option<f32>,
+    /// CPU 包温（摄氏度），如不可用则为 None
+    #[serde(default)]
+    pub cpu_temperature: Option<f32>,
+    /// CPU 封装功率（瓦特），如不可用则为 None
+    #[serde(default)]
+    pub cpu_package_power: Option<f32>,
     #[serde(default)]
     pub network_tx_bytes: u64,
     #[serde(default)]

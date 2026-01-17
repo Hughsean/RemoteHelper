@@ -28,7 +28,8 @@ pub fn get_baseboard_info() -> Option<SmbiosInfo> {
         }
 
         let mut buf = vec![0u8; size];
-        let ret = unsafe { GetSystemFirmwareTable(provider, 0, buf.as_mut_ptr() as *mut _, size as u32) };
+        let ret =
+            unsafe { GetSystemFirmwareTable(provider, 0, buf.as_mut_ptr() as *mut _, size as u32) };
         if ret == 0 {
             tracing::warn!("GetSystemFirmwareTable failed to retrieve data");
             return None;
@@ -105,8 +106,16 @@ pub fn get_baseboard_info() -> Option<SmbiosInfo> {
                     return Some(SmbiosInfo {
                         manufacturer,
                         product,
-                        version: if version.is_empty() { None } else { Some(version) },
-                        serial: if serial.is_empty() { None } else { Some(serial) },
+                        version: if version.is_empty() {
+                            None
+                        } else {
+                            Some(version)
+                        },
+                        serial: if serial.is_empty() {
+                            None
+                        } else {
+                            Some(serial)
+                        },
                     });
                 }
             }

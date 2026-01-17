@@ -112,8 +112,6 @@ impl Sensor for TemperatureSensor {
     }
 }
 
-
-
 /// CPU 的功率传感器
 #[derive(Clone)]
 pub struct PowerSensor {

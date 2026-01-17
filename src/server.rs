@@ -378,6 +378,12 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 )
             };
 
+            // 从缓存中读取 GPU 温度与功率（由后台监控任务更新）
+            let (gpu_temperature, gpu_power_watts) = {
+                let cache = state.gpu_cache.read().await;
+                (cache.temperature, cache.power_watts)
+            };
+
             Response::Status(SystemInfo {
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -392,6 +398,18 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 gpu_total_memory,
                 cpu_model,
                 gpu_model,
+                // GPU 温度与功率
+                gpu_temperature,
+                gpu_power_watts,
+                // Read CPU cached metrics
+                cpu_temperature: {
+                    let t = state.cpu_temp_cache.read().await;
+                    *t
+                },
+                cpu_package_power: {
+                    let p = state.cpu_power_cache.read().await;
+                    *p
+                },
                 network_tx_bytes: net_tx,
                 network_rx_bytes: net_rx,
                 network_tx_speed: net_tx_spd,
