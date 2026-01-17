@@ -38,8 +38,7 @@ enum Route {
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 fn main() {
-    // dioxus_logger::init(Level::DEBUG).expect("");
-    let _guard = common::func::tracing_init(None, None);
+    let _guard = common::func::tracing_init(None, None, tracing::Level::DEBUG);
 
     #[cfg(feature = "desktop")]
     {

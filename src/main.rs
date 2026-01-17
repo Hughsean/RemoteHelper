@@ -12,7 +12,7 @@ use std::time::Duration;
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
     // 初始化 tracing
-    let _guard = common::func::tracing_init(Some("logs"), Some("server.log"));
+    let _guard = common::func::tracing_init(Some("logs"), Some("server.log"), tracing::Level::INFO);
 
     // tracing::info!("\n\n================================================================================");
     tracing::info!("正在启动 RemoteHelper 服务器实例");
@@ -77,7 +77,6 @@ async fn main() -> anyhow::Result<()> {
     let monitor_state = state.clone();
     tokio::spawn(async move {
         let mut first_pause = false;
-
 
         loop {
             let interval_ms = *monitor_state.refresh_interval.read().await;
@@ -226,12 +225,18 @@ async fn main() -> anyhow::Result<()> {
                                         pow_val = Some(v.value);
                                         break;
                                     } else {
-                                        tracing::trace!("Power sensor present but has no value (blocking): {}", r.name);
+                                        tracing::trace!(
+                                            "Power sensor present but has no value (blocking): {}",
+                                            r.name
+                                        );
                                     }
                                 }
                             }
                         }
-                        Err(e) => tracing::warn!("Failed to read sensors from SensorHub (blocking): {}", e),
+                        Err(e) => tracing::warn!(
+                            "Failed to read sensors from SensorHub (blocking): {}",
+                            e
+                        ),
                     }
 
                     Ok::<(Option<f32>, Option<f32>), ()>((temp_val, pow_val))

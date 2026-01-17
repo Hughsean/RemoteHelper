@@ -155,26 +155,14 @@ pub fn Home() -> Element {
                                     value: format!("{:.1}/{:.1} GB", mem_used_gb, mem_total_gb),
                                     progress: Some(mem_usage_ratio),
                                 },
-                                // MetricItem {
-                                //     label: "CPU 温度".to_string(),
-                                //     value: match info.cpu_temperature {
-                                //         Some(t) => format!("{:.1} °C", t),
-                                //         None => "-- °C".to_string(),
-                                //     },
-                                //     progress: None,
-                                // },
-                                // MetricItem {
-                                //     label: "CPU 封装功率".to_string(),
-                                //     value: match info.cpu_package_power {
-                                //         Some(p) => format!("{:.2} W", p),
-                                //         None => "-- W".to_string(),
-                                //     },
-                                //     progress: None,
-                                // },
                             ],
                             footer: Some(info.cpu_model.clone()),
-                            right_small_power: info.cpu_package_power.map(|p| (format!("{:.1} W", p), "#f59e0b".to_string())),
-                            right_small_temp: info.cpu_temperature.map(|t| (format!("{:.1} °C", t), "#ef4444".to_string())),
+                            right_small_power: info
+                                .cpu_package_power
+                                .map(|p| (format!("{:.1} W", p), "#f59e0b".to_string())),
+                            right_small_temp: info
+                                .cpu_temperature
+                                .map(|t| (format!("{:.1} °C", t), "#ef4444".to_string())),
                         };
 
                         // 更新系统趋势图 - CPU (系列 0)
@@ -223,26 +211,14 @@ pub fn Home() -> Element {
                                         ),
                                         progress: Some(gpu_mem_ratio),
                                     },
-                                    MetricItem {
-                                        label: "GPU 温度".to_string(),
-                                        value: match info.gpu_temperature {
-                                            Some(t) => format!("{:.1} °C", t),
-                                            None => "-- °C".to_string(),
-                                        },
-                                        progress: None,
-                                    },
-                                    MetricItem {
-                                        label: "GPU 功率".to_string(),
-                                        value: match info.gpu_power_watts {
-                                            Some(p) => format!("{:.1} W", p),
-                                            None => "-- W".to_string(),
-                                        },
-                                        progress: None,
-                                    },
                                 ],
                                 footer: Some(gpu_model),
-                                right_small_power: info.gpu_power_watts.map(|p| (format!("{:.1} W", p), "#f59e0b".to_string())),
-                                right_small_temp: info.gpu_temperature.map(|t| (format!("{:.1} °C", t), "#ef4444".to_string())),
+                                right_small_power: info
+                                    .gpu_power_watts
+                                    .map(|p| (format!("{:.1} W", p), "#f59e0b".to_string())),
+                                right_small_temp: info
+                                    .gpu_temperature
+                                    .map(|t| (format!("{:.1} °C", t), "#ef4444".to_string())),
                             };
 
                             // 更新系统趋势图 - GPU (系列 2)

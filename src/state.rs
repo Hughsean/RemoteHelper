@@ -100,7 +100,6 @@ impl AppState {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,7 +138,11 @@ mod tests {
                 match device.power_usage() {
                     Ok(power_mw) => {
                         // Allow 0 (idle) up to a sensible upper bound
-                        assert!(power_mw <= 1_000_000, "unreasonable GPU power: {} mW", power_mw);
+                        assert!(
+                            power_mw <= 1_000_000,
+                            "unreasonable GPU power: {} mW",
+                            power_mw
+                        );
                         println!("GPU power usage: {} mW", power_mw);
                     }
                     Err(NvmlError::NotSupported) => {
