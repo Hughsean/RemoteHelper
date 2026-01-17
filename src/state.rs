@@ -7,10 +7,46 @@ use sysinfo::{Networks, System};
 use tokio::process::Child;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-/// 进程句柄：可能是直接的 Child 句柄（系统模式），或者是 PID（用户模式）
-pub enum ProcessHandle {
-    Child(Child),
-    Pid(u32),
+/// 服务进程信息（系统模式）
+///
+/// 目前项目以系统服务模式管理进程，持有 `tokio::process::Child`。使用结构体而不是枚举
+/// 便于记录元数据（例如启动时间）并提供统一的操作方法。
+pub struct ServiceProcess {
+    pub child: Child,
+    #[allow(dead_code)]
+    pub started_at: std::time::SystemTime,
+}
+
+impl ServiceProcess {
+    pub fn new(child: Child) -> Self {
+        Self {
+            child,
+            started_at: std::time::SystemTime::now(),
+        }
+    }
+
+    pub fn pid(&self) -> Option<u32> {
+        self.child.id()
+    }
+
+    pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+
+    pub async fn kill(&mut self) -> anyhow::Result<()> {
+        self.child
+            .kill()
+            .await
+            .map_err(|e| anyhow::anyhow!("kill failed: {}", e))
+    }
+
+    pub fn start_kill(&mut self) -> std::io::Result<()> {
+        self.child.start_kill()
+    }
+
+    pub async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        self.child.wait().await
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -19,6 +55,10 @@ pub struct GpuCache {
     pub memory_used: Option<u64>,
     pub memory_total: Option<u64>,
     pub model: Option<String>,
+    /// GPU 温度（摄氏度），从 NVML 读取
+    pub temperature: Option<f32>,
+    /// GPU 功率（瓦特），从 NVML 读取并转换为 W
+    pub power_watts: Option<f32>,
 }
 
 #[derive(Clone)]
@@ -29,10 +69,12 @@ pub struct AppState {
     pub networks: Arc<RwLock<Networks>>,
     pub nvml: Arc<RwLock<Option<Nvml>>>,
     pub gpu_cache: Arc<RwLock<GpuCache>>,
+    pub cpu_temp_cache: Arc<RwLock<Option<f32>>>,
+    pub cpu_power_cache: Arc<RwLock<Option<f32>>>,
     pub refresh_interval: Arc<RwLock<u64>>,
     pub last_read_time: Arc<RwLock<std::time::Instant>>,
     pub update_notify: Arc<Notify>,
-    pub service_processes: Arc<RwLock<HashMap<usize, ProcessHandle>>>,
+    pub service_processes: Arc<RwLock<HashMap<usize, ServiceProcess>>>,
     pub web_tunnel_process: Arc<Mutex<Option<Child>>>,
     pub active_connections: Arc<AtomicUsize>,
 }
@@ -46,12 +88,76 @@ impl AppState {
             networks: Arc::new(RwLock::new(Networks::new_with_refreshed_list())),
             nvml: Arc::new(RwLock::new(Nvml::init().ok())),
             gpu_cache: Arc::new(RwLock::new(GpuCache::default())),
-            refresh_interval: Arc::new(RwLock::new(1000)), // Default 1s
+            cpu_temp_cache: Arc::new(RwLock::new(None)),
+            cpu_power_cache: Arc::new(RwLock::new(None)),
+            refresh_interval: Arc::new(RwLock::new(1000)), // 默认 1 秒
             last_read_time: Arc::new(RwLock::new(std::time::Instant::now())),
             update_notify: Arc::new(Notify::new()),
             service_processes: Arc::new(RwLock::new(HashMap::new())),
             web_tunnel_process: Arc::new(Mutex::new(None)),
             active_connections: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nvml_wrapper::Nvml;
+    use nvml_wrapper::enum_wrappers::device::TemperatureSensor;
+    use nvml_wrapper::error::NvmlError;
+
+    #[test]
+    fn test_gpu_temperature_and_power() -> anyhow::Result<()> {
+        match Nvml::init() {
+            Ok(nvml) => {
+                let device = match nvml.device_by_index(0) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        eprintln!("No NVML device found: {}", e);
+                        // Skip test if no device
+                        return Ok(());
+                    }
+                };
+
+                // Temperature (°C)
+                match device.temperature(TemperatureSensor::Gpu) {
+                    Ok(temp) => {
+                        // Basic sanity check
+                        assert!(temp <= 200, "unreasonable GPU temperature: {} °C", temp);
+                        println!("GPU temperature: {} °C", temp);
+                    }
+                    Err(NvmlError::NotSupported) => {
+                        eprintln!("Temperature sensor not supported on this device");
+                        return Ok(());
+                    }
+                    Err(e) => return Err(anyhow::anyhow!("Failed to read GPU temperature: {}", e)),
+                }
+
+                // Power usage (mW)
+                match device.power_usage() {
+                    Ok(power_mw) => {
+                        // Allow 0 (idle) up to a sensible upper bound
+                        assert!(
+                            power_mw <= 1_000_000,
+                            "unreasonable GPU power: {} mW",
+                            power_mw
+                        );
+                        println!("GPU power usage: {} mW", power_mw);
+                    }
+                    Err(NvmlError::NotSupported) => {
+                        eprintln!("Power usage not supported on this device");
+                        return Ok(());
+                    }
+                    Err(e) => return Err(anyhow::anyhow!("Failed to read GPU power usage: {}", e)),
+                }
+
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("NVML initialization failed: {}", e);
+                // Skip test when NVML cannot be initialized
+                Ok(())
+            }
         }
     }
 }

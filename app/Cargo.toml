@@ -7,7 +7,7 @@ authors.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
+dioxus = { version = "0.7", features = ["router", "fullstack"] }
 
 # 与服务器通信的客户端库
 client.workspace = true

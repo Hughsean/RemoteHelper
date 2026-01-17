@@ -26,6 +26,7 @@ winapi = { version = "0.3", features = [
   "ioapiset",
   "processthreadsapi",
   "securitybaseapi",
+  "sysinfoapi",
   "winsvc",
 ] }
 
@@ -57,5 +58,9 @@ clap = { version = "4.5", features = ["derive"] }
 common.workspace = true
 
 [[bin]]
-name = "hw-cli"
+name = "cli"
 path = "src/bin/cli.rs"
+
+[features]
+# Enable motherboard sensor support (experimental)
+motherboard_sensors = []

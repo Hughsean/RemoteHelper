@@ -1,7 +1,7 @@
 [workspace]
 members = ["common", "client", "hwlib", "app"]
 [workspace.package]
-version = "2.2.0"
+version = "2.3.0"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
 edition = "2024"
 license = "MIT"
@@ -79,4 +79,6 @@ x25519-dalek.workspace = true
 rcgen.workspace = true
 dirs.workspace = true
 reqwest = "0.13.1"
+# bring hwlib into this package
+hwlib.workspace = true
 # wasm-bindgen-futures.workspace = true

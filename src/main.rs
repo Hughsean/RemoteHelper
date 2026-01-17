@@ -11,14 +11,14 @@ use std::time::Duration;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
-    let _guard = common::func::tracing_init(Some("logs"), Some("server.log"));
+    // 初始化 tracing
+    let _guard = common::func::tracing_init(Some("logs"), Some("server.log"), tracing::Level::INFO);
 
     // tracing::info!("\n\n================================================================================");
     tracing::info!("正在启动 RemoteHelper 服务器实例");
     // tracing::info!("================================================================================");
 
-    // Load configuration
+    // 加载配置
     let config = AppConfig::load()?;
 
     let no_url = config.web_panel.health_check_url.is_none();
@@ -63,17 +63,112 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::info!("已配置服务数量: {}", config.service.len());
 
-    // Initialize state
+    // 初始化状态
     let state = AppState::new(config.clone());
     tracing::info!("应用程序状态初始化完成");
 
-    // Start background monitoring task
+    // 尝试初始化 hwlib 驱动（在服务启动时进行），记录详细日志但不阻塞启动
+    match hwlib::driver::init_driver() {
+        Ok(()) => tracing::info!("hwlib driver initialized at startup"),
+        Err(e) => tracing::warn!("Failed to initialize hwlib driver at startup: {}", e),
+    }
+
+    // Spawn a dedicated sensor worker thread that owns a long-lived SensorHub
+    // Requests are sent as a oneshot responder over a std::sync channel; the worker replies with (temp, power)
+    let (sensor_req_tx, sensor_req_rx) = std::sync::mpsc::channel::<
+        tokio::sync::oneshot::Sender<Result<(Option<f32>, Option<f32>), ()>>,
+    >();
+    std::thread::spawn(move || {
+        let mut hub_opt: Option<hwlib::sensors::Sensors> = None;
+
+        loop {
+            // Wait for a read request
+            let resp_tx = match sensor_req_rx.recv() {
+                Ok(tx) => tx,
+                Err(_) => break, // channel closed -> exit thread
+            };
+
+            // Default response
+            let mut temp_val: Option<f32> = None;
+            let mut pow_val: Option<f32> = None;
+
+            // Try to get driver + pawn manager
+            match hwlib::driver::get_driver() {
+                Ok(driver) => match driver.pawn_manager() {
+                    Ok(pm) => {
+                        // Ensure we have a hub and pawn manager set
+                        if hub_opt.is_none() {
+                            let mut hub = hwlib::sensors::Sensors::new();
+                            hub.set_pawn_manager(pm.clone());
+
+                            if let Err(e) = hub.detect() {
+                                tracing::warn!("SensorHub detect failed (worker): {}", e);
+                                // Leave hub_opt as None so we will retry on next request
+                            } else {
+                                hub_opt = Some(hub);
+                            }
+                        } else if let Some(hub) = &mut hub_opt {
+                            // Ensure pawn manager is current
+                            hub.set_pawn_manager(pm.clone());
+                        }
+                    }
+                    Err(e) => tracing::trace!("Pawn manager not available (worker): {}", e),
+                },
+                Err(e) => tracing::trace!("hwlib driver not initialized (worker): {}", e),
+            }
+
+            // If hub exists, perform two-sample read
+            if let Some(hub) = &mut hub_opt {
+                let _ = hub.read_all();
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if let Ok((cpu_readings, _mb)) = hub.read_all() {
+                    if cpu_readings.is_empty() {
+                        tracing::warn!("SensorHub returned no CPU sensors (worker)");
+                    }
+
+                    for r in cpu_readings.iter() {
+                        if r.sensor_type == hwlib::core::SensorType::Temperature
+                            && (r.name.contains("Tctl") || r.name.contains("Package"))
+                            && let Some(v) = &r.value
+                        {
+                            temp_val = Some(v.value);
+                            break;
+                        }
+                    }
+
+                    for r in cpu_readings.iter() {
+                        if r.sensor_type == hwlib::core::SensorType::Power {
+                            if let Some(v) = &r.value {
+                                pow_val = Some(v.value);
+                                break;
+                            } else {
+                                tracing::trace!(
+                                    "Power sensor present but has no value (worker): {}",
+                                    r.name
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Send response if receiver still alive
+            let _ = resp_tx.send(Ok((temp_val, pow_val)));
+        }
+
+        tracing::debug!("Sensor worker thread exiting");
+    });
+
+    // 启动后台监控任务
     let monitor_state = state.clone();
+    let sensor_req_tx = sensor_req_tx.clone();
     tokio::spawn(async move {
+        let mut first_pause = false;
+
         loop {
             let interval_ms = *monitor_state.refresh_interval.read().await;
 
-            // Check if we should pause updates (no reads for 10s)
+            // 检查是否应暂停更新（10 秒内无读取）
             let should_pause = {
                 let last_read = *monitor_state.last_read_time.read().await;
                 last_read.elapsed() > Duration::from_secs(10)
@@ -81,25 +176,30 @@ async fn main() -> anyhow::Result<()> {
 
             let timeout = tokio::select! {
                 _ = if should_pause {
-                    tokio::time::sleep(Duration::from_secs(1))
+                    tokio::time::sleep(Duration::from_secs(3))
                 }
                 else {
                     tokio::time::sleep(Duration::from_millis(interval_ms))
                 } => {
                     true
-                    // Timer expired, refresh
+                    // 定时器到期，执行刷新
                 }
                 _ = monitor_state.update_notify.notified() => {
                     false
-                    // Config changed, wake up immediately (and refresh)
+                    // 配置已更改，立即唤醒（并刷新）
                 }
             };
 
             if timeout && should_pause {
-                // Skip this cycle
-                tracing::trace!("监控已暂停 - 无最近读取");
+                // 跳过本次周期
+                if first_pause {
+                    tracing::info!("监控已暂停 - 无最近读取");
+                }
+                first_pause = false;
                 continue;
             }
+
+            first_pause = true;
 
             tracing::trace!("正在刷新系统指标...");
             {
@@ -112,7 +212,7 @@ async fn main() -> anyhow::Result<()> {
                 networks.refresh(true);
             }
 
-            // Update GPU Cache
+            // 更新 GPU 缓存
             {
                 let nvml_lock = monitor_state.nvml.read().await;
                 let mut cache = monitor_state.gpu_cache.write().await;
@@ -128,28 +228,80 @@ async fn main() -> anyhow::Result<()> {
                     cache.memory_used = mem;
                     cache.memory_total = total;
                     cache.model = device.name().ok();
+
+                    // 温度（°C）
+                    cache.temperature = device
+                        .temperature(nvml_wrapper::enum_wrappers::device::TemperatureSensor::Gpu)
+                        .map(|t| t as f32)
+                        .ok();
+
+                    // 功率（mW -> W）
+                    cache.power_watts = device.power_usage().map(|pmw| pmw as f32 / 1000.0).ok();
+                } else {
+                    // 当 NVML 不可用或设备访问失败时，清空缓存中的即时值
+                    cache.temperature = None;
+                    cache.power_watts = None;
+                }
+            }
+
+            // 请求 sensor worker 读取 CPU 传感器（长生命周期 SensorHub）
+            {
+                let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+                if let Err(e) = sensor_req_tx.send(resp_tx) {
+                    tracing::trace!("Sensor worker not available (blocking): {}", e);
+                } else {
+                    match tokio::time::timeout(std::time::Duration::from_secs(2), resp_rx).await {
+                        Ok(Ok(Ok((temp_val, pow_val)))) => {
+                            // Store into state caches
+                            let mut tcache = monitor_state.cpu_temp_cache.write().await;
+                            *tcache = temp_val;
+                            let mut pcache = monitor_state.cpu_power_cache.write().await;
+                            *pcache = pow_val;
+                        }
+                        _ => tracing::trace!("cpu_metrics_res returned error or task failed"),
+                    }
                 }
             }
         }
     });
 
-    // Auto-start services
+    // 自动启动服务
     tracing::info!("正在启动自动启动服务...");
-    let auto_start_count = state.config.service.iter().filter(|s| s.auto_start).count();
+    let auto_start_count = state
+        .config
+        .service
+        .iter()
+        .filter(|s| s.auto_start != crate::config::AutoStart::None)
+        .count();
     tracing::info!("发现 {} 个标记为自动启动的服务", auto_start_count);
 
     for (id, svc) in state.config.service.iter().enumerate() {
-        if svc.auto_start {
-            tracing::info!("自动启动服务 ID {}: {}", id, svc.description);
-            if let Err(e) = process::start_service(&state, id, None, None).await {
-                tracing::error!("自动启动服务失败 {} ({}): {}", id, svc.description, e);
-            } else {
-                tracing::info!("成功自动启动服务 ID {}", id);
+        match svc.auto_start.clone() {
+            crate::config::AutoStart::None => {}
+            crate::config::AutoStart::OneShot => {
+                tracing::info!("OneShot 自动启动服务 ID {}: {}", id, svc.description);
+                if let Err(e) = process::start_service(&state, id).await {
+                    tracing::error!("自动启动服务失败 {} ({}): {}", id, svc.description, e);
+                } else {
+                    tracing::info!("成功 OneShot 启动服务 ID {}", id);
+                }
+            }
+            crate::config::AutoStart::Continuous => {
+                tracing::info!(
+                    "Continuous 自动启动服务 ID {}: {}（持久运行，保留 PID 以便后续销毁）",
+                    id,
+                    svc.description
+                );
+                if let Err(e) = process::start_service(&state, id).await {
+                    tracing::error!("自动启动服务失败 {} ({}): {}", id, svc.description, e);
+                } else {
+                    tracing::info!("成功 Continuous 启动服务 ID {}", id);
+                }
             }
         }
     }
 
-    // Auto-start web tunnel
+    // 自动启动 Web 隧道
     tracing::info!("正在启动 Web 隧道...");
     if let Err(e) = process::start_web_tunnel(&state).await {
         tracing::error!("启动 Web 隧道失败: {}", e);
@@ -157,17 +309,17 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Web 隧道启动成功");
     }
 
-    // Keep a clone for cleanup
+    // 为清理保留一个克隆
     let cleanup_state = state.clone();
 
-    // Run it
+    // 运行服务器
     let port = config.web_panel.local_port;
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("正在监听 {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
-    // Accept loop
+    // 接收循环
     let server_state = state.clone();
     let max_connections = config.web_panel.max_connections;
     tokio::select! {
@@ -175,7 +327,7 @@ async fn main() -> anyhow::Result<()> {
             loop {
                 match listener.accept().await {
                     Ok((socket, addr)) => {
-                        // Check connection limit
+                        // 检查连接上限
                         let current = server_state.active_connections.load(std::sync::atomic::Ordering::Relaxed);
                         if current >= max_connections {
                             tracing::warn!("连接数已达上限 ({}), 拒绝来自 {} 的连接", max_connections, addr);
@@ -199,7 +351,7 @@ async fn main() -> anyhow::Result<()> {
         _ = shutdown_signal() => {},
     }
 
-    // Cleanup logic
+    // 清理逻辑
     tracing::info!("正在关闭，终止子进程...");
     let active = cleanup_state
         .active_connections
@@ -208,42 +360,31 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("关闭时仍有 {} 个活动连接", active);
     }
 
-    // Kill service processes with timeout
+    // 终止服务进程（带超时）
     {
         let mut processes = cleanup_state.service_processes.write().await;
         tracing::info!("发现 {} 个需要终止的服务进程", processes.len());
-        for (id, handle) in processes.iter_mut() {
+        for (id, sp) in processes.iter_mut() {
             tracing::info!("正在终止服务进程 {}", id);
-            match handle {
-                state::ProcessHandle::Child(child) => {
-                    if let Err(e) = child.start_kill() {
-                        tracing::error!("终止服务进程 {} 失败: {}", id, e);
-                        continue;
-                    }
-                    // Wait for process to exit with 5 second timeout
-                    match tokio::time::timeout(Duration::from_secs(5), child.wait()).await {
-                        Ok(Ok(status)) => {
-                            tracing::info!("服务 {} 退出，状态: {:?}", id, status)
-                        }
-                        Ok(Err(e)) => tracing::error!("等待服务 {} 时出错: {}", id, e),
-                        Err(_) => {
-                            tracing::warn!("服务 {} 未在超时时间内退出，强制终止", id);
-                            let _ = child.kill().await;
-                        }
-                    }
+            if let Err(e) = sp.start_kill() {
+                tracing::error!("终止服务进程 {} 失败: {}", id, e);
+                continue;
+            }
+            // 等待进程退出（5 秒超时）
+            match tokio::time::timeout(Duration::from_secs(5), sp.wait()).await {
+                Ok(Ok(status)) => {
+                    tracing::info!("服务 {} 退出，状态: {:?}", id, status)
                 }
-                state::ProcessHandle::Pid(pid) => {
-                    // 用户模式：使用 taskkill
-                    tracing::info!("正在终止用户模式进程，PID: {}", pid);
-                    let _ = std::process::Command::new("taskkill")
-                        .args(&["/F", "/PID", &pid.to_string()])
-                        .output();
+                Ok(Err(e)) => tracing::error!("等待服务 {} 时出错: {}", id, e),
+                Err(_) => {
+                    tracing::warn!("服务 {} 未在超时时间内退出，强制终止", id);
+                    let _ = sp.kill().await;
                 }
             }
         }
     }
 
-    // Kill web tunnel with timeout
+    // 终止 Web 隧道（带超时）
     {
         let mut tunnel = cleanup_state.web_tunnel_process.lock().await;
         if let Some(child) = tunnel.as_mut() {

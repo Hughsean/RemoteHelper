@@ -65,7 +65,11 @@ pub fn decrypt_private_key(key_file: &KeyFile, passphrase: &str) -> Result<Signi
 /// 返回 `Some(WorkerGuard)` 如果启用了文件日志，否则返回 `None`。
 /// 返回的 guard 必须保留以便后续同步缓冲区到文件。
 #[must_use]
-pub fn tracing_init(dir: Option<&str>, file: Option<&str>) -> Option<WorkerGuard> {
+pub fn tracing_init(
+    dir: Option<&str>,
+    file: Option<&str>,
+    lvl: tracing::Level,
+) -> Option<WorkerGuard> {
     // 创建标准输出日志层
     let stdout_layer = tracing_subscriber::fmt::layer()
         .with_file(true)
@@ -75,8 +79,7 @@ pub fn tracing_init(dir: Option<&str>, file: Option<&str>) -> Option<WorkerGuard
         .with_target(false);
 
     // 创建环境过滤器，默认级别为 info
-    let env_filter =
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    let env_filter = tracing_subscriber::filter::LevelFilter::from_level(lvl);
 
     if let (Some(dir), Some(file)) = (dir, file) {
         let file_appender = tracing_appender::rolling::never(dir, file);

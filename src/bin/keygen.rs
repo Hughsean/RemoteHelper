@@ -35,13 +35,13 @@ fn main() -> anyhow::Result<()> {
     io::stdin().read_line(&mut passphrase)?;
     let passphrase = passphrase.trim();
 
-    // Derive key from passphrase
+    // 从密码短语派生密钥
     let salt: [u8; 16] = rand::random();
     let mut key = [0u8; 32];
     pbkdf2::<Hmac<Sha256>>(passphrase.as_bytes(), &salt, 100_000, &mut key)
         .expect("HMAC can be initialized with any key length");
 
-    // Encrypt private key
+    // 加密私钥
     let cipher = Aes256Gcm::new(&key.into());
     let nonce_bytes: [u8; 12] = rand::random();
     let nonce = Nonce::from_slice(&nonce_bytes);
@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
         nonce: BASE64_STANDARD.encode(nonce_bytes),
     };
 
-    // Save to user home directory
+    // 保存到用户主目录
     let home_dir =
         dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Failed to locate home directory"))?;
     let key_path = home_dir.join("id_ed25519.json");

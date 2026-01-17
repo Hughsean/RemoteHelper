@@ -27,3 +27,9 @@ pub mod core;
 pub mod cpu;
 pub mod driver;
 pub mod motherboard;
+
+// High level sensors abstraction (CPU + Motherboard)
+pub mod sensors;
+
+// Re-export key types from sensors for convenience
+pub use sensors::{Sensor, Sensors};

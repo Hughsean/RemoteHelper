@@ -16,7 +16,7 @@
 - 🌐 **双客户端支持**：
   - **Web 客户端**：基于 WebAssembly 的浏览器应用
   - **桌面客户端**：Tauri v2 系统托盘应用
-- 📝 **日志管理**：自动日志轮转（10MB）
+- 📝 **日志管理**：服务/隧道日志在超过 10MB 时轮转；主服务器日志 `logs/server.log` 默认不自动轮转
 - ⚡ **高性能**：异步 Tokio 运行时，支持并发连接
 
 ## 🏗️ 架构
@@ -90,7 +90,11 @@ connection_timeout_secs = 300
 description = "Remote Desktop Access"
 exe_path = "frpc.exe"
 args = ["-f", "token:port"]
-auto_start = false
+# 服务启动模式："none" | "oneshot" | "continuous"
+# - "none"      : 不自动启动
+# - "oneshot"   : 启动后会立即结束（不保留 PID）
+# - "continuous": 启动后会持续运行（保留 PID 以便后续销毁）
+auto_start = "none"
 allow_web_control = true
 ```
 
@@ -203,7 +207,7 @@ cargo run --bin gen_cert
 description = "服务描述"
 exe_path = "可执行文件路径"
 args = ["参数1", "参数2"]
-auto_start = false           # 服务器启动时自动启动
+auto_start = "none"           # 服务启动模式："none" | "oneshot" | "continuous"
 allow_web_control = true     # 允许 Web 控制
 ```
 
@@ -255,7 +259,7 @@ allow_web_control = true     # 允许 Web 控制
 - 服务状态（运行中/已停止）
 - 进程 PID
 - 启动/停止/重启操作
-- 日志查看（自动轮转）
+- 日志查看（服务/隧道日志实现简单轮转）
 
 ## 🛠️ 开发
 
@@ -325,14 +329,14 @@ cargo check --workspace
 ### 服务器日志
 
 - **位置**：`logs/server.log`
-- **轮转**：超过 10MB 自动轮转
+- **轮转**：**不自动轮转**（由 tracing_appender 写入）。如需轮转，请使用系统日志轮转工具或部署脚本（例如通过 NSSM 或外部轮转工具）。
 - **输出**：同时输出到 stdout 和文件
 
 ### 服务日志
 
 - **静态服务**：`logs/service_{id}.log`
 - **Web 隧道**：`logs/web_tunnel.log`
-- **轮转**：超过 10MB 自动轮转
+- **轮转**：超过 10MB 自动轮转（服务与 Web 隧道日志由程序实现简单轮转）
 
 ## 🔮 未来计划
 

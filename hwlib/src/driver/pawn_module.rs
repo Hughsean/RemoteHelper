@@ -79,23 +79,45 @@ impl PawnModuleManager {
             ));
         }
 
-        // Construct module file path
+        // 构造模块文件路径
         let module_path = Path::new(&self.modules_path).join(format!("{}.bin", module_name));
 
-        if !module_path.exists() {
+        // 尝试从磁盘读取模块二进制；如果不存在或读取失败，回退到嵌入数据（如果可用）
+        let binary_data: Vec<u8> = if module_path.exists() {
+            match fs::read(&module_path) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to read module file {:?}: {}, falling back to embedded",
+                        module_path,
+                        e
+                    );
+                    if let Some(embedded) =
+                        crate::driver::driver_resource::embedded_module_bytes(module_name)
+                    {
+                        embedded.to_vec()
+                    } else {
+                        return Err(DriverError::IoctlError(format!(
+                            "Failed to read module file {:?}: {}",
+                            module_path, e
+                        )));
+                    }
+                }
+            }
+        } else if let Some(embedded) =
+            crate::driver::driver_resource::embedded_module_bytes(module_name)
+        {
+            tracing::info!(
+                "Module file {:?} not found, using embedded binary",
+                module_path
+            );
+            embedded.to_vec()
+        } else {
             return Err(DriverError::IoctlError(format!(
                 "Module file not found: {:?}",
                 module_path
             )));
-        }
-
-        // Read module binary data
-        let binary_data = fs::read(&module_path).map_err(|e| {
-            DriverError::IoctlError(format!(
-                "Failed to read module file {:?}: {}",
-                module_path, e
-            ))
-        })?;
+        };
 
         tracing::info!(
             "Loading Pawn module: {} ({} bytes)",
@@ -103,13 +125,13 @@ impl PawnModuleManager {
             binary_data.len()
         );
 
-        // PawnIO associates a loaded module with the handle.
-        // Keep a dedicated handle per module, like LibreHardwareMonitor's C# wrappers.
+        // PawnIO 将已加载的模块与句柄关联。
+        // 为每个模块保留专用句柄，类似 LibreHardwareMonitor 的 C# 封装。
         let module_ioctl = self.ioctl.clone();
 
-        // Load the binary into the driver
+        // 将二进制加载到驱动中
         if let Err(e) = module_ioctl.load_pawn_binary(module_name, &binary_data) {
-            // Official PawnIO driver may not implement Pawn script IOCTLs.
+            // 官方的 PawnIO 驱动可能未实现 Pawn 脚本的 IOCTL。
             if matches!(e, DriverError::NotSupported(_)) {
                 self.pawn_script_supported = false;
             }
@@ -121,7 +143,7 @@ impl PawnModuleManager {
         self.module_ioctls
             .insert(module_name.to_string(), module_ioctl);
 
-        // Mark as loaded
+        // 标记为已加载
         self.loaded_modules.insert(module_name.to_string(), true);
 
         tracing::info!("Successfully loaded Pawn module: {}", module_name);

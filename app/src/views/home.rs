@@ -1,8 +1,8 @@
-use crate::components::{
-    DataSeries, MetricCard, MetricCardData, MetricItem, Select, SelectList, SelectOption,
-    SelectTrigger, SelectValue, TrendChart, TrendChartData,
-};
+use crate::components::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 use crate::views::{Services, Test};
+use crate::widgets::{
+    DataSeries, MetricCard, MetricCardData, MetricItem, TrendChart, TrendChartData,
+};
 use dioxus::prelude::*;
 
 const HOME_CSS: Asset = asset!("/assets/styling/home.css");
@@ -77,8 +77,20 @@ pub fn Home() -> Element {
                 value: "-- / -- GB".to_string(),
                 progress: Some(0.0),
             },
+            MetricItem {
+                label: "CPU 温度".to_string(),
+                value: "-- °C".to_string(),
+                progress: None,
+            },
+            MetricItem {
+                label: "CPU 封装功率".to_string(),
+                value: "-- W".to_string(),
+                progress: None,
+            },
         ],
         footer: Some("正在获取硬件信息...".to_string()),
+        right_small_power: None,
+        right_small_temp: None,
     });
 
     let mut gpu_data = use_signal(|| MetricCardData {
@@ -97,6 +109,8 @@ pub fn Home() -> Element {
             },
         ],
         footer: Some("正在获取硬件信息...".to_string()),
+        right_small_power: None,
+        right_small_temp: None,
     });
 
     // 综合趋势图数据 - 包含 CPU、内存、GPU 三个系列
@@ -143,6 +157,12 @@ pub fn Home() -> Element {
                                 },
                             ],
                             footer: Some(info.cpu_model.clone()),
+                            right_small_power: info
+                                .cpu_package_power
+                                .map(|p| (format!("{:.1} W", p), "#f59e0b".to_string())),
+                            right_small_temp: info
+                                .cpu_temperature
+                                .map(|t| (format!("{:.1} °C", t), "#ef4444".to_string())),
                         };
 
                         // 更新系统趋势图 - CPU (系列 0)
@@ -193,6 +213,12 @@ pub fn Home() -> Element {
                                     },
                                 ],
                                 footer: Some(gpu_model),
+                                right_small_power: info
+                                    .gpu_power_watts
+                                    .map(|p| (format!("{:.1} W", p), "#f59e0b".to_string())),
+                                right_small_temp: info
+                                    .gpu_temperature
+                                    .map(|t| (format!("{:.1} °C", t), "#ef4444".to_string())),
                             };
 
                             // 更新系统趋势图 - GPU (系列 2)
@@ -208,6 +234,8 @@ pub fn Home() -> Element {
                                 main_value: "不可用".to_string(),
                                 items: vec![],
                                 footer: Some("未检测到 GPU 或驱动未安装".to_string()),
+                                right_small_power: None,
+                                right_small_temp: None,
                             };
                         }
                     }
@@ -328,15 +356,13 @@ pub fn Home() -> Element {
                         MetricCard { data: gpu_data }
                     }
 
-
+                    // div { class: "home-footer",
+                    //     p { "💡 实时数据自动更新 • 当前间隔: {update_interval().to_display()}" }
+                    //     p { class: "powered-by", "Powered by Hughsean" }
+                    // }
 
                     div { class: "trends-single",
                         TrendChart { data: system_trend }
-                    }
-
-                    div { class: "home-footer",
-                        p { "💡 实时数据自动更新 • 当前间隔: {update_interval().to_display()}" }
-                        p { class: "powered-by", "Powered by Hughsean" }
                     }
                 },
                 PageView::Services => rsx! {

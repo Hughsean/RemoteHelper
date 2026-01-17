@@ -1,13 +1,14 @@
 // Dioxus prelude 包含了 Dioxus 应用中使用的许多常见项。在需要 Dioxus 的地方导入它是好的做法
 use dioxus::prelude::*;
 
-use tracing::Level;
 use views::{Home, Login, Services, Test};
 
-/// 定义一个包含应用所有共享组件的组件模块。
+/// 官方组件模块，包含应用的所有共享组件。这些组件是 Dioxus 应用的构建块。
 mod components;
 /// 定义一个包含应用所有布局和路由 UI 的视图模块。
 mod views;
+/// 自定义组件模块
+mod widgets;
 
 /// Route 枚举用于定义应用内部路由的结构。所有路由枚举都需要派生 [`Routable`] trait，它为路由器工作提供必要的方法。
 ///
@@ -39,8 +40,7 @@ enum Route {
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 fn main() {
-    // dioxus_logger::init(Level::DEBUG).expect("");
-    let _guard = common::func::tracing_init(Some("logs"), Some("app.log"));
+    let _guard = common::func::tracing_init(None, None, tracing::Level::DEBUG);
 
     #[cfg(feature = "desktop")]
     {

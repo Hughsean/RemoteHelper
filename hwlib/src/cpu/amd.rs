@@ -1,6 +1,6 @@
 use crate::core::{Hardware, HardwareResult, HardwareType, Identifier, Sensor};
 use crate::cpu::detection::CpuInfo;
-use crate::cpu::sensors::{PowerSensor, TemperatureSensor, VoltageSensor};
+use crate::cpu::sensors::{PowerSensor, TemperatureSensor};
 use crate::driver::PawnModuleManager;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -48,18 +48,15 @@ impl AmdCpu {
 
         let tctl_id = Identifier::new(HardwareType::CPU, 0, "Core (Tctl)");
         let tdie_id = Identifier::new(HardwareType::CPU, 0, "Core (Tdie)");
-        let voltage_id = Identifier::new(HardwareType::CPU, 0, "CPU Core Voltage");
         let power_id = Identifier::new(HardwareType::CPU, 0, "CPU Package Power");
 
-        let tctl_sensor = TemperatureSensor::new(tctl_id, "Core (Tctl)".to_string());
-        let tdie_sensor = TemperatureSensor::new(tdie_id, "Core (Tdie)".to_string());
-        let voltage_sensor = VoltageSensor::new(voltage_id, "CPU Core".to_string());
-        let power_sensor = PowerSensor::new(power_id, "CPU Package".to_string());
+        let tctl_sensor = TemperatureSensor::new(tctl_id, "CPU Package (Tctl)".to_string());
+        let tdie_sensor = TemperatureSensor::new(tdie_id, "CPU Package (socket)".to_string());
+        let power_sensor = PowerSensor::new(power_id, "CPU Package Power".to_string());
 
         let sensors: Vec<Box<dyn Sensor>> = vec![
             Box::new(tctl_sensor) as Box<dyn Sensor>,
             Box::new(tdie_sensor) as Box<dyn Sensor>,
-            Box::new(voltage_sensor) as Box<dyn Sensor>,
             Box::new(power_sensor) as Box<dyn Sensor>,
         ];
 
@@ -132,7 +129,7 @@ impl Hardware for AmdCpu {
     }
 
     fn update(&mut self) -> HardwareResult<()> {
-        tracing::info!("Update called, family = {}", self.info.family);
+        tracing::debug!("Update called, family = {}", self.info.family);
         if let Some(pm) = &self.pawn_manager {
             let mut pm = pm.lock().unwrap();
 
@@ -142,13 +139,24 @@ impl Hardware for AmdCpu {
                 if let Ok(msr) = pm.read_msr_amd(0x590) {
                     let data = (msr & 0xFFFF_FFFF) as u32;
                     let temp_raw = data & 0xfff;
-                    let temp_c = (temp_raw as f64 * 0.0625) - 49.0;
-                    tracing::info!("Read temperature MSR: raw={}, temp_c={}", temp_raw, temp_c);
+                    // Use package temperature (raw * 1/16)
+                    let package_c = temp_raw as f64 * 0.0625;
+                    tracing::debug!(
+                        "Read temperature MSR: raw={}, package_c={}",
+                        temp_raw,
+                        package_c
+                    );
                     if let Some(sensor) = self.sensors[0]
                         .as_any_mut()
                         .downcast_mut::<TemperatureSensor>()
                     {
-                        sensor.update_value(temp_c);
+                        sensor.update_value(package_c);
+                    }
+                    if let Some(sensor) = self.sensors[1]
+                        .as_any_mut()
+                        .downcast_mut::<TemperatureSensor>()
+                    {
+                        sensor.update_value(package_c);
                     }
                 } else {
                     tracing::warn!("Failed to read temperature from MSR 0x590");
@@ -157,25 +165,66 @@ impl Hardware for AmdCpu {
                 // SMN THM_TCON_CUR_TMP for Tctl/Tdie
                 match pm.read_smn_amd(0x00059800) {
                     Ok(raw_temp) => {
-                        let tctl_c = ((raw_temp >> 21) * 125) as f64 * 0.001;
-                        let tdie_c = tctl_c - 65.0; // Offset for Ryzen 5000/7000
-                        tracing::info!(
-                            "Read temperature SMN: raw={}, Tctl={}, Tdie={}",
-                            raw_temp,
-                            tctl_c,
-                            tdie_c
-                        );
-                        if let Some(sensor) = self.sensors[0]
-                            .as_any_mut()
-                            .downcast_mut::<TemperatureSensor>()
-                        {
-                            sensor.update_value(tctl_c);
+                        // THM_TCON_CUR_TMP: CUR_TEMP [31:21]
+                        // If bit 19 (0x80000) is set, an additional -49°C offset applies.
+                        let temp_offset_flag = (raw_temp & 0x80000) != 0;
+
+                        // temperature in millidegrees = ((raw >> 21) * 125)
+                        let mut t = ((raw_temp >> 21) * 125) as f64 * 0.001;
+                        if temp_offset_flag {
+                            t -= 49.0;
                         }
-                        if let Some(sensor) = self.sensors[1]
-                            .as_any_mut()
-                            .downcast_mut::<TemperatureSensor>()
+
+                        // Apply known model-specific offsets (from LibreHardwareMonitor / k10temp)
+                        let mut name_offset: f64 = 0.0;
+                        let cpu_name = self.info.name.as_str();
+                        if cpu_name.contains("1600X")
+                            || cpu_name.contains("1700X")
+                            || cpu_name.contains("1800X")
                         {
-                            sensor.update_value(tdie_c);
+                            name_offset = -20.0;
+                        } else if cpu_name.contains("Threadripper 19")
+                            || cpu_name.contains("Threadripper 29")
+                        {
+                            name_offset = -27.0;
+                        } else if cpu_name.contains("2700X") {
+                            name_offset = -10.0;
+                        }
+
+                        tracing::debug!(
+                            "Read temperature SMN: raw={}, t={}, flag={}, name_offset={}",
+                            raw_temp,
+                            t,
+                            temp_offset_flag,
+                            name_offset
+                        );
+
+                        if name_offset < 0.0 {
+                            if let Some(sensor) = self.sensors[0]
+                                .as_any_mut()
+                                .downcast_mut::<TemperatureSensor>()
+                            {
+                                sensor.update_value(t);
+                            }
+                            if let Some(sensor) = self.sensors[1]
+                                .as_any_mut()
+                                .downcast_mut::<TemperatureSensor>()
+                            {
+                                sensor.update_value(t + name_offset);
+                            }
+                        } else {
+                            if let Some(sensor) = self.sensors[0]
+                                .as_any_mut()
+                                .downcast_mut::<TemperatureSensor>()
+                            {
+                                sensor.update_value(t);
+                            }
+                            if let Some(sensor) = self.sensors[1]
+                                .as_any_mut()
+                                .downcast_mut::<TemperatureSensor>()
+                            {
+                                sensor.update_value(t);
+                            }
                         }
                     }
                     Err(e) => tracing::warn!("Failed to read temperature from SMN: {}", e),
@@ -218,16 +267,18 @@ impl Hardware for AmdCpu {
                         let joules = delta * energy_unit_joule;
                         let watts = joules / dt;
 
-                        tracing::info!(
+                        tracing::debug!(
                             "Read package power: delta={}, dt_s={}, W={}",
                             delta,
                             dt,
                             watts
                         );
-                        if let Some(sensor) =
-                            self.sensors[3].as_any_mut().downcast_mut::<PowerSensor>()
-                        {
-                            sensor.update_value(watts);
+                        // Find PowerSensor dynamically to avoid relying on fixed index
+                        for s in &mut self.sensors {
+                            if let Some(sensor) = s.as_any_mut().downcast_mut::<PowerSensor>() {
+                                sensor.update_value(watts);
+                                break;
+                            }
                         }
                     }
                 }

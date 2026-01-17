@@ -36,19 +36,21 @@ connection_timeout_secs = 300
 description = "Remote Desktop Access"
 exe_path = "frpc.exe"
 args = ["-f", "token:port"]
-# 是否在服务器启动时自动启动
-auto_start = false
+# 服务启动模式："none" | "oneshot" | "continuous"
+# - "none"      : 不自动启动
+# - "oneshot"   : 启动后会立即结束（不保留 PID）
+# - "continuous": 启动后会持续运行（保留 PID 以便后续销毁）
+auto_start = "none"
 # 是否允许通过 Web 控制
 allow_web_control = true
-# 是否以用户模式运行（false=系统服务, true=用户进程可显示界面）
-run_as_user = false
+# 注意：新版仅使用系统方式启动（不再支持以其它用户身份运行）
 
 # 服务配置示例 2：SSH 访问
 [[service]]
 description = "SSH Access"
 exe_path = "frpc.exe"
 args = ["-f", "token:port"]
-auto_start = true
+auto_start = "continuous"
 allow_web_control = true
 run_as_user = false
 
@@ -57,7 +59,7 @@ run_as_user = false
 # description = "Custom Application"
 # exe_path = "C:/path/to/your/application.exe"
 # args = ["--arg1", "value1", "--arg2", "value2"]
-# auto_start = false
+# auto_start = "none"
 # allow_web_control = true
 # run_as_user = true  # GUI 程序通常需要设为 true
 
@@ -76,11 +78,7 @@ run_as_user = false
 # - args: 启动参数列表
 # - auto_start: 服务器启动时自动启动该服务
 # - allow_web_control: 是否允许通过 Web 控制该服务
-# - run_as_user: 运行模式（false=系统服务后台运行, true=用户进程可显示界面）
-# - user_name: 用户名（可选，格式：COMPUTERNAME\Username 或 domain\username）
-# - user_password: 用户密码（可选，明文存储需注意安全）
-#
-# 用户凭据在全局级别配置，所有 run_as_user=true 的服务使用相同凭据
+# 注：新版不再支持以其它用户身份运行服务，所有服务均以系统方式启动（若需 GUI，请使用桌面客户端）
 # 1. 定期更换密钥对
 # 2. 不要在公共仓库中提交包含实际 token 的配置文件
 # 3. 使用强密码保护私钥文件

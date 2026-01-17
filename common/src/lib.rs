@@ -22,16 +22,11 @@ pub enum Request {
     ControlService {
         id: usize,
         action: ServiceAction,
-        user_name: Option<String>,
-        user_password: Option<String>,
     },
     AddService {
         description: String,
         exe_path: String,
         args: Vec<String>,
-        run_as_user: bool,
-        user_name: Option<String>,
-        user_password: Option<String>,
     },
     QueryPath {
         path: String,
@@ -68,6 +63,18 @@ pub struct SystemInfo {
     pub gpu_total_memory: Option<u64>,
     pub cpu_model: String,
     pub gpu_model: Option<String>,
+    /// GPU 温度（摄氏度），如不可用则为 None
+    #[serde(default)]
+    pub gpu_temperature: Option<f32>,
+    /// GPU 功率（瓦特），如不可用则为 None
+    #[serde(default)]
+    pub gpu_power_watts: Option<f32>,
+    /// CPU 包温（摄氏度），如不可用则为 None
+    #[serde(default)]
+    pub cpu_temperature: Option<f32>,
+    /// CPU 封装功率（瓦特），如不可用则为 None
+    #[serde(default)]
+    pub cpu_package_power: Option<f32>,
     #[serde(default)]
     pub network_tx_bytes: u64,
     #[serde(default)]
@@ -84,7 +91,6 @@ pub struct ServiceInfo {
     pub description: String,
     pub running: bool,
     pub pid: Option<u32>,
-    pub run_as_user: bool,
 }
 
 impl PartialEq for SystemInfo {

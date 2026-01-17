@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use hwlib::cpu::CpuGroup;
 use hwlib::motherboard::MotherboardGroup;
-use tracing::{info, warn};
+use tracing::{Level, info, warn};
 
 #[derive(Parser)]
 #[command(name = "lhm-cli")]
@@ -56,9 +56,9 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Initialize logger
-    // NOTE: default env_logger target is stderr; some wrappers only surface stdout.
+    // 注意：默认的 env_logger 输出目标为 stderr；某些封装器仅显示 stdout。
     // Logging to stdout makes diagnostics visible in more environments.
-    let _guard = common::func::tracing_init(None, None);
+    let _guard = common::func::tracing_init(None, None, Level::TRACE);
 
     info!("Starting LibreHardwareMonitor CLI");
 
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
 
     // Initialize hardware groups
     let mut cpu_group = CpuGroup::new();
-    let _motherboard_group = MotherboardGroup::new();
+    let mut motherboard_group = MotherboardGroup::new();
 
     // Detect CPUs
     if let Err(e) = cpu_group.detect_cpus() {
@@ -117,6 +117,12 @@ async fn main() -> Result<()> {
         && let Ok(pm) = driver.pawn_manager()
     {
         cpu_group.set_pawn_manager(pm.clone());
+        motherboard_group.set_pawn_manager(pm.clone());
+    }
+
+    // Detect motherboards
+    if let Err(e) = motherboard_group.detect_motherboards() {
+        warn!("Failed to detect motherboards: {}", e);
     }
 
     info!("Hardware groups initialized");
@@ -175,6 +181,38 @@ async fn main() -> Result<()> {
                                 None => {
                                     println!("    {}: No value available", sensor.name());
                                 }
+                            }
+                        }
+                    }
+                } else {
+                    println!("  Sensors: Driver not available");
+                }
+            }
+        }
+
+        // Show motherboards
+        if !motherboard_group.motherboards().is_empty() {
+            println!("\n=== Detected Motherboards ===");
+
+            // Update motherboards (may require driver)
+            if driver_opt.is_some()
+                && let Err(e) = motherboard_group.update_all() {
+                    warn!("Failed to update motherboard sensors: {}", e);
+                }
+
+            for (i, mb) in motherboard_group.motherboards().iter().enumerate() {
+                println!("Motherboard {}: {}", i, mb.name());
+
+                if driver_opt.is_some() {
+                    let sensors = mb.sensors();
+                    if !sensors.is_empty() {
+                        println!("  Sensors:");
+                        for s in sensors {
+                            match s.value() {
+                                Some(v) => {
+                                    println!("    {}: {:.2} {:?}", s.name(), v, s.sensor_type())
+                                }
+                                None => println!("    {}: No value available", s.name()),
                             }
                         }
                     }
@@ -263,6 +301,33 @@ async fn main() -> Result<()> {
                 println!();
             }
 
+            // Update and print motherboard sensors
+            if driver_opt.is_some()
+                && let Err(e) = motherboard_group.update_all() {
+                    warn!("Failed to update motherboard sensors: {}", e);
+                }
+
+            if !motherboard_group.motherboards().is_empty() {
+                println!("\n=== Motherboards ===");
+                for (i, mb) in motherboard_group.motherboards().iter().enumerate() {
+                    println!("Motherboard {}: {}", i, mb.name());
+                    let sensors = mb.sensors();
+                    if !sensors.is_empty() {
+                        println!("  Sensors:");
+                        for s in sensors {
+                            match s.value() {
+                                Some(v) => {
+                                    println!("    {}: {:.2} {:?}", s.name(), v, s.sensor_type())
+                                }
+                                None => println!("    {}: No value available", s.name()),
+                            }
+                        }
+                    } else {
+                        println!("  Sensors: none");
+                    }
+                }
+            }
+
             if driver_opt.is_some() {
                 println!("Driver loaded: Hardware sensor access enabled");
             } else {
@@ -270,7 +335,7 @@ async fn main() -> Result<()> {
             }
 
             // Wait before next update
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
     }
 
