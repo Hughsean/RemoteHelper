@@ -5,7 +5,7 @@ const LOGIN_CSS: Asset = asset!("/assets/styling/login.css");
 #[component]
 pub fn Login() -> Element {
     let mut server_address = use_signal(|| "frp-try.com:53460".to_string());
-    let mut password = use_signal(|| String::new());
+    let mut password = use_signal(String::new);
     let mut key_file_content = use_signal(|| Option::<String>::None);
     let mut key_file_name = use_signal(|| "未选择文件".to_string());
     let mut error_msg = use_signal(|| Option::<String>::None);
@@ -24,7 +24,6 @@ pub fn Login() -> Element {
                         Ok(content) => {
                             key_file_content.set(Some(content));
                             key_file_name.set("id_ed25519.json (默认位置)".to_string());
-                            return;
                         }
                         Err(_) => {
                             // 静默失败，用户可手动选择

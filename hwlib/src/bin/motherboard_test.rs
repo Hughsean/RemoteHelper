@@ -24,8 +24,8 @@ fn main() -> Result<()> {
 
     let mut mb_group = MotherboardGroup::new();
 
-    if let Some(driver) = driver_opt {
-        if let Ok(pm) = driver.pawn_manager() {
+    if let Some(driver) = driver_opt
+        && let Ok(pm) = driver.pawn_manager() {
             mb_group.set_pawn_manager(pm.clone());
 
             // Run SuperIO diagnostic and print summary
@@ -48,7 +48,6 @@ fn main() -> Result<()> {
                 println!("--- End EC Diagnostic ---\n");
             }
         }
-    }
 
     if let Err(e) = mb_group.detect_motherboards() {
         warn!("Failed to detect motherboards: {}", e);

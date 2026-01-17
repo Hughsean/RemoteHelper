@@ -1,34 +1,37 @@
 {
-  // "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.command": "clippy",
   // "rust-analyzer.check.extraArgs": [
   //     "--",
   //     "-D",
   //     "warnings"
   // ],
   // "rust-analyzer.cargo.features": "all",
-  // "rust-analyzer.rustfmt.rangeFormatting.enable": false,
+  "rust-analyzer.rustfmt.rangeFormatting.enable": false,
+  "rust-analyzer.files.exclude": [
+    "app/src/components"
+  ],
   // "editor.formatOnSave": false,
   // "editor.rulers": [
   //   100
   // ],
-  // "files.watcherExclude": {
-  //   "**/target/**": true,
-  //   "**/node_modules/**": true,
-  //   "**/.git/**": true,
-  //   "**/logs/**": true
-  // },
-  // "files.exclude": {
-  //   "**/.git": true,
-  //   "**/target": true,
-  //   "**/node_modules": true,
-  //   "**/logs": true
-  // },
-  // "search.exclude": {
-  //   "**/target": true,
-  //   "**/node_modules": true,
-  //   "**/logs": true,
-  //   "**/.git": true
-  // },
+  "files.watcherExclude": {
+    "**/target/**": true,
+    "**/node_modules/**": true,
+    "**/.git/**": true,
+    "**/logs/**": true
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/target": true,
+    "**/node_modules": true,
+    "**/logs": true
+  },
+  "search.exclude": {
+    "**/target": true,
+    "**/node_modules": true,
+    "**/logs": true,
+    "**/.git": true
+  },
   // "[rust]": {
   //   "editor.defaultFormatter": "rust-lang.rust-analyzer",
   //   "editor.formatOnSave": false,

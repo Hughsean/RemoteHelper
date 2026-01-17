@@ -7,12 +7,12 @@ const SERVICES_CSS: Asset = asset!("/assets/styling/services.css");
 #[component]
 pub fn Services() -> Element {
     // 服务列表状态
-    let services = use_signal(|| Vec::new());
+    let services = use_signal(Vec::new);
     let mut show_add_dialog = use_signal(|| false);
 
     // 加载服务列表的函数
     let load_services = move || {
-        let mut services_clone = services.clone();
+        let mut services_clone = services;
         spawn(async move {
             match client::send_request(Request::ListServices).await {
                 Ok(Response::Services(service_list)) => {
@@ -32,7 +32,7 @@ pub fn Services() -> Element {
 
     // 控制服务函数
     let control_service = move |id: usize, action: ServiceAction| {
-        let load_services_clone = load_services.clone();
+        let load_services_clone = load_services;
         spawn(async move {
             let result = client::send_request(Request::ControlService {
                 id,

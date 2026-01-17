@@ -127,13 +127,12 @@ async fn main() -> anyhow::Result<()> {
                     }
 
                     for r in cpu_readings.iter() {
-                        if r.sensor_type == hwlib::core::SensorType::Temperature {
-                            if r.name.contains("Tctl") || r.name.contains("Package") {
-                                if let Some(v) = &r.value {
-                                    temp_val = Some(v.value);
-                                    break;
-                                }
-                            }
+                        if r.sensor_type == hwlib::core::SensorType::Temperature
+                            && (r.name.contains("Tctl") || r.name.contains("Package"))
+                            && let Some(v) = &r.value
+                        {
+                            temp_val = Some(v.value);
+                            break;
                         }
                     }
 

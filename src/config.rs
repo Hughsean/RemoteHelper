@@ -48,17 +48,14 @@ use std::fmt;
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum AutoStart {
+    #[default]
     None,
     OneShot,
     Continuous,
 }
 
-impl Default for AutoStart {
-    fn default() -> Self {
-        AutoStart::None
-    }
-}
 
 impl fmt::Display for AutoStart {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

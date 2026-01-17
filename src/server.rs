@@ -99,7 +99,7 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
         while let Some(response) = resp_rx.recv().await {
             let mut sock = socket_write_clone.lock().await;
             let mut cry = crypto_clone.lock().await;
-            if let Err(e) = send_response_inner(&mut *sock, &mut *cry, &response).await {
+            if let Err(e) = send_response_inner(&mut sock, &mut cry, &response).await {
                 error!("Failed to send response: {}", e);
                 break;
             }
@@ -108,12 +108,8 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
 
     // 主请求读取循环
     let mut socket_read = socket_read;
-    loop {
-        // 读取加密长度
-        let len = match socket_read.read_u32().await {
-            Ok(n) => n as usize,
-            Err(_) => break, // 连接已关闭
-        };
+    while let Ok(n) = socket_read.read_u32().await {
+        let len = n as usize;
 
         if len > read_buf.len() {
             error!("Request too large: {} bytes", len);

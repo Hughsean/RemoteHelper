@@ -356,15 +356,13 @@ pub fn Home() -> Element {
                         MetricCard { data: gpu_data }
                     }
 
-
+                    // div { class: "home-footer",
+                    //     p { "💡 实时数据自动更新 • 当前间隔: {update_interval().to_display()}" }
+                    //     p { class: "powered-by", "Powered by Hughsean" }
+                    // }
 
                     div { class: "trends-single",
                         TrendChart { data: system_trend }
-                    }
-
-                    div { class: "home-footer",
-                        p { "💡 实时数据自动更新 • 当前间隔: {update_interval().to_display()}" }
-                        p { class: "powered-by", "Powered by Hughsean" }
                     }
                 },
                 PageView::Services => rsx! {

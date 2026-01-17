@@ -244,7 +244,7 @@ pub fn TrendChart(
                     .take_while(|p| p.timestamp <= time_end),
             );
 
-            if filtered_points.len() >= 1 {
+            if !filtered_points.is_empty() {
                 // 生成线条路径 - 根据时间戳计算 X 坐标
                 let mut line_points: Vec<String> = Vec::with_capacity(filtered_points.len()); // 预分配与数据点数量相同的容量
                 line_points.extend(filtered_points.iter().map(|point| {

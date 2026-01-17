@@ -16,7 +16,7 @@ pub fn detect_superio(pm: &mut PawnModuleManager) -> Option<SuperIoChip> {
     {
         // Parse a simple name from the diagnostic line
         // Format: "Detected SuperIO chip: <name> (details: [...])"
-        if let Some(rest) = chip.splitn(4, ':').nth(1) {
+        if let Some(rest) = chip.split(':').nth(1) {
             let name = rest.trim().to_string();
             return Some(SuperIoChip { name });
         }

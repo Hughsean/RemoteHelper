@@ -25,6 +25,7 @@ pub struct SensorReading {
 }
 
 /// 传感器管理器，封装 CPU 与主板的检测、更新与读取
+#[derive(Default)]
 pub struct SensorHub {
     cpu_group: CpuGroup,
     #[cfg(feature = "motherboard_sensors")]
@@ -32,15 +33,11 @@ pub struct SensorHub {
     pawn_manager: Option<Arc<Mutex<PawnModuleManager>>>,
 }
 
+
 impl SensorHub {
     /// 创建新的 `SensorHub`。
     pub fn new() -> Self {
-        Self {
-            cpu_group: CpuGroup::new(),
-            #[cfg(feature = "motherboard_sensors")]
-            mb_group: MotherboardGroup::new(),
-            pawn_manager: None,
-        }
+        Self::default()
     }
 
     /// 将 PawnIO 管理器注入，用于硬件访问

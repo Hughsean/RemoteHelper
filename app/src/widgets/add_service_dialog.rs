@@ -6,10 +6,10 @@ const DIALOG_CSS: Asset = asset!("/assets/styling/add_service_dialog.css");
 
 #[component]
 pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>) -> Element {
-    let mut description = use_signal(|| String::new());
-    let mut exe_path = use_signal(|| String::new());
-    let mut args = use_signal(|| String::new());
-    let mut path_suggestions = use_signal(|| Vec::<PathItem>::new());
+    let mut description = use_signal(String::new);
+    let mut exe_path = use_signal(String::new);
+    let mut args = use_signal(String::new);
+    let mut path_suggestions = use_signal(Vec::<PathItem>::new);
     let mut show_suggestions = use_signal(|| false);
     let mut is_submitting = use_signal(|| false);
     let mut selected_index = use_signal(|| 0_i32);
@@ -18,16 +18,14 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
     use_effect(move || {
         if show_suggestions() && !path_suggestions().is_empty() {
             spawn(async move {
-                let script = format!(
-                    r#"
-                    setTimeout(() => {{
+                let script = r#"
+                    setTimeout(() => {
                         const item = document.querySelector('.suggestion-item.selected');
-                        if (item) {{
-                            item.scrollIntoView({{ block: 'nearest', behavior: 'smooth' }});
-                        }}
-                    }}, 10);
-                    "#
-                );
+                        if (item) {
+                            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                        }
+                    }, 10);
+                    "#.to_string();
                 let _ = eval(&script);
             });
         }
