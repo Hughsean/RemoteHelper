@@ -46,16 +46,16 @@ impl AmdCpu {
     pub fn new(info: CpuInfo) -> HardwareResult<Self> {
         let identifier = Identifier::new(HardwareType::CPU, 0, &info.name);
 
-        let tctl_id = Identifier::new(HardwareType::CPU, 0, "Core (Tctl)");
+        // let tctl_id = Identifier::new(HardwareType::CPU, 0, "Core (Tctl)");
         let tdie_id = Identifier::new(HardwareType::CPU, 0, "Core (Tdie)");
         let power_id = Identifier::new(HardwareType::CPU, 0, "CPU Package Power");
 
-        let tctl_sensor = TemperatureSensor::new(tctl_id, "CPU Package (Tctl)".to_string());
+        // let tctl_sensor = TemperatureSensor::new(tctl_id, "CPU Package (Tctl)".to_string());
         let tdie_sensor = TemperatureSensor::new(tdie_id, "CPU Package (socket)".to_string());
         let power_sensor = PowerSensor::new(power_id, "CPU Package Power".to_string());
 
         let sensors: Vec<Box<dyn Sensor>> = vec![
-            Box::new(tctl_sensor) as Box<dyn Sensor>,
+            // Box::new(tctl_sensor) as Box<dyn Sensor>,
             Box::new(tdie_sensor) as Box<dyn Sensor>,
             Box::new(power_sensor) as Box<dyn Sensor>,
         ];

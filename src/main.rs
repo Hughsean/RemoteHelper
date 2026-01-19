@@ -69,19 +69,35 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::new(config.clone());
     tracing::info!("应用程序状态初始化完成");
 
-    // 尝试初始化 hwlib 驱动（在服务启动时进行），记录详细日志但不阻塞启动
-    match hwlib::driver::init_driver() {
-        Ok(()) => tracing::info!("hwlib driver initialized at startup"),
-        Err(e) => tracing::warn!("Failed to initialize hwlib driver at startup: {}", e),
-    }
-
     // 启动后台监控任务
     let monitor_state = state.clone();
     tokio::spawn(async move {
         let mut first_pause = false;
 
-        let mut hub_opt: Option<hwlib::sensors::Sensors> = None;
-        hwlib::sensors::ensure_sensor_hub(&mut hub_opt, "worker");
+        // let mut hub_opt: Option<hwlib::sensors::Sensors> = None;
+        // hwlib::sensors::ensure_sensor_hub(&mut hub_opt, "worker");
+        match hwlib::driver::init_driver() {
+            Ok(_) => tracing::info!("hwlib 驱动初始化成功"),
+            Err(e) => tracing::error!("hwlib 驱动初始化失败: {}", e),
+        }
+
+        let mut sensor_hub = Some(hwlib::Sensors::new());
+        let pm = match hwlib::driver::get_driver().and_then(|d| d.pawn_manager()) {
+            Ok(pm) => Some(pm),
+            Err(e) => {
+                tracing::error!("获取 hwlib pawn manager 失败: {}", e);
+                None
+            }
+        };
+
+        if let (Some(hub), Some(pm_)) = (sensor_hub.as_mut(), pm) {
+            hub.set_pawn_manager(pm_.clone());
+            tracing::info!("SensorHub pawn manager 设置完成");
+            match hub.detect() {
+                Ok(_) => tracing::info!("SensorHub 硬件检测成功"),
+                Err(e) => tracing::warn!("SensorHub 硬件检测失败: {}", e),
+            }
+        }
 
         loop {
             let interval_ms = *monitor_state.refresh_interval.read().await;
@@ -163,7 +179,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             {
-                if let Some(hub) = &mut hub_opt
+                if let Some(hub) = &mut sensor_hub
                     && let Ok((cpu_readings, _mb)) = hub.read_all()
                 {
                     if cpu_readings.is_empty() {
@@ -177,31 +193,20 @@ async fn main() -> anyhow::Result<()> {
                                 return None;
                             }
                             // Update temperature cache
-                            if x.sensor_type == hwlib::core::SensorType::Temperature
-                                && (x.name.contains("Tctl") || x.name.contains("Package"))
+                            if s.0 == 0
+                                && x.sensor_type == hwlib::core::SensorType::Temperature
                                 && let Some(v) = &x.value
-                                && s.0 == 0
                             {
-                                tokio::task::block_in_place(|| {
-                                    monitor_state
-                                        .cpu_temp_cache
-                                        .blocking_write()
-                                        .replace(v.value)
-                                });
+                                monitor_state.set_cpu_temp(Some(v.value));
                                 s.0 += 1;
                             }
                             // Update power cache
-                            else if x.sensor_type == hwlib::core::SensorType::Power
+                            else if s.1 == 0
+                                && x.sensor_type == hwlib::core::SensorType::Power
                                 && let Some(v) = &x.value
-                                && s.1 == 0
                             {
                                 tracing::debug!("更新 CPU 功率传感器值: {} W", v.value);
-                                tokio::task::block_in_place(|| {
-                                    monitor_state
-                                        .cpu_power_cache
-                                        .blocking_write()
-                                        .replace(v.value)
-                                });
+                                monitor_state.set_cpu_power(Some(v.value));
                                 s.1 += 1;
                             } else {
                                 tracing::trace!(
