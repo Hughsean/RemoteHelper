@@ -178,48 +178,48 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
+            if let Some(hub) = &mut sensor_hub
+                && let Ok((cpu_readings, _mb)) = hub.read_all()
             {
-                if let Some(hub) = &mut sensor_hub
-                    && let Ok((cpu_readings, _mb)) = hub.read_all()
-                {
-                    if cpu_readings.is_empty() {
-                        tracing::warn!("SensorHub returned no CPU sensors (worker)");
-                    }
-
-                    let c = cpu_readings
-                        .iter()
-                        .scan((0, 0), |s, x| {
-                            if s.0 > 0 && s.1 > 0 {
-                                return None;
-                            }
-                            // Update temperature cache
-                            if s.0 == 0
-                                && x.sensor_type == hwlib::core::SensorType::Temperature
-                                && let Some(v) = &x.value
-                            {
-                                monitor_state.set_cpu_temp(Some(v.value));
-                                s.0 += 1;
-                            }
-                            // Update power cache
-                            else if s.1 == 0
-                                && x.sensor_type == hwlib::core::SensorType::Power
-                                && let Some(v) = &x.value
-                            {
-                                tracing::debug!("更新 CPU 功率传感器值: {} W", v.value);
-                                monitor_state.set_cpu_power(Some(v.value));
-                                s.1 += 1;
-                            } else {
-                                tracing::trace!(
-                                    "Power sensor present but has no value: {}",
-                                    x.name
-                                );
-                            }
-                            // tracing::warn!("state: {:?}", s);
-                            Some((s.0, s.1))
-                        })
-                        .count();
-                    tracing::debug!("readings processed: {}", c);
+                if cpu_readings.is_empty() {
+                    tracing::warn!("SensorHub returned no CPU sensors (worker)");
                 }
+
+                let c = cpu_readings
+                    .iter()
+                    .scan((0, 0), |s, x| {
+                        if s.0 > 0 && s.1 > 0 {
+                            return None;
+                        }
+                        // Update temperature cache
+                        if s.0 == 0
+                            && x.sensor_type == hwlib::core::SensorType::Temperature
+                            && let Some(v) = &x.value
+                        {
+                            monitor_state.set_cpu_temp(Some(v.value));
+                            s.0 += 1;
+                        }
+                        // Update power cache
+                        else if s.1 == 0
+                            && x.sensor_type == hwlib::core::SensorType::Power
+                            && let Some(v) = &x.value
+                        {
+                            tracing::debug!("更新 CPU 功率传感器值: {} W", v.value);
+                            monitor_state.set_cpu_power(Some(v.value));
+                            s.1 += 1;
+                        } else {
+                            tracing::trace!("Power sensor present but has no value: {}", x.name);
+                        }
+                        // tracing::warn!("state: {:?}", s);
+                        Some((s.0, s.1))
+                    })
+                    .count();
+                // tracing::debug!("readings processed: {}", c);
+                tracing::warn!(
+                    "当前 CPU 温度缓存: {:?} °C, 功率缓存: {:?} W",
+                    monitor_state.get_cpu_temp(),
+                    monitor_state.get_cpu_power()
+                );
             }
         }
     });

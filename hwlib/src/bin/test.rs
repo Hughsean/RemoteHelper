@@ -1,6 +1,7 @@
 use hwlib::sensors::SensorHub;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut sensor_hub = SensorHub::new();
     hwlib::driver::init_driver().unwrap();
     sensor_hub.set_pawn_manager(
@@ -16,7 +17,7 @@ fn main() {
     }
 
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         match sensor_hub.read_all() {
             Ok((cpu_sensors, mb_sensors)) => {
                 println!("CPU 传感器数据:");
