@@ -26,7 +26,7 @@
 pub mod core;
 pub mod cpu;
 pub mod driver;
-pub mod mb;
+pub mod motherboard;
 
 // High level sensors abstraction (CPU + Motherboard)
 pub mod sensors;

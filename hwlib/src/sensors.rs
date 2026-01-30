@@ -11,7 +11,7 @@ use crate::core::{Identifier, SensorType, SensorValue};
 use crate::cpu::CpuGroup;
 use crate::driver::PawnModuleManager;
 #[cfg(feature = "motherboard_sensors")]
-use crate::mb::MotherboardGroup;
+use crate::motherboard::MotherboardGroup;
 use std::sync::{Arc, Mutex};
 
 /// 单个传感器的统一读数表示

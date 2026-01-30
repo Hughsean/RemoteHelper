@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use hwlib::cpu::CpuGroup;
-use hwlib::mb::MotherboardGroup;
+use hwlib::motherboard::MotherboardGroup;
 use tracing::{Level, info, warn};
 
 #[derive(Parser)]

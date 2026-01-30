@@ -185,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
                     tracing::warn!("SensorHub returned no CPU sensors (worker)");
                 }
 
-                let c = cpu_readings
+                let _c = cpu_readings
                     .iter()
                     .scan((0, 0), |s, x| {
                         if s.0 > 0 && s.1 > 0 {
