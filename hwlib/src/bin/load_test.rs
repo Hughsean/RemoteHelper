@@ -1,11 +1,15 @@
 use hwlib::sensors::SensorHub;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use std::thread;
 use std::time::{Duration, Instant};
 
 fn main() {
     // Init tracing to file + stdout at TRACE level
-    let _guard = common::func::tracing_init(Some("logs"), Some("load_test.log"), tracing::Level::TRACE);
+    let _guard =
+        common::func::tracing_init(Some("logs"), Some("load_test.log"), tracing::Level::TRACE);
     tracing::info!("Starting load test");
 
     // Init driver
@@ -58,7 +62,8 @@ fn main() {
 
     // We'll toggle load: collect samples for 5s, then enable load for 6s, then disable for 5s
     let sample_interval = Duration::from_millis(500);
-    let mut samples: Vec<(Instant, Option<u64>, Option<u64>, Option<f32>, Option<f32>)> = Vec::new();
+    let mut samples: Vec<(Instant, Option<u64>, Option<u64>, Option<f32>, Option<f32>)> =
+        Vec::new();
 
     let start = Instant::now();
     let total_duration = Duration::from_secs(600);
@@ -104,15 +109,28 @@ fn main() {
             Ok((cpu_readings, _mb)) => {
                 for r in cpu_readings.iter() {
                     if r.sensor_type == hwlib::core::SensorType::Temperature
-                        && let Some(v) = &r.value { temp = Some(v.value); }
+                        && let Some(v) = &r.value
+                    {
+                        temp = Some(v.value);
+                    }
                     if r.sensor_type == hwlib::core::SensorType::Power
-                        && let Some(v) = &r.value { power = Some(v.value); }
+                        && let Some(v) = &r.value
+                    {
+                        power = Some(v.value);
+                    }
                 }
             }
             Err(e) => tracing::warn!("SensorHub read_all failed: {}", e),
         }
 
-        tracing::trace!("sample @ {:?}: raw_pkg={:?}, raw_unit={:?}, temp={:?}, power={:?}", t, raw_pkg, raw_unit, temp, power);
+        tracing::trace!(
+            "sample @ {:?}: raw_pkg={:?}, raw_unit={:?}, temp={:?}, power={:?}",
+            t,
+            raw_pkg,
+            raw_unit,
+            temp,
+            power
+        );
         samples.push((t, raw_pkg, raw_unit, temp, power));
 
         thread::sleep(sample_interval);
@@ -120,7 +138,15 @@ fn main() {
 
     tracing::info!("Test complete, printing summary of samples:");
     for (i, (t, raw_pkg, raw_unit, temp, power)) in samples.iter().enumerate() {
-        println!("{:02}: {:?} | raw_pkg={:?} raw_unit={:?} temp={:?} power={:?}", i, t.elapsed(), raw_pkg, raw_unit, temp, power);
+        println!(
+            "{:02}: {:?} | raw_pkg={:?} raw_unit={:?} temp={:?} power={:?}",
+            i,
+            t.elapsed(),
+            raw_pkg,
+            raw_unit,
+            temp,
+            power
+        );
     }
 
     tracing::info!("Load test finished");

@@ -75,14 +75,14 @@ impl Hardware for Motherboard {
             tracing::debug!("Updating motherboard sensors for {}", self.name);
 
             // Try detecting SuperIO chip (placeholder implementation)
-            if let Some(chip) = crate::motherboard::superio::detect_superio(&mut pm) {
+            if let Some(chip) = crate::mb::superio::detect_superio(&mut pm) {
                 tracing::debug!("Detected SuperIO chip: {}", chip.name);
                 self.properties.insert("SuperIO".to_string(), chip.name);
             } else {
                 tracing::debug!("No SuperIO detected (or detection not implemented)");
 
                 // Try IsaBridge EC MMIO probing as a fallback
-                match crate::motherboard::ec::find_superio_mmio(&mut pm) {
+                match crate::mb::ec::find_superio_mmio(&mut pm) {
                     Some(vec) => {
                         tracing::debug!("IsaBridgeEC reported potential MMIO regions: {:?}", vec);
                         self.properties

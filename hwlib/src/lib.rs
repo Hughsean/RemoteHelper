@@ -16,7 +16,7 @@
 //! - `core`: 硬件抽象的核心 trait 和类型
 //! - `driver`: Windows 内核驱动接口（PawnIO）
 //! - `cpu`: CPU 检测和监控
-//! - `motherboard`: 主板传感器支持（计划中）
+//! - `mb`: 主板传感器支持（计划中）
 //!
 //! ## 安全
 //!
@@ -26,7 +26,7 @@
 pub mod core;
 pub mod cpu;
 pub mod driver;
-pub mod motherboard;
+pub mod mb;
 
 // High level sensors abstraction (CPU + Motherboard)
 pub mod sensors;

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use hwlib::motherboard::MotherboardGroup;
+use hwlib::mb::MotherboardGroup;
 use tracing::{info, warn};
 
 fn main() -> Result<()> {
@@ -33,7 +33,7 @@ fn main() -> Result<()> {
         if let Ok(pm_ref) = driver.pawn_manager() {
             let pm_arc = pm_ref.clone();
             let mut pm = pm_arc.lock().unwrap();
-            let diag = hwlib::motherboard::superio::diagnose(&mut pm);
+            let diag = hwlib::mb::superio::diagnose(&mut pm);
             println!("\n--- SuperIO Diagnostic ---");
             for line in diag {
                 println!("  {}", line);
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
             println!("--- End SuperIO Diagnostic ---\n");
 
             // Run EC (IsaBridge) diagnostic if available
-            let ec_diag = hwlib::motherboard::ec::diagnose_ec(&mut pm);
+            let ec_diag = hwlib::mb::ec::diagnose_ec(&mut pm);
             println!("\n--- EC (IsaBridge) Diagnostic ---");
             for line in ec_diag {
                 println!("  {}", line);
