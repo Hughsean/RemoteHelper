@@ -149,7 +149,7 @@ impl SensorValues {
 }
 
 /// 传感器 trait，定义基本的传感器接口
-pub trait Sensor {
+pub trait Sensor: Send + Sync {
     fn identifier(&self) -> &Identifier;
     fn sensor_type(&self) -> SensorType;
     fn name(&self) -> &str;
@@ -173,7 +173,7 @@ pub trait Sensor {
 }
 
 /// 控制 trait，定义传感器控制接口
-pub trait Control {
+pub trait Control: Send + Sync {
     fn identifier(&self) -> &Identifier;
     fn control_mode(&self) -> ControlMode;
     fn sensor(&self) -> &dyn Sensor;
@@ -185,7 +185,7 @@ pub trait Control {
 }
 
 /// 参数 trait，定义传感器参数接口
-pub trait Parameter {
+pub trait Parameter: Send + Sync {
     fn identifier(&self) -> &Identifier;
     fn name(&self) -> &str;
     fn description(&self) -> &str;
@@ -198,7 +198,7 @@ pub trait Parameter {
 }
 
 /// 硬件 trait，定义基本的硬件接口
-pub trait Hardware {
+pub trait Hardware: Send + Sync {
     fn identifier(&self) -> &Identifier;
     fn hardware_type(&self) -> HardwareType;
     fn name(&self) -> &str;
@@ -213,7 +213,7 @@ pub trait Hardware {
 }
 
 /// 计算机 trait，定义主接口
-pub trait Computer {
+pub trait Computer: Send + Sync {
     fn hardware(&self) -> &[Box<dyn Hardware>];
     fn update(&mut self) -> Result<(), ComputerError>;
     fn close(&mut self);
@@ -223,7 +223,7 @@ pub trait Computer {
 pub type SensorEventHandler = Box<dyn Fn(&dyn Sensor) + Send + Sync>;
 
 /// 具有事件处理能力的硬件
-pub trait HardwareEvents {
+pub trait HardwareEvents: Send + Sync {
     fn on_sensor_added(&mut self, handler: SensorEventHandler);
     fn on_sensor_removed(&mut self, handler: SensorEventHandler);
     fn trigger_sensor_added(&self, sensor: &dyn Sensor);

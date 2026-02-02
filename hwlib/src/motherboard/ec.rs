@@ -193,7 +193,9 @@ pub fn diagnose_ec(pm: &mut PawnModuleManager) -> Vec<String> {
                             hexs
                         ));
                     }
-                    Ok(_) => out.push("ioctl_access_superio_mmio permutation read => empty response".to_string()),
+                    Ok(_) => out.push(
+                        "ioctl_access_superio_mmio permutation read => empty response".to_string(),
+                    ),
                     Err(e) => out.push(format!(
                         "ioctl_access_superio_mmio permutation failed: {}",
                         e

@@ -398,14 +398,8 @@ async fn process_authenticated_request(req: Request, state: &AppState) -> Respon
                 gpu_temperature,
                 gpu_power_watts,
                 // Read CPU cached metrics
-                cpu_temperature: {
-                    let t = state.cpu_temp_cache.read().await;
-                    *t
-                },
-                cpu_package_power: {
-                    let p = state.cpu_power_cache.read().await;
-                    *p
-                },
+                cpu_temperature: state.get_cpu_temp(),
+                cpu_package_power: state.get_cpu_power(),
                 network_tx_bytes: net_tx,
                 network_rx_bytes: net_rx,
                 network_tx_speed: net_tx_spd,

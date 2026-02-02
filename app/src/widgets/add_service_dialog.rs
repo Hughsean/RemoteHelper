@@ -25,7 +25,8 @@ pub fn AddServiceDialog(on_close: EventHandler<()>, on_success: EventHandler<()>
                             item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                         }
                     }, 10);
-                    "#.to_string();
+                    "#
+                .to_string();
                 let _ = eval(&script);
             });
         }

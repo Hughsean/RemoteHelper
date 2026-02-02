@@ -12,11 +12,13 @@ use std::time::Duration;
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> anyhow::Result<()> {
     // 初始化 tracing
+    #[cfg(debug_assertions)]
+    let _guard =
+        common::func::tracing_init(Some("logs"), Some("server.log"), tracing::Level::DEBUG);
+    #[cfg(not(debug_assertions))]
     let _guard = common::func::tracing_init(Some("logs"), Some("server.log"), tracing::Level::INFO);
 
-    // tracing::info!("\n\n================================================================================");
     tracing::info!("正在启动 RemoteHelper 服务器实例");
-    // tracing::info!("================================================================================");
 
     // 加载配置
     let config = AppConfig::load()?;
@@ -67,103 +69,35 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::new(config.clone());
     tracing::info!("应用程序状态初始化完成");
 
-    // 尝试初始化 hwlib 驱动（在服务启动时进行），记录详细日志但不阻塞启动
-    match hwlib::driver::init_driver() {
-        Ok(()) => tracing::info!("hwlib driver initialized at startup"),
-        Err(e) => tracing::warn!("Failed to initialize hwlib driver at startup: {}", e),
-    }
-
-    // Spawn a dedicated sensor worker thread that owns a long-lived SensorHub
-    // Requests are sent as a oneshot responder over a std::sync channel; the worker replies with (temp, power)
-    let (sensor_req_tx, sensor_req_rx) = std::sync::mpsc::channel::<
-        tokio::sync::oneshot::Sender<Result<(Option<f32>, Option<f32>), ()>>,
-    >();
-    std::thread::spawn(move || {
-        let mut hub_opt: Option<hwlib::sensors::Sensors> = None;
-
-        loop {
-            // Wait for a read request
-            let resp_tx = match sensor_req_rx.recv() {
-                Ok(tx) => tx,
-                Err(_) => break, // channel closed -> exit thread
-            };
-
-            // Default response
-            let mut temp_val: Option<f32> = None;
-            let mut pow_val: Option<f32> = None;
-
-            // Try to get driver + pawn manager
-            match hwlib::driver::get_driver() {
-                Ok(driver) => match driver.pawn_manager() {
-                    Ok(pm) => {
-                        // Ensure we have a hub and pawn manager set
-                        if hub_opt.is_none() {
-                            let mut hub = hwlib::sensors::Sensors::new();
-                            hub.set_pawn_manager(pm.clone());
-
-                            if let Err(e) = hub.detect() {
-                                tracing::warn!("SensorHub detect failed (worker): {}", e);
-                                // Leave hub_opt as None so we will retry on next request
-                            } else {
-                                hub_opt = Some(hub);
-                            }
-                        } else if let Some(hub) = &mut hub_opt {
-                            // Ensure pawn manager is current
-                            hub.set_pawn_manager(pm.clone());
-                        }
-                    }
-                    Err(e) => tracing::trace!("Pawn manager not available (worker): {}", e),
-                },
-                Err(e) => tracing::trace!("hwlib driver not initialized (worker): {}", e),
-            }
-
-            // If hub exists, perform two-sample read
-            if let Some(hub) = &mut hub_opt {
-                let _ = hub.read_all();
-                std::thread::sleep(std::time::Duration::from_millis(250));
-                if let Ok((cpu_readings, _mb)) = hub.read_all() {
-                    if cpu_readings.is_empty() {
-                        tracing::warn!("SensorHub returned no CPU sensors (worker)");
-                    }
-
-                    for r in cpu_readings.iter() {
-                        if r.sensor_type == hwlib::core::SensorType::Temperature
-                            && (r.name.contains("Tctl") || r.name.contains("Package"))
-                            && let Some(v) = &r.value
-                        {
-                            temp_val = Some(v.value);
-                            break;
-                        }
-                    }
-
-                    for r in cpu_readings.iter() {
-                        if r.sensor_type == hwlib::core::SensorType::Power {
-                            if let Some(v) = &r.value {
-                                pow_val = Some(v.value);
-                                break;
-                            } else {
-                                tracing::trace!(
-                                    "Power sensor present but has no value (worker): {}",
-                                    r.name
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Send response if receiver still alive
-            let _ = resp_tx.send(Ok((temp_val, pow_val)));
-        }
-
-        tracing::debug!("Sensor worker thread exiting");
-    });
-
     // 启动后台监控任务
     let monitor_state = state.clone();
-    let sensor_req_tx = sensor_req_tx.clone();
     tokio::spawn(async move {
         let mut first_pause = false;
+
+        // let mut hub_opt: Option<hwlib::sensors::Sensors> = None;
+        // hwlib::sensors::ensure_sensor_hub(&mut hub_opt, "worker");
+        match hwlib::driver::init_driver() {
+            Ok(_) => tracing::info!("hwlib 驱动初始化成功"),
+            Err(e) => tracing::error!("hwlib 驱动初始化失败: {}", e),
+        }
+
+        let mut sensor_hub = Some(hwlib::Sensors::new());
+        let pm = match hwlib::driver::get_driver().and_then(|d| d.pawn_manager()) {
+            Ok(pm) => Some(pm),
+            Err(e) => {
+                tracing::error!("获取 hwlib pawn manager 失败: {}", e);
+                None
+            }
+        };
+
+        if let (Some(hub), Some(pm_)) = (sensor_hub.as_mut(), pm) {
+            hub.set_pawn_manager(pm_.clone());
+            tracing::info!("SensorHub pawn manager 设置完成");
+            match hub.detect() {
+                Ok(_) => tracing::info!("SensorHub 硬件检测成功"),
+                Err(e) => tracing::warn!("SensorHub 硬件检测失败: {}", e),
+            }
+        }
 
         loop {
             let interval_ms = *monitor_state.refresh_interval.read().await;
@@ -244,23 +178,48 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            // 请求 sensor worker 读取 CPU 传感器（长生命周期 SensorHub）
+            if let Some(hub) = &mut sensor_hub
+                && let Ok((cpu_readings, _mb)) = hub.read_all()
             {
-                let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
-                if let Err(e) = sensor_req_tx.send(resp_tx) {
-                    tracing::trace!("Sensor worker not available (blocking): {}", e);
-                } else {
-                    match tokio::time::timeout(std::time::Duration::from_secs(2), resp_rx).await {
-                        Ok(Ok(Ok((temp_val, pow_val)))) => {
-                            // Store into state caches
-                            let mut tcache = monitor_state.cpu_temp_cache.write().await;
-                            *tcache = temp_val;
-                            let mut pcache = monitor_state.cpu_power_cache.write().await;
-                            *pcache = pow_val;
-                        }
-                        _ => tracing::trace!("cpu_metrics_res returned error or task failed"),
-                    }
+                if cpu_readings.is_empty() {
+                    tracing::warn!("SensorHub returned no CPU sensors (worker)");
                 }
+
+                let _c = cpu_readings
+                    .iter()
+                    .scan((0, 0), |s, x| {
+                        if s.0 > 0 && s.1 > 0 {
+                            return None;
+                        }
+                        // Update temperature cache
+                        if s.0 == 0
+                            && x.sensor_type == hwlib::core::SensorType::Temperature
+                            && let Some(v) = &x.value
+                        {
+                            monitor_state.set_cpu_temp(Some(v.value));
+                            s.0 += 1;
+                        }
+                        // Update power cache
+                        else if s.1 == 0
+                            && x.sensor_type == hwlib::core::SensorType::Power
+                            && let Some(v) = &x.value
+                        {
+                            tracing::debug!("更新 CPU 功率传感器值: {} W", v.value);
+                            monitor_state.set_cpu_power(Some(v.value));
+                            s.1 += 1;
+                        } else {
+                            tracing::trace!("Power sensor present but has no value: {}", x.name);
+                        }
+                        // tracing::warn!("state: {:?}", s);
+                        Some((s.0, s.1))
+                    })
+                    .count();
+                // tracing::debug!("readings processed: {}", c);
+                tracing::warn!(
+                    "当前 CPU 温度缓存: {:?} °C, 功率缓存: {:?} W",
+                    monitor_state.get_cpu_temp(),
+                    monitor_state.get_cpu_power()
+                );
             }
         }
     });

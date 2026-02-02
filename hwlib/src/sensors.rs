@@ -33,7 +33,6 @@ pub struct SensorHub {
     pawn_manager: Option<Arc<Mutex<PawnModuleManager>>>,
 }
 
-
 impl SensorHub {
     /// 创建新的 `SensorHub`。
     pub fn new() -> Self {
@@ -142,3 +141,28 @@ impl SensorHub {
 // Re-export常用类型
 pub use SensorHub as Sensors;
 pub use SensorReading as Sensor;
+
+pub fn ensure_sensor_hub(hub_opt: &mut Option<crate::sensors::Sensors>, ctx: &str) {
+    match crate::driver::get_driver() {
+        Ok(driver) => match driver.pawn_manager() {
+            Ok(pm) => {
+                if let Some(hub) = hub_opt {
+                    // Update pawn manager if hub exists
+                    hub.set_pawn_manager(pm.clone());
+                } else {
+                    // Try to create and detect a new hub
+                    let mut hub = crate::sensors::Sensors::new();
+                    hub.set_pawn_manager(pm.clone());
+                    if let Err(e) = hub.detect() {
+                        tracing::warn!("SensorHub detect failed ({}): {}", ctx, e);
+                        // Leave hub_opt as None so we'll retry later
+                    } else {
+                        *hub_opt = Some(hub);
+                    }
+                }
+            }
+            Err(e) => tracing::trace!("Pawn manager not available ({}): {}", ctx, e),
+        },
+        Err(e) => tracing::trace!("hwlib driver not initialized ({}): {}", ctx, e),
+    }
+}

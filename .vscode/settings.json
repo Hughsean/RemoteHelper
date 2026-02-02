@@ -18,13 +18,13 @@
     "**/target/**": true,
     "**/node_modules/**": true,
     "**/.git/**": true,
-    "**/logs/**": true
+    // "**/logs/**": true
   },
   "files.exclude": {
     "**/.git": true,
     "**/target": true,
     "**/node_modules": true,
-    "**/logs": true
+    // "**/logs": true
   },
   "search.exclude": {
     "**/target": true,

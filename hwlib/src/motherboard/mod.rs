@@ -1,12 +1,12 @@
 // 模块声明 - 已实现基础骨架
 pub mod ec;
-pub mod motherboard;
+pub mod mb;
 pub mod smbios;
 pub mod superio;
 // pub mod config; // config 支持待完善
 
 // 重新导出主要类型
-pub use motherboard::Motherboard;
+pub use mb::Motherboard;
 pub use smbios::SmbiosInfo;
 pub use superio::SuperIoChip;
 

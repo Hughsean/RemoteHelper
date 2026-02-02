@@ -196,9 +196,10 @@ async fn main() -> Result<()> {
 
             // Update motherboards (may require driver)
             if driver_opt.is_some()
-                && let Err(e) = motherboard_group.update_all() {
-                    warn!("Failed to update motherboard sensors: {}", e);
-                }
+                && let Err(e) = motherboard_group.update_all()
+            {
+                warn!("Failed to update motherboard sensors: {}", e);
+            }
 
             for (i, mb) in motherboard_group.motherboards().iter().enumerate() {
                 println!("Motherboard {}: {}", i, mb.name());
@@ -303,9 +304,10 @@ async fn main() -> Result<()> {
 
             // Update and print motherboard sensors
             if driver_opt.is_some()
-                && let Err(e) = motherboard_group.update_all() {
-                    warn!("Failed to update motherboard sensors: {}", e);
-                }
+                && let Err(e) = motherboard_group.update_all()
+            {
+                warn!("Failed to update motherboard sensors: {}", e);
+            }
 
             if !motherboard_group.motherboards().is_empty() {
                 println!("\n=== Motherboards ===");

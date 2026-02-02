@@ -1,13 +1,51 @@
 use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[cfg(target_arch = "wasm32")]
+use gloo_storage::{LocalStorage, Storage};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs;
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
+use dirs;
 
 const LOGIN_CSS: Asset = asset!("/assets/styling/login.css");
 
+// 登录数据序列化结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LoginData {
+    server_address: String,
+    key_file_name: String,
+    password: String,
+}
+
+impl Default for LoginData {
+    fn default() -> Self {
+        Self {
+            server_address: "frp-try.com:53460".to_string(),
+            key_file_name: String::new(),
+            password: String::new(),
+        }
+    }
+}
+
 #[component]
 pub fn Login() -> Element {
-    let mut server_address = use_signal(|| "frp-try.com:53460".to_string());
-    let mut password = use_signal(String::new);
+    // 从本地存储/文件读取之前保存的数据
+    let stored_data = load_login_data();
+
+    let mut server_address = use_signal(move || stored_data.server_address.clone());
+    let mut password = use_signal(move || stored_data.password.clone());
     let mut key_file_content = use_signal(|| Option::<String>::None);
-    let mut key_file_name = use_signal(|| "未选择文件".to_string());
+    let mut key_file_name = use_signal(move || {
+        if stored_data.key_file_name.is_empty() {
+            "未选择文件".to_string()
+        } else {
+            stored_data.key_file_name.clone()
+        }
+    });
     let mut error_msg = use_signal(|| Option::<String>::None);
     let mut is_logging_in = use_signal(|| false);
 
@@ -43,8 +81,15 @@ pub fn Login() -> Element {
                 match file.read_string().await {
                     Ok(content) => {
                         key_file_content.set(Some(content));
-                        key_file_name.set(file.name());
+                        key_file_name.set(file.name().clone());
                         error_msg.set(None);
+
+                        // 保存到本地存储
+                        save_login_data(
+                            server_address(),
+                            file.name(),
+                            password(),
+                        );
                     }
                     Err(e) => {
                         error_msg.set(Some(format!("读取文件失败: {}", e)));
@@ -119,6 +164,13 @@ pub fn Login() -> Element {
                     *guard = Some(conn);
                     drop(guard);
 
+                    // 保存登录数据到本地存储
+                    save_login_data(
+                        server_address(),
+                        key_file_name(),
+                        password(),
+                    );
+
                     // 跳转到仪表板测试页面
                     navigator.push("/home");
                 }
@@ -153,7 +205,10 @@ pub fn Login() -> Element {
                         value: "{server_address}",
                         placeholder: "host:port",
                         disabled: is_logging_in(),
-                        oninput: move |evt| server_address.set(evt.value()),
+                        oninput: move |evt| {
+                            server_address.set(evt.value());
+                            save_login_data(evt.value(), key_file_name(), password());
+                        },
                     }
                 }
 
@@ -183,7 +238,10 @@ pub fn Login() -> Element {
                         value: "{password}",
                         placeholder: "密钥文件密码",
                         disabled: is_logging_in(),
-                        oninput: move |evt| password.set(evt.value()),
+                        oninput: move |evt| {
+                            password.set(evt.value());
+                            save_login_data(server_address(), key_file_name(), evt.value());
+                        },
                         onkeydown: move |evt| {
                             if evt.key() == Key::Enter && !is_logging_in() {
                                 handle_login();
@@ -219,6 +277,59 @@ pub fn Login() -> Element {
                     }
                 }
             }
+        }
+    }
+}
+
+// 平台无关的加载/保存函数
+#[cfg(target_arch = "wasm32")]
+fn load_login_data() -> LoginData {
+    LocalStorage::get("login_data").unwrap_or_default()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn load_login_data() -> LoginData {
+    if let Some(mut p) = dirs::config_dir() {
+        p.push("remotehelper");
+        p.push("login_data.json");
+        match std::fs::read_to_string(&p) {
+            Ok(s) => match serde_json::from_str(&s) {
+                Ok(ld) => ld,
+                Err(e) => {
+                    tracing::warn!("解析登录数据失败: {}", e);
+                    LoginData::default()
+                }
+            },
+            Err(_) => LoginData::default(),
+        }
+    } else {
+        LoginData::default()
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn save_login_data(server_address: String, key_file_name: String, password: String) {
+    let login_data = LoginData { server_address, key_file_name, password };
+    let _ = LocalStorage::set("login_data", &login_data);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_login_data(server_address: String, key_file_name: String, password: String) {
+    let login_data = LoginData { server_address, key_file_name, password };
+    if let Some(mut p) = dirs::config_dir() {
+        p.push("remotehelper");
+        if let Err(e) = std::fs::create_dir_all(&p) {
+            tracing::warn!("无法创建配置目录 {:?}: {}", p, e);
+            return;
+        }
+        p.push("login_data.json");
+        match serde_json::to_string(&login_data) {
+            Ok(s) => {
+                if let Err(e) = std::fs::write(&p, s) {
+                    tracing::warn!("无法写入登录数据 {:?}: {}", p, e);
+                }
+            }
+            Err(e) => tracing::warn!("序列化登录数据失败: {}", e),
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::config::{AppConfig, ServiceConfig};
 use nvml_wrapper::Nvml;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use sysinfo::{Networks, System};
 use tokio::process::Child;
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -69,8 +69,8 @@ pub struct AppState {
     pub networks: Arc<RwLock<Networks>>,
     pub nvml: Arc<RwLock<Option<Nvml>>>,
     pub gpu_cache: Arc<RwLock<GpuCache>>,
-    pub cpu_temp_cache: Arc<RwLock<Option<f32>>>,
-    pub cpu_power_cache: Arc<RwLock<Option<f32>>>,
+    pub cpu_temp_cache: Arc<AtomicU32>,
+    pub cpu_power_cache: Arc<AtomicU32>,
     pub refresh_interval: Arc<RwLock<u64>>,
     pub last_read_time: Arc<RwLock<std::time::Instant>>,
     pub update_notify: Arc<Notify>,
@@ -88,8 +88,8 @@ impl AppState {
             networks: Arc::new(RwLock::new(Networks::new_with_refreshed_list())),
             nvml: Arc::new(RwLock::new(Nvml::init().ok())),
             gpu_cache: Arc::new(RwLock::new(GpuCache::default())),
-            cpu_temp_cache: Arc::new(RwLock::new(None)),
-            cpu_power_cache: Arc::new(RwLock::new(None)),
+            cpu_temp_cache: Arc::new(AtomicU32::new(u32::MAX)),
+            cpu_power_cache: Arc::new(AtomicU32::new(u32::MAX)),
             refresh_interval: Arc::new(RwLock::new(1000)), // 默认 1 秒
             last_read_time: Arc::new(RwLock::new(std::time::Instant::now())),
             update_notify: Arc::new(Notify::new()),
@@ -97,6 +97,37 @@ impl AppState {
             web_tunnel_process: Arc::new(Mutex::new(None)),
             active_connections: Arc::new(AtomicUsize::new(0)),
         }
+    }
+
+    // Atomics helpers for CPU metric caches (no external dependencies)
+    fn store_opt_f32_atomic(a: &Arc<AtomicU32>, val: Option<f32>) {
+        let bits = val.map_or(u32::MAX, |v| v.to_bits());
+        a.store(bits, Ordering::Relaxed);
+    }
+
+    fn load_opt_f32_atomic(a: &Arc<AtomicU32>) -> Option<f32> {
+        let bits = a.load(Ordering::Relaxed);
+        if bits == u32::MAX {
+            None
+        } else {
+            Some(f32::from_bits(bits))
+        }
+    }
+
+    pub fn set_cpu_temp(&self, val: Option<f32>) {
+        Self::store_opt_f32_atomic(&self.cpu_temp_cache, val);
+    }
+
+    pub fn get_cpu_temp(&self) -> Option<f32> {
+        Self::load_opt_f32_atomic(&self.cpu_temp_cache)
+    }
+
+    pub fn set_cpu_power(&self, val: Option<f32>) {
+        Self::store_opt_f32_atomic(&self.cpu_power_cache, val);
+    }
+
+    pub fn get_cpu_power(&self) -> Option<f32> {
+        Self::load_opt_f32_atomic(&self.cpu_power_cache)
     }
 }
 
