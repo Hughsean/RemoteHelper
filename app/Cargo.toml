@@ -40,6 +40,9 @@ dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version 
   "router",
 ] }
 
+# 本地存储
+gloo-storage.workspace = true
+
 
 [features]
 default = ["desktop"]
