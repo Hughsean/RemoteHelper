@@ -37,8 +37,8 @@ async fn main() -> anyhow::Result<()> {
         if !no_delay && no_url {
             tokio::time::sleep(Duration::from_secs(delay)).await;
         } else if !no_url {
-            let timeout = delay.max(10);
-            let mut sleep_time = 1;
+            let timeout = delay.max(3);
+            let mut sleep_time = 3;
             loop {
                 let connected = utils::test_http_503(
                     config.web_panel.health_check_url.as_ref().unwrap(),
@@ -51,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
                     tracing::info!("检测到网络初始化完成");
                     break;
                 };
+                tracing::warn!("网络尚未初始化完成，{} 秒后重试...", sleep_time);
                 tokio::time::sleep(Duration::from_secs(sleep_time)).await;
                 sleep_time = (sleep_time * 2).min(timeout * 6);
             }
@@ -74,18 +75,16 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async move {
         let mut first_pause = false;
 
-        // let mut hub_opt: Option<hwlib::sensors::Sensors> = None;
-        // hwlib::sensors::ensure_sensor_hub(&mut hub_opt, "worker");
         match hwlib::driver::init_driver() {
             Ok(_) => tracing::info!("hwlib 驱动初始化成功"),
-            Err(e) => tracing::error!("hwlib 驱动初始化失败: {}", e),
+            Err(e) => tracing::warn!("hwlib 驱动初始化失败: {}", e),
         }
 
         let mut sensor_hub = Some(hwlib::Sensors::new());
         let pm = match hwlib::driver::get_driver().and_then(|d| d.pawn_manager()) {
             Ok(pm) => Some(pm),
             Err(e) => {
-                tracing::error!("获取 hwlib pawn manager 失败: {}", e);
+                tracing::warn!("获取 hwlib pawn manager 失败: {}", e);
                 None
             }
         };
@@ -182,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
                 && let Ok((cpu_readings, _mb)) = hub.read_all()
             {
                 if cpu_readings.is_empty() {
-                    tracing::warn!("SensorHub returned no CPU sensors (worker)");
+                    tracing::trace!("SensorHub returned no CPU sensors (worker)");
                 }
 
                 let _c = cpu_readings
@@ -210,12 +209,11 @@ async fn main() -> anyhow::Result<()> {
                         } else {
                             tracing::trace!("Power sensor present but has no value: {}", x.name);
                         }
-                        // tracing::warn!("state: {:?}", s);
                         Some((s.0, s.1))
                     })
                     .count();
                 // tracing::debug!("readings processed: {}", c);
-                tracing::warn!(
+                tracing::trace!(
                     "当前 CPU 温度缓存: {:?} °C, 功率缓存: {:?} W",
                     monitor_state.get_cpu_temp(),
                     monitor_state.get_cpu_power()
