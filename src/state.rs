@@ -100,6 +100,7 @@ impl AppState {
     }
 
     // Atomics helpers for CPU metric caches (no external dependencies)
+    #[allow(dead_code)]
     fn store_opt_f32_atomic(a: &Arc<AtomicU32>, val: Option<f32>) {
         let bits = val.map_or(u32::MAX, |v| v.to_bits());
         a.store(bits, Ordering::Relaxed);
@@ -114,6 +115,7 @@ impl AppState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_cpu_temp(&self, val: Option<f32>) {
         Self::store_opt_f32_atomic(&self.cpu_temp_cache, val);
     }
@@ -122,6 +124,7 @@ impl AppState {
         Self::load_opt_f32_atomic(&self.cpu_temp_cache)
     }
 
+    #[allow(dead_code)]
     pub fn set_cpu_power(&self, val: Option<f32>) {
         Self::store_opt_f32_atomic(&self.cpu_power_cache, val);
     }

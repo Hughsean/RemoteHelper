@@ -5,6 +5,10 @@ use std::path::{Path, PathBuf};
 
 use tracing;
 
+fn to_lower_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
 /// Embedded PawnIO 0.2.1 driver binaries
 pub struct DriverResource {
     temp_dir: PathBuf,
@@ -90,7 +94,7 @@ impl DriverResource {
         // Verify hash of embedded data
         let mut hasher = Sha256::new();
         hasher.update(data);
-        let actual_hash = format!("{:x}", hasher.finalize());
+        let actual_hash = to_lower_hex(&hasher.finalize());
 
         if actual_hash != expected_hash {
             return Err(DriverError::HashMismatch {
@@ -220,7 +224,7 @@ pub fn calculate_file_hash<P: AsRef<Path>>(path: P) -> DriverResult<String> {
     let data = fs::read(path)?;
     let mut hasher = Sha256::new();
     hasher.update(&data);
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(to_lower_hex(&hasher.finalize()))
 }
 
 #[cfg(test)]
@@ -238,7 +242,7 @@ mod tests {
         let test_data = b"hello world";
         let mut hasher = Sha256::new();
         hasher.update(test_data);
-        let hash = format!("{:x}", hasher.finalize());
+        let hash = to_lower_hex(&hasher.finalize());
 
         // Known SHA256 of "hello world"
         assert_eq!(

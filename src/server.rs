@@ -5,7 +5,6 @@ use common::{
     Handshake, Request, Response, ServiceAction, ServiceInfo, SystemInfo, crypto::CryptoSession,
 };
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use rand::Rng;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -155,7 +154,7 @@ async fn handle_connection_inner(mut socket: TcpStream, state: AppState) -> Resu
         match req {
             Request::GetChallenge => {
                 // Auth request - process immediately
-                let nonce: [u8; 32] = rand::thread_rng().r#gen();
+                let nonce: [u8; 32] = rand::random();
                 let nonce_str = BASE64_STANDARD.encode(nonce);
                 current_challenge = Some((nonce_str.clone(), Instant::now()));
                 let response = Response::Challenge(nonce_str);

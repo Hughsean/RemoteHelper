@@ -75,29 +75,6 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async move {
         let mut first_pause = false;
 
-        match hwlib::driver::init_driver() {
-            Ok(_) => tracing::info!("hwlib 驱动初始化成功"),
-            Err(e) => tracing::warn!("hwlib 驱动初始化失败: {}", e),
-        }
-
-        let mut sensor_hub = Some(hwlib::Sensors::new());
-        let pm = match hwlib::driver::get_driver().and_then(|d| d.pawn_manager()) {
-            Ok(pm) => Some(pm),
-            Err(e) => {
-                tracing::warn!("获取 hwlib pawn manager 失败: {}", e);
-                None
-            }
-        };
-
-        if let (Some(hub), Some(pm_)) = (sensor_hub.as_mut(), pm) {
-            hub.set_pawn_manager(pm_.clone());
-            tracing::info!("SensorHub pawn manager 设置完成");
-            match hub.detect() {
-                Ok(_) => tracing::info!("SensorHub 硬件检测成功"),
-                Err(e) => tracing::warn!("SensorHub 硬件检测失败: {}", e),
-            }
-        }
-
         loop {
             let interval_ms = *monitor_state.refresh_interval.read().await;
 
@@ -175,49 +152,6 @@ async fn main() -> anyhow::Result<()> {
                     cache.temperature = None;
                     cache.power_watts = None;
                 }
-            }
-
-            if let Some(hub) = &mut sensor_hub
-                && let Ok((cpu_readings, _mb)) = hub.read_all()
-            {
-                if cpu_readings.is_empty() {
-                    tracing::trace!("SensorHub returned no CPU sensors (worker)");
-                }
-
-                let _c = cpu_readings
-                    .iter()
-                    .scan((0, 0), |s, x| {
-                        if s.0 > 0 && s.1 > 0 {
-                            return None;
-                        }
-                        // Update temperature cache
-                        if s.0 == 0
-                            && x.sensor_type == hwlib::core::SensorType::Temperature
-                            && let Some(v) = &x.value
-                        {
-                            monitor_state.set_cpu_temp(Some(v.value));
-                            s.0 += 1;
-                        }
-                        // Update power cache
-                        else if s.1 == 0
-                            && x.sensor_type == hwlib::core::SensorType::Power
-                            && let Some(v) = &x.value
-                        {
-                            tracing::debug!("更新 CPU 功率传感器值: {} W", v.value);
-                            monitor_state.set_cpu_power(Some(v.value));
-                            s.1 += 1;
-                        } else {
-                            tracing::trace!("Power sensor present but has no value: {}", x.name);
-                        }
-                        Some((s.0, s.1))
-                    })
-                    .count();
-                // tracing::debug!("readings processed: {}", c);
-                tracing::trace!(
-                    "当前 CPU 温度缓存: {:?} °C, 功率缓存: {:?} W",
-                    monitor_state.get_cpu_temp(),
-                    monitor_state.get_cpu_power()
-                );
             }
         }
     });

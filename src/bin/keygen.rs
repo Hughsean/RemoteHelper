@@ -1,33 +1,12 @@
-use aes_gcm::{
-    Aes256Gcm, Nonce,
-    aead::{Aead, KeyInit},
-};
-use base64::prelude::*;
+use common::func::encrypt_private_key;
 use ed25519_dalek::SigningKey;
-use hmac::Hmac;
-use pbkdf2::pbkdf2;
-use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use std::fs::File;
 use std::io::{self, Write};
 
-#[derive(Serialize, Deserialize)]
-struct KeyFile {
-    pub_key: String,
-    enc_priv_key: String,
-    salt: String,
-    nonce: String,
-}
-
 fn main() -> anyhow::Result<()> {
     println!("Generating Ed25519 Keypair...");
-    let mut csprng = OsRng;
-    let signing_key = SigningKey::generate(&mut csprng);
-    let verifying_key = signing_key.verifying_key();
-
-    let pub_key_b64 = BASE64_STANDARD.encode(verifying_key.to_bytes());
-    println!("Public Key: {}", pub_key_b64);
+    let signing_key_bytes: [u8; 32] = rand::random();
+    let signing_key = SigningKey::from_bytes(&signing_key_bytes);
 
     print!("Enter passphrase to encrypt private key: ");
     io::stdout().flush()?;
@@ -35,29 +14,10 @@ fn main() -> anyhow::Result<()> {
     io::stdin().read_line(&mut passphrase)?;
     let passphrase = passphrase.trim();
 
-    // 从密码短语派生密钥
-    let salt: [u8; 16] = rand::random();
-    let mut key = [0u8; 32];
-    pbkdf2::<Hmac<Sha256>>(passphrase.as_bytes(), &salt, 100_000, &mut key)
-        .expect("HMAC can be initialized with any key length");
-
-    // 加密私钥
-    let cipher = Aes256Gcm::new(&key.into());
-    let nonce_bytes: [u8; 12] = rand::random();
-    let nonce = Nonce::from_slice(&nonce_bytes);
-
-    let priv_key_bytes = signing_key.to_bytes();
-
-    let ciphertext = cipher
-        .encrypt(nonce, priv_key_bytes.as_ref())
+    let key_file = encrypt_private_key(&signing_key, passphrase)
         .map_err(|e| anyhow::anyhow!("Encryption failure: {}", e))?;
 
-    let key_file = KeyFile {
-        pub_key: pub_key_b64.clone(),
-        enc_priv_key: BASE64_STANDARD.encode(ciphertext),
-        salt: BASE64_STANDARD.encode(salt),
-        nonce: BASE64_STANDARD.encode(nonce_bytes),
-    };
+    println!("Public Key: {}", key_file.pub_key);
 
     // 保存到用户主目录
     let home_dir =

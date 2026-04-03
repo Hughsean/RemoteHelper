@@ -1,12 +1,13 @@
 use base64::prelude::*;
 use common::{Handshake, Request, Response, crypto::CryptoSession};
 use ed25519_dalek::{Signer, SigningKey};
-use serde::Deserialize;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use x25519_dalek::PublicKey;
+
+pub use common::func::KeyFile;
 
 // Global state to hold the decrypted private key
 pub static SIGNING_KEY: LazyLock<Mutex<Option<(SigningKey, String)>>> =
@@ -22,14 +23,6 @@ pub struct EncryptedConnection {
 
 pub static CONNECTION: LazyLock<tokio::sync::Mutex<Option<EncryptedConnection>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(None));
-
-#[derive(Deserialize)]
-pub struct KeyFile {
-    pub pub_key: String,
-    pub enc_priv_key: String,
-    pub salt: String,
-    pub nonce: String,
-}
 
 pub async fn connect_and_auth() -> Result<EncryptedConnection, String> {
     // 1. Check if we are authenticated (have a key)
