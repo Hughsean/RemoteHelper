@@ -1,4 +1,4 @@
-use crate::components::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
+use dioxus_primitives::select::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 use crate::views::{Services, Test};
 use crate::widgets::{
     DataSeries, MetricCard, MetricCardData, MetricItem, TrendChart, TrendChartData,
@@ -6,6 +6,7 @@ use crate::widgets::{
 use dioxus::prelude::*;
 
 const HOME_CSS: Asset = asset!("/assets/styling/home.css");
+const SELECT_CSS: Asset = asset!("/assets/components/select/style.css");
 
 /// 页面视图选项
 #[derive(Clone, PartialEq, Debug)]
@@ -266,6 +267,7 @@ pub fn Home() -> Element {
 
     rsx! {
         document::Link { rel: "stylesheet", href: HOME_CSS }
+        document::Link { rel: "stylesheet", href: SELECT_CSS }
 
         div { class: "home-container",
             // Header bar with update interval control
@@ -306,8 +308,8 @@ pub fn Home() -> Element {
 
                 div { class: "header-controls",
                     label { class: "update-interval-label", "更新间隔:" }
-                    Select {
-                        value: use_memo(move || Some(Some(update_interval().to_display().to_string()))),
+                    Select::<String> {
+                        default_value: Some(update_interval().to_display().to_string()),
                         on_value_change: move |value: Option<String>| {
                             if let Some(v) = value {
                                 let interval = match v.as_str() {
@@ -320,7 +322,6 @@ pub fn Home() -> Element {
                                 update_interval.set(interval);
                             }
                         },
-                        placeholder: "".to_string(),
                         SelectTrigger { SelectValue {} }
                         SelectList {
                             SelectOption::<String> {

@@ -1,9 +1,10 @@
-use crate::components::card::*;
-use crate::components::select::*;
+use crate::widgets::card::*;
+use dioxus_primitives::select::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 use dioxus::prelude::*;
 use std::collections::VecDeque;
 
 const TREND_CHART_CSS: Asset = asset!("/assets/components/trend_chart/style.css");
+const SELECT_CSS: Asset = asset!("/assets/components/select/style.css");
 
 /// 时间窗口枚举
 #[derive(Clone, PartialEq, Debug)]
@@ -337,20 +338,20 @@ pub fn TrendChart(
     rsx! {
         Card { class: "trend-chart-card",
             document::Link { rel: "stylesheet", href: TREND_CHART_CSS }
+            document::Link { rel: "stylesheet", href: SELECT_CSS }
 
             CardHeader { class: "trend-chart-header",
                 div { class: "trend-chart-header-top",
                     CardTitle { class: "trend-chart-title", "{chart_data.title}" }
                     div { class: "time-window-selector",
                         label { class: "time-window-label", "时间窗口:" }
-                        Select {
-                            value: use_memo(move || Some(Some(data().time_window.to_display().to_string()))),
+                        Select::<String> {
+                            default_value: Some(data().time_window.to_display().to_string()),
                             on_value_change: move |value: Option<String>| {
                                 if let Some(v) = value {
                                     data.write().time_window = TimeWindow::from_str(&v);
                                 }
                             },
-                            placeholder: "".to_string(),
                             SelectTrigger { SelectValue {} }
                             SelectList {
                                 SelectOption::<String> {

@@ -1,9 +1,11 @@
-use crate::components::card::*;
-use crate::components::progress::*;
-use crate::components::separator::*;
+use crate::widgets::card::*;
 use dioxus::prelude::*;
+use dioxus_primitives::progress::{Progress, ProgressIndicator};
+use dioxus_primitives::separator::Separator;
 
 const METRIC_CARD_CSS: Asset = asset!("/assets/components/metric_card/style.css");
+const PROGRESS_CSS: Asset = asset!("/assets/components/progress/style.css");
+const SEPARATOR_CSS: Asset = asset!("/assets/components/separator/style.css");
 
 /// 单个指标项
 #[derive(Clone, PartialEq)]
@@ -37,6 +39,8 @@ pub fn MetricCard(
     rsx! {
         Card { class: "metric-card",
             document::Link { rel: "stylesheet", href: METRIC_CARD_CSS }
+            document::Link { rel: "stylesheet", href: PROGRESS_CSS }
+            document::Link { rel: "stylesheet", href: SEPARATOR_CSS }
 
             CardHeader {
                 CardTitle { class: "metric-card-title", "{card_data.title}" }

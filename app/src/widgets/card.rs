@@ -1,12 +1,14 @@
 use dioxus::prelude::*;
 
+const CARD_CSS: Asset = asset!("/assets/components/card/style.css");
+
 #[component]
 pub fn Card(
     #[props(extends=GlobalAttributes)] attributes: Vec<Attribute>,
     children: Element,
 ) -> Element {
     rsx! {
-        document::Link { rel: "stylesheet", href: asset!("./style.css") }
+        document::Link { rel: "stylesheet", href: CARD_CSS }
         div {
             class: "card",
             "data-slot": "card",

@@ -3,8 +3,6 @@ use dioxus::prelude::*;
 
 use views::{Home, Login, Services, Test};
 
-/// 官方组件模块，包含应用的所有共享组件。这些组件是 Dioxus 应用的构建块。
-mod components;
 /// 定义一个包含应用所有布局和路由 UI 的视图模块。
 mod views;
 /// 自定义组件模块
