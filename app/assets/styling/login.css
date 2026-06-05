@@ -200,3 +200,35 @@ body,
     font-size: 12px;
     color: #667eea;
 }
+
+.login-box hr {
+    border: none;
+    border-top: 1px dashed #d1d5db;
+    margin: 20px 0 16px 0;
+}
+
+.debug-hint {
+    text-align: center;
+    font-size: 13px;
+    color: #9ca3af;
+    margin-bottom: 12px;
+}
+
+.btn-debug-login {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 2px dashed #f59e0b;
+    background: #fffbeb;
+    color: #92400e;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-debug-login:hover {
+    background: #fef3c7;
+    border-color: #d97706;
+    color: #78350f;
+}

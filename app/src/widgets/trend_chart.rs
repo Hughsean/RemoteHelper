@@ -1,6 +1,6 @@
 use crate::widgets::card::*;
-use dioxus_primitives::select::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 use dioxus::prelude::*;
+use dioxus_primitives::select::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 use std::collections::VecDeque;
 
 const TREND_CHART_CSS: Asset = asset!("/assets/components/trend_chart/style.css");
@@ -346,30 +346,43 @@ pub fn TrendChart(
                     div { class: "time-window-selector",
                         label { class: "time-window-label", "时间窗口:" }
                         Select::<String> {
+                            class: "select",
                             default_value: Some(data().time_window.to_display().to_string()),
                             on_value_change: move |value: Option<String>| {
                                 if let Some(v) = value {
                                     data.write().time_window = TimeWindow::from_str(&v);
                                 }
                             },
-                            SelectTrigger { SelectValue {} }
-                            SelectList {
+                            SelectTrigger { class: "select-trigger",
+                                SelectValue {}
+                                svg {
+                                    class: "select-expand-icon",
+                                    view_box: "0 0 24 24",
+                                    xmlns: "http://www.w3.org/2000/svg",
+                                    polyline { points: "6 9 12 15 18 9" }
+                                }
+                            }
+                            SelectList { class: "select-list",
                                 SelectOption::<String> {
+                                    class: "select-option",
                                     index: use_signal(|| 0),
                                     value: "1分钟".to_string(),
                                     "1分钟"
                                 }
                                 SelectOption::<String> {
+                                    class: "select-option",
                                     index: use_signal(|| 1),
                                     value: "5分钟".to_string(),
                                     "5分钟"
                                 }
                                 SelectOption::<String> {
+                                    class: "select-option",
                                     index: use_signal(|| 2),
                                     value: "30分钟".to_string(),
                                     "30分钟"
                                 }
                                 SelectOption::<String> {
+                                    class: "select-option",
                                     index: use_signal(|| 3),
                                     value: "3小时".to_string(),
                                     "3小时"

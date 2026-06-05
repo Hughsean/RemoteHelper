@@ -62,7 +62,7 @@ fn main() {
         // macOS 自定义中文菜单
         #[cfg(target_os = "macos")]
         {
-            use dioxus::desktop::muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+            use dioxus::desktop::muda::{Menu, PredefinedMenuItem, Submenu};
 
             let menu = Menu::new();
 

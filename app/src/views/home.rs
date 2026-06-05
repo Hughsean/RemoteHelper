@@ -1,9 +1,9 @@
-use dioxus_primitives::select::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 use crate::views::{Services, Test};
 use crate::widgets::{
     DataSeries, MetricCard, MetricCardData, MetricItem, TrendChart, TrendChartData,
 };
 use dioxus::prelude::*;
+use dioxus_primitives::select::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 
 const HOME_CSS: Asset = asset!("/assets/styling/home.css");
 const SELECT_CSS: Asset = asset!("/assets/components/select/style.css");
@@ -309,6 +309,7 @@ pub fn Home() -> Element {
                 div { class: "header-controls",
                     label { class: "update-interval-label", "更新间隔:" }
                     Select::<String> {
+                        class: "select",
                         default_value: Some(update_interval().to_display().to_string()),
                         on_value_change: move |value: Option<String>| {
                             if let Some(v) = value {
@@ -322,24 +323,36 @@ pub fn Home() -> Element {
                                 update_interval.set(interval);
                             }
                         },
-                        SelectTrigger { SelectValue {} }
-                        SelectList {
+                        SelectTrigger { class: "select-trigger",
+                            SelectValue {}
+                            svg {
+                                class: "select-expand-icon",
+                                view_box: "0 0 24 24",
+                                xmlns: "http://www.w3.org/2000/svg",
+                                polyline { points: "6 9 12 15 18 9" }
+                            }
+                        }
+                        SelectList { class: "select-list",
                             SelectOption::<String> {
+                                class: "select-option",
                                 index: use_signal(|| 0),
                                 value: "0.5秒".to_string(),
                                 "0.5秒"
                             }
                             SelectOption::<String> {
+                                class: "select-option",
                                 index: use_signal(|| 1),
                                 value: "1秒".to_string(),
                                 "1秒"
                             }
                             SelectOption::<String> {
+                                class: "select-option",
                                 index: use_signal(|| 2),
                                 value: "3秒".to_string(),
                                 "3秒"
                             }
                             SelectOption::<String> {
+                                class: "select-option",
                                 index: use_signal(|| 3),
                                 value: "暂停".to_string(),
                                 "暂停"

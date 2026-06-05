@@ -1,8 +1,10 @@
 use base64::prelude::*;
-use common::{Handshake, Request, Response, crypto::CryptoSession};
+use common::{Handshake, Request, Response, SystemInfo, crypto::CryptoSession};
 use ed25519_dalek::{Signer, SigningKey};
 use std::sync::LazyLock;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::SystemTime;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use x25519_dalek::PublicKey;
@@ -23,6 +25,49 @@ pub struct EncryptedConnection {
 
 pub static CONNECTION: LazyLock<tokio::sync::Mutex<Option<EncryptedConnection>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(None));
+
+pub static MOCK_MODE: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
+
+fn generate_mock_system_info() -> SystemInfo {
+    let start = SystemTime::now();
+    let elapsed = start
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64();
+
+    let t = elapsed;
+    let cpu = 25.0 + 20.0 * (t / 3.0).sin() + 15.0 * (t / 1.7).sin();
+    let mem_ratio = 0.55 + 0.15 * (t / 8.0).sin();
+    let gpu = 35.0 + 25.0 * (t / 5.0).sin() + 20.0 * (t / 2.3).sin();
+    let gpu_mem_ratio = 0.5 + 0.25 * (t / 7.0).sin();
+
+    let total_mem: u64 = 16 * 1024 * 1024 * 1024;
+    let gpu_total_mem: u64 = 8 * 1024 * 1024 * 1024;
+
+    SystemInfo {
+        timestamp: std::time::UNIX_EPOCH
+            .elapsed()
+            .unwrap_or_default()
+            .as_millis() as u64,
+        cpu_usage: cpu.clamp(0.0, 100.0) as f32,
+        memory_usage: (total_mem as f64 * mem_ratio.clamp(0.1, 0.95)) as u64,
+        total_memory: total_mem,
+        uptime: (t / 3600.0) as u64,
+        gpu_usage: Some(gpu.clamp(0.0, 100.0) as u32),
+        gpu_memory_usage: Some((gpu_total_mem as f64 * gpu_mem_ratio.clamp(0.1, 0.95)) as u64),
+        gpu_total_memory: Some(gpu_total_mem),
+        cpu_model: "Mock CPU @ 3.50GHz (Debug Mode)".to_string(),
+        gpu_model: Some("Mock GPU (Debug Mode)".to_string()),
+        gpu_temperature: Some((55.0 + 20.0 * (t / 8.0).sin()) as f32),
+        gpu_power_watts: Some((80.0 + 40.0 * (t / 6.0).sin()) as f32),
+        cpu_temperature: Some((45.0 + 15.0 * (t / 10.0).sin()) as f32),
+        cpu_package_power: Some((15.0 + 10.0 * (t / 4.0).sin()) as f32),
+        network_tx_bytes: (t * 10_000_000.0) as u64,
+        network_rx_bytes: (t * 50_000_000.0) as u64,
+        network_tx_speed: (2_000_000.0 + 18_000_000.0 * (t / 3.0).sin().abs()) as u64,
+        network_rx_speed: (5_000_000.0 + 45_000_000.0 * (t / 4.0).sin().abs()) as u64,
+    }
+}
 
 pub async fn connect_and_auth() -> Result<EncryptedConnection, String> {
     // 1. Check if we are authenticated (have a key)
@@ -129,6 +174,15 @@ pub async fn connect_and_auth() -> Result<EncryptedConnection, String> {
 }
 
 pub async fn send_request(req: Request) -> Result<Response, String> {
+    if MOCK_MODE.load(Ordering::Relaxed) {
+        return Ok(match req {
+            Request::GetStatus { .. } => Response::Status(generate_mock_system_info()),
+            Request::ListServices => Response::Services(vec![]),
+            Request::QueryPath { .. } => Response::PathSuggestions(vec![]),
+            _ => Response::Ok,
+        });
+    }
+
     let mut guard = CONNECTION.lock().await;
 
     if guard.is_none() {

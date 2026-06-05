@@ -261,6 +261,19 @@ pub fn Login() -> Element {
                         " 生成密钥"
                     }
                 }
+
+                if cfg!(debug_assertions) {
+                    hr {}
+                    p { class: "debug-hint", "🔧 调试模式 — 无需服务器即可查看 UI" }
+                    button {
+                        class: "btn-debug-login",
+                        onclick: move |_| {
+                            client::MOCK_MODE.store(true, std::sync::atomic::Ordering::Relaxed);
+                            navigator.push("/home");
+                        },
+                        "调试登录（跳过认证）"
+                    }
+                }
             }
         }
     }
