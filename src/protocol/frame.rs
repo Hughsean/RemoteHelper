@@ -5,19 +5,25 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::Mutex;
 
-/// 从流中读取一个加密帧，解密并反序列化为 Request。
-/// 返回 `Ok(None)` 表示连接正常关闭。
+/// 帧读取结果：区分正常请求、可恢复的无效帧、连接关闭。
+pub enum FrameResult {
+    /// 成功解析的请求
+    Request(Request),
+    /// 帧格式有效但 JSON 无法解析（可恢复，不应断开连接）
+    Invalid(String),
+    /// 连接正常关闭（EOF）
+    Closed,
+}
+
+/// 从流中读取一个加密帧。
 pub async fn read_next_request(
     read_half: &mut OwnedReadHalf,
     crypto: &Arc<Mutex<CryptoSession>>,
     buf: &mut [u8],
-) -> Result<Option<Request>> {
+) -> Result<FrameResult> {
     let len = match read_half.read_u32().await {
         Ok(n) => n as usize,
-        Err(e) => {
-            tracing::debug!("Failed to read frame length: {}", e);
-            return Ok(None);
-        }
+        Err(_) => return Ok(FrameResult::Closed),
     };
 
     if len > buf.len() {
@@ -26,8 +32,7 @@ pub async fn read_next_request(
     }
 
     if read_half.read_exact(&mut buf[..len]).await.is_err() {
-        tracing::debug!("Connection closed during frame read");
-        return Ok(None);
+        return Ok(FrameResult::Closed);
     }
 
     let plaintext = {
@@ -36,10 +41,14 @@ pub async fn read_next_request(
             .map_err(|e| anyhow::anyhow!("Decryption failed: {}", e))?
     };
 
-    let req = serde_json::from_slice(&plaintext)
-        .map_err(|e| anyhow::anyhow!("Invalid JSON request: {}", e))?;
-
-    Ok(Some(req))
+    match serde_json::from_slice(&plaintext) {
+        Ok(req) => Ok(FrameResult::Request(req)),
+        Err(e) => {
+            let msg = format!("无效的 JSON 请求: {}", e);
+            tracing::warn!("{}", msg);
+            Ok(FrameResult::Invalid(msg))
+        }
+    }
 }
 
 /// 加密响应并写入流中。

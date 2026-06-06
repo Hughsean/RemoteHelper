@@ -40,13 +40,11 @@ pub fn register_default_handlers() {
 
 /// 线性扫描匹配的 handler，无锁。
 /// 返回 `true` 表示找到并已派发。
-pub fn dispatch(
-    req: Request,
-    state: AppState,
-    resp_tx: mpsc::Sender<Response>,
-) -> bool {
+pub fn dispatch(req: Request, state: AppState, resp_tx: mpsc::Sender<Response>) -> bool {
     let Some(handlers) = HANDLERS.get() else {
-        tracing::error!("handlers not registered — missing register_default_handlers() call at startup");
+        tracing::error!(
+            "handlers not registered — missing register_default_handlers() call at startup"
+        );
         return false;
     };
     for handler in handlers {

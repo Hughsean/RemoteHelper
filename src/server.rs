@@ -71,11 +71,17 @@ async fn handle_connection_inner(socket: TcpStream, state: AppState) -> Result<(
     let mut buf = [0u8; 10 * 1024];
 
     loop {
+        use crate::protocol::frame::FrameResult;
         let req = match crate::protocol::frame::read_next_request(&mut read_half, &crypto, &mut buf)
             .await
         {
-            Ok(Some(req)) => req,
-            Ok(None) => break, // connection closed
+            Ok(FrameResult::Request(req)) => req,
+            Ok(FrameResult::Invalid(msg)) => {
+                // JSON 解析失败 — 返回错误但不断开连接
+                let _ = resp_tx.send(Response::Error(msg)).await;
+                continue;
+            }
+            Ok(FrameResult::Closed) => break,
             Err(e) => {
                 error!("Frame read error: {}", e);
                 break;
@@ -128,12 +134,20 @@ async fn handle_connection_inner(socket: TcpStream, state: AppState) -> Result<(
                     }
                     continue;
                 }
-                handlers::dispatch(req, state.clone(), resp_tx.clone());
+                if !handlers::dispatch(req, state.clone(), resp_tx.clone()) {
+                    // 无匹配 handler — 返回错误但不断开连接
+                    if resp_tx
+                        .send(Response::Error("无效的请求状态".to_string()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
             }
         }
     }
 
-    // 等待响应发送器完成
     drop(resp_tx);
     let _ = writer.await;
 
