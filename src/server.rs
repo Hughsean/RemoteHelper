@@ -52,7 +52,7 @@ async fn handle_connection_inner(socket: TcpStream, state: AppState) -> Result<(
     let writer_crypto = crypto.clone();
 
     let writer = tokio::spawn(async move {
-        let mut cry_guard = writer_crypto;
+        let cry_guard = writer_crypto;
         while let Some(response) = resp_rx.recv().await {
             let mut sock_guard = write_half.lock().await;
             let mut c = cry_guard.lock().await;

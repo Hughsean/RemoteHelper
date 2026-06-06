@@ -11,7 +11,7 @@ use x25519_dalek::PublicKey;
 ///
 /// 所有参数由所有权转移，确保调用侧无需持有中间态。
 pub async fn perform_handshake(
-    socket: TcpStream,
+    mut socket: TcpStream,
 ) -> Result<(
     OwnedReadHalf,
     Arc<Mutex<OwnedWriteHalf>>,

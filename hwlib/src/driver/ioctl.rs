@@ -7,7 +7,7 @@ use winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::ioapiset::DeviceIoControl;
 use winapi::um::winnt::{
-    FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE, HANDLE,
+    FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE,
 };
 
 use tracing;
@@ -139,6 +139,12 @@ pub struct PhysicalMemoryRequest {
 ///   each `DeviceIoControl` call is atomic with respect to the handle
 /// - Overlapped I/O is not used, so there is no shared `OVERLAPPED` state
 //
+/// Handle-based wrapper for communicating with the PawnIO kernel driver via IOCTL.
+pub struct IoctlInterface {
+    device_handle: winapi::um::winnt::HANDLE,
+    device_name: String,
+}
+
 // SAFETY: HANDLE from CreateFile is thread-safe for concurrent DeviceIoControl calls.
 unsafe impl Send for IoctlInterface {}
 unsafe impl Sync for IoctlInterface {}
