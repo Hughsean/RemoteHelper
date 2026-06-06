@@ -1,5 +1,5 @@
 use crate::core::{Control, Identifier, Parameter, Sensor, SensorType, SensorValue};
-use std::collections::VecDeque;
+// VecDeque 已移除 — 改用 Vec 保证 values() 返回完整连续切片
 use std::time::Duration;
 
 /// CPU 的温度传感器
@@ -8,7 +8,7 @@ pub struct TemperatureSensor {
     identifier: Identifier,
     name: String,
     value: Option<f64>,
-    values: VecDeque<SensorValue>,
+    values: Vec<SensorValue>,
     time_window: Duration,
 }
 
@@ -18,7 +18,7 @@ impl TemperatureSensor {
             identifier,
             name,
             value: None,
-            values: VecDeque::new(),
+            values: Vec::new(),
             time_window: Duration::from_secs(60),
         }
     }
@@ -26,10 +26,22 @@ impl TemperatureSensor {
     pub fn update_value(&mut self, value: f64) {
         self.value = Some(value);
         let sensor_value = SensorValue::new(value as f32, "°C");
-        self.values.push_back(sensor_value);
+        self.values.push(sensor_value);
 
+        // Evict by count cap
         while self.values.len() > 100 {
-            self.values.pop_front();
+            self.values.remove(0);
+        }
+
+        // Evict by time window
+        let now = std::time::SystemTime::now();
+        while let Some(oldest) = self.values.first() {
+            match now.duration_since(oldest.timestamp) {
+                Ok(age) if age > self.time_window => {
+                    self.values.remove(0);
+                }
+                _ => break,
+            }
         }
     }
 }
@@ -74,7 +86,7 @@ impl Sensor for TemperatureSensor {
     }
 
     fn values(&self) -> &[SensorValue] {
-        self.values.as_slices().0
+        &self.values
     }
 
     fn values_time_window(&self) -> Duration {
@@ -118,7 +130,7 @@ pub struct PowerSensor {
     identifier: Identifier,
     name: String,
     value: Option<f64>,
-    values: VecDeque<SensorValue>,
+    values: Vec<SensorValue>,
     time_window: Duration,
 }
 
@@ -128,7 +140,7 @@ impl PowerSensor {
             identifier,
             name,
             value: None,
-            values: VecDeque::new(),
+            values: Vec::new(),
             time_window: Duration::from_secs(60),
         }
     }
@@ -136,10 +148,22 @@ impl PowerSensor {
     pub fn update_value(&mut self, value: f64) {
         self.value = Some(value);
         let sensor_value = SensorValue::new(value as f32, "W");
-        self.values.push_back(sensor_value);
+        self.values.push(sensor_value);
 
+        // Evict by count cap
         while self.values.len() > 100 {
-            self.values.pop_front();
+            self.values.remove(0);
+        }
+
+        // Evict by time window
+        let now = std::time::SystemTime::now();
+        while let Some(oldest) = self.values.first() {
+            match now.duration_since(oldest.timestamp) {
+                Ok(age) if age > self.time_window => {
+                    self.values.remove(0);
+                }
+                _ => break,
+            }
         }
     }
 }
@@ -184,7 +208,7 @@ impl Sensor for PowerSensor {
     }
 
     fn values(&self) -> &[SensorValue] {
-        self.values.as_slices().0
+        &self.values
     }
 
     fn values_time_window(&self) -> Duration {

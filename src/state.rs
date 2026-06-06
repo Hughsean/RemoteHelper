@@ -99,15 +99,17 @@ impl AppState {
         }
     }
 
-    // Atomics helpers for CPU metric caches (no external dependencies)
+    // Atomics helpers for CPU metric caches.
+    // Store uses Release ordering to ensure prior writes are visible to subsequent Acquire loads.
+    // Load uses Acquire ordering to ensure it observes all writes that happened-before the Release store.
     #[allow(dead_code)]
     fn store_opt_f32_atomic(a: &Arc<AtomicU32>, val: Option<f32>) {
         let bits = val.map_or(u32::MAX, |v| v.to_bits());
-        a.store(bits, Ordering::Relaxed);
+        a.store(bits, Ordering::Release);
     }
 
     fn load_opt_f32_atomic(a: &Arc<AtomicU32>) -> Option<f32> {
-        let bits = a.load(Ordering::Relaxed);
+        let bits = a.load(Ordering::Acquire);
         if bits == u32::MAX {
             None
         } else {

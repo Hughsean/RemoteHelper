@@ -131,7 +131,11 @@ pub fn Home() -> Element {
             // 检查是否暂停
             let current_interval = update_interval();
             if let Some(interval_ms) = current_interval.to_millis() {
-                match client::send_request(common::Request::GetStatus { interval_ms: None }).await {
+                match client::send_request(common::Request::GetStatus {
+                    interval_ms: Some(interval_ms),
+                })
+                .await
+                {
                     Ok(common::Response::Status(info)) => {
                         let timestamp = info.timestamp;
 

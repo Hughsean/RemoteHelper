@@ -73,7 +73,12 @@ pub fn diagnose(pm: &mut PawnModuleManager) -> Vec<String> {
                         "WritePortByte(idx=0x{:X}, {:#02X}) failed: {} (exit)",
                         idx, b, e
                     ));
-                    let _ = pm.write_port_byte(idx, 0xAA);
+                    if let Err(e) = pm.write_port_byte(idx, 0xAA) {
+                        out.push(format!(
+                            "Exit config (0xAA) at idx=0x{:X} failed: {}",
+                            idx, e
+                        ));
+                    }
                     continue;
                 }
             }
@@ -96,7 +101,12 @@ pub fn diagnose(pm: &mut PawnModuleManager) -> Vec<String> {
                 }
             }
 
-            let _ = pm.write_port_byte(idx, 0xAA);
+            if let Err(e) = pm.write_port_byte(idx, 0xAA) {
+                out.push(format!(
+                    "Exit config (0xAA) at idx=0x{:X} failed: {}",
+                    idx, e
+                ));
+            }
 
             let meaningful: Vec<(u8, u8)> = id_values
                 .iter()
