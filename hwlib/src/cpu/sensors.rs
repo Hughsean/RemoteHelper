@@ -1,5 +1,4 @@
-use crate::core::{Control, Identifier, Parameter, Sensor, SensorType, SensorValue};
-// VecDeque 已移除 — 改用 Vec 保证 values() 返回完整连续切片
+use crate::core::{Identifier, Sensor, SensorType, SensorValue};
 use std::time::Duration;
 
 /// CPU 的温度传感器
@@ -59,60 +58,12 @@ impl Sensor for TemperatureSensor {
         &self.name
     }
 
-    fn index(&self) -> usize {
-        0
-    }
-
-    fn is_default_hidden(&self) -> bool {
-        false
-    }
-
-    fn min_value(&self) -> Option<f32> {
-        self.values
-            .iter()
-            .map(|v| v.value)
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-
-    fn max_value(&self) -> Option<f32> {
-        self.values
-            .iter()
-            .map(|v| v.value)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-
     fn value(&self) -> Option<f32> {
         self.value.map(|v| v as f32)
     }
 
     fn values(&self) -> &[SensorValue] {
         &self.values
-    }
-
-    fn values_time_window(&self) -> Duration {
-        self.time_window
-    }
-
-    fn set_values_time_window(&mut self, window: Duration) {
-        self.time_window = window;
-    }
-
-    fn control(&self) -> Option<&dyn Control> {
-        None
-    }
-
-    fn parameters(&self) -> &[Box<dyn Parameter>] {
-        &[]
-    }
-
-    fn reset_min(&mut self) {}
-    fn reset_max(&mut self) {}
-    fn clear_values(&mut self) {
-        self.values.clear();
-    }
-
-    fn update(&mut self) -> Result<(), crate::core::SensorError> {
-        Ok(())
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -181,60 +132,12 @@ impl Sensor for PowerSensor {
         &self.name
     }
 
-    fn index(&self) -> usize {
-        0
-    }
-
-    fn is_default_hidden(&self) -> bool {
-        false
-    }
-
-    fn min_value(&self) -> Option<f32> {
-        self.values
-            .iter()
-            .map(|v| v.value)
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-
-    fn max_value(&self) -> Option<f32> {
-        self.values
-            .iter()
-            .map(|v| v.value)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-
     fn value(&self) -> Option<f32> {
         self.value.map(|v| v as f32)
     }
 
     fn values(&self) -> &[SensorValue] {
         &self.values
-    }
-
-    fn values_time_window(&self) -> Duration {
-        self.time_window
-    }
-
-    fn set_values_time_window(&mut self, window: Duration) {
-        self.time_window = window;
-    }
-
-    fn control(&self) -> Option<&dyn Control> {
-        None
-    }
-
-    fn parameters(&self) -> &[Box<dyn Parameter>] {
-        &[]
-    }
-
-    fn reset_min(&mut self) {}
-    fn reset_max(&mut self) {}
-    fn clear_values(&mut self) {
-        self.values.clear();
-    }
-
-    fn update(&mut self) -> Result<(), crate::core::SensorError> {
-        Ok(())
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

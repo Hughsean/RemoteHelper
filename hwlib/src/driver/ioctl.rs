@@ -129,33 +129,34 @@ pub struct PhysicalMemoryRequest {
     pub size: u32,
 }
 
-/// Pawn binary load request structure
-#[repr(C)]
-#[derive(Debug)]
-pub struct PawnLoadRequest {
-    pub binary_data: *const u8,
-    pub binary_size: u32,
-    pub module_name: [u8; 32], // Fixed-size array for module name
-}
-
-/// IOCTL interface for communicating with PawnIO driver
-pub struct IoctlInterface {
-    device_handle: HANDLE,
-    device_name: String,
-}
-
-// Windows HANDLE is thread-safe for read operations
+/// IOCTL interface for communicating with PawnIO driver.
+///
+/// Each instance holds an independent Windows `HANDLE` obtained via `CreateFile`.
+/// The underlying `HANDLE` is safe to use from multiple threads because:
+/// - `CreateFile` with `FILE_SHARE_READ | FILE_SHARE_WRITE` creates a handle
+///   that can be concurrently accessed
+/// - The PawnIO kernel driver processes IOCTL requests synchronously and
+///   each `DeviceIoControl` call is atomic with respect to the handle
+/// - Overlapped I/O is not used, so there is no shared `OVERLAPPED` state
+//
+// SAFETY: HANDLE from CreateFile is thread-safe for concurrent DeviceIoControl calls.
 unsafe impl Send for IoctlInterface {}
 unsafe impl Sync for IoctlInterface {}
 
+impl IoctlInterface {
+    /// 尝试克隆 IOCTL 接口，创建一个新的设备句柄。
+    ///
+    /// 每个句柄独立运行；内核驱动设备是无状态的，
+    /// 因此不需要担心句柄之间的状态共享问题。
+    pub fn try_clone(&self) -> DriverResult<Self> {
+        IoctlInterface::new(&self.device_name)
+    }
+}
+
 impl Clone for IoctlInterface {
     fn clone(&self) -> Self {
-        // For now, create a new handle. In a real implementation,
-        // you might want to share the handle or use a reference counted approach
-        match IoctlInterface::new(&self.device_name) {
-            Ok(interface) => interface,
-            Err(_) => panic!("Failed to clone IoctlInterface"),
-        }
+        self.try_clone()
+            .expect("Failed to clone IoctlInterface: device handle exhausted or driver not running")
     }
 }
 
@@ -363,9 +364,10 @@ impl IoctlInterface {
             input.extend_from_slice(&(param as i64).to_le_bytes());
         }
 
-        // Output buffer: PawnIO expects the caller to provide the expected output length.
-        // For our current usage (register reads), a single int64 return value is expected.
-        let mut output = vec![0u8; 8];
+        // Output buffer: allocate enough space for up to 8 x i64 return values.
+        // PawnIO returns the actual number of bytes written; we then parse into i64s.
+        let max_output_values = 8usize;
+        let mut output = vec![0u8; max_output_values * 8];
 
         let bytes_returned = self.device_io_control_bytes(
             ioctl_codes::IOCTL_PIO_EXECUTE_FN,

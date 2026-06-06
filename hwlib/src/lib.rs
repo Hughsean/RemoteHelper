@@ -24,12 +24,19 @@
 //! MSR/SMN 操作不当可能导致系统不稳定。
 
 pub mod core;
-pub mod cpu;
-pub mod driver;
-pub mod motherboard;
 
-// High level sensors abstraction (CPU + Motherboard)
+// Platform-specific modules — only available on Windows.
+// The driver, CPU, motherboard, and sensors modules all depend on
+// PawnIO kernel driver communication and are thus Windows-only.
+#[cfg(windows)]
+pub mod cpu;
+#[cfg(windows)]
+pub mod driver;
+#[cfg(windows)]
+pub mod motherboard;
+#[cfg(windows)]
 pub mod sensors;
 
 // Re-export key types from sensors for convenience
+#[cfg(windows)]
 pub use sensors::{Sensor, Sensors};

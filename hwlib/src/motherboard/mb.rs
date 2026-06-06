@@ -1,6 +1,5 @@
 use crate::core::{Hardware, HardwareResult, HardwareType, Identifier, Sensor};
 use crate::driver::PawnModuleManager;
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use tracing;
@@ -9,7 +8,6 @@ pub struct Motherboard {
     identifier: Identifier,
     name: String,
     sensors: Vec<Box<dyn Sensor>>,
-    properties: HashMap<String, String>,
     pawn_manager: Option<Arc<Mutex<PawnModuleManager>>>,
 }
 
@@ -17,14 +15,11 @@ impl Motherboard {
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
         let identifier = Identifier::new(HardwareType::Motherboard, 0, &name);
-        let mut properties = HashMap::new();
-        properties.insert("Name".to_string(), name.clone());
 
         Self {
             identifier,
             name,
             sensors: Vec::new(),
-            properties,
             pawn_manager: None,
         }
     }
@@ -48,24 +43,8 @@ impl Hardware for Motherboard {
         &self.name
     }
 
-    fn parent(&self) -> Option<&dyn Hardware> {
-        None
-    }
-
     fn sensors(&self) -> &[Box<dyn Sensor>] {
         &self.sensors
-    }
-
-    fn sub_hardware(&self) -> &[Box<dyn Hardware>] {
-        &[]
-    }
-
-    fn properties(&self) -> &HashMap<String, String> {
-        &self.properties
-    }
-
-    fn get_report(&self) -> String {
-        format!("Motherboard: {}", self.name)
     }
 
     fn update(&mut self) -> HardwareResult<()> {
@@ -76,8 +55,7 @@ impl Hardware for Motherboard {
 
             // Try detecting SuperIO chip (placeholder implementation)
             if let Some(chip) = crate::motherboard::superio::detect_superio(&mut pm) {
-                tracing::debug!("Detected SuperIO chip: {}", chip.name);
-                self.properties.insert("SuperIO".to_string(), chip.name);
+                tracing::info!("Detected SuperIO chip: {}", chip.name);
             } else {
                 tracing::debug!("No SuperIO detected (or detection not implemented)");
 
@@ -85,8 +63,6 @@ impl Hardware for Motherboard {
                 match crate::motherboard::ec::find_superio_mmio(&mut pm) {
                     Some(vec) => {
                         tracing::debug!("IsaBridgeEC reported potential MMIO regions: {:?}", vec);
-                        self.properties
-                            .insert("IsaBridgeMMIO".to_string(), format!("{:?}", vec));
                     }
                     None => tracing::debug!(
                         "IsaBridgeEC did not find MMIO regions or module unavailable"

@@ -2,7 +2,6 @@ use crate::core::{Hardware, HardwareResult, HardwareType, Identifier, Sensor};
 use crate::cpu::detection::CpuInfo;
 use crate::cpu::sensors::{PowerSensor, TemperatureSensor};
 use crate::driver::PawnModuleManager;
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use tracing;
@@ -61,7 +60,6 @@ pub struct AmdCpu {
     info: CpuInfo,
     identifier: Identifier,
     sensors: Vec<Box<dyn Sensor>>,
-    properties: HashMap<String, String>,
     pawn_manager: Option<Arc<Mutex<PawnModuleManager>>>,
 
     // 温度访问方式缓存
@@ -91,19 +89,10 @@ impl AmdCpu {
             Box::new(power_sensor) as Box<dyn Sensor>,
         ];
 
-        let mut properties = HashMap::new();
-        properties.insert("Manufacturer".to_string(), info.manufacturer.clone());
-        properties.insert("Family".to_string(), format!("0x{:X}", info.family));
-        properties.insert("Model".to_string(), format!("0x{:X}", info.model));
-        properties.insert("Stepping".to_string(), format!("0x{:X}", info.stepping));
-        properties.insert("Cores".to_string(), info.cores.to_string());
-        properties.insert("Threads".to_string(), info.threads.to_string());
-
         Ok(Self {
             info,
             identifier,
             sensors,
-            properties,
             pawn_manager: None,
             temperature_source: TemperatureSource::Unprobed,
             last_energy_sample_time: None,
@@ -156,9 +145,7 @@ impl AmdCpu {
             || cpu_name.contains("1800X")
         {
             -20.0
-        } else if cpu_name.contains("Threadripper 19")
-            || cpu_name.contains("Threadripper 29")
-        {
+        } else if cpu_name.contains("Threadripper 19") || cpu_name.contains("Threadripper 29") {
             -27.0
         } else if cpu_name.contains("2700X") {
             -10.0
@@ -169,7 +156,11 @@ impl AmdCpu {
         let final_temp = t + name_offset;
         tracing::debug!(
             "Temperature via SMN 0x59800: raw=0x{:08X}, t={:.1}, flag={}, offset={:.1}, final={:.1}°C",
-            raw_temp, t, temp_offset_flag, name_offset, final_temp
+            raw_temp,
+            t,
+            temp_offset_flag,
+            name_offset,
+            final_temp
         );
         Some(final_temp)
     }
@@ -198,7 +189,10 @@ impl AmdCpu {
                     return;
                 }
                 self.temperature_source = TemperatureSource::Unavailable;
-                tracing::warn!("All temperature access methods failed for {}", self.info.name);
+                tracing::warn!(
+                    "All temperature access methods failed for {}",
+                    self.info.name
+                );
             }
             TemperatureSource::Smn0x59800 => {
                 // 缓存了 SMN 路径，直接尝试
@@ -214,7 +208,10 @@ impl AmdCpu {
                     return;
                 }
                 self.temperature_source = TemperatureSource::Unavailable;
-                tracing::warn!("All temperature access methods failed for {}", self.info.name);
+                tracing::warn!(
+                    "All temperature access methods failed for {}",
+                    self.info.name
+                );
             }
             TemperatureSource::Unprobed => {
                 // 首次探测：按优先级尝试
@@ -354,27 +351,8 @@ impl Hardware for AmdCpu {
         &self.info.name
     }
 
-    fn parent(&self) -> Option<&dyn Hardware> {
-        None
-    }
-
     fn sensors(&self) -> &[Box<dyn Sensor>] {
         &self.sensors
-    }
-
-    fn sub_hardware(&self) -> &[Box<dyn Hardware>] {
-        &[]
-    }
-
-    fn properties(&self) -> &HashMap<String, String> {
-        &self.properties
-    }
-
-    fn get_report(&self) -> String {
-        format!(
-            "AMD CPU: {} ({} cores, {} threads)",
-            self.info.name, self.info.cores, self.info.threads
-        )
     }
 
     fn update(&mut self) -> HardwareResult<()> {

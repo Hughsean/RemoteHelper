@@ -88,10 +88,10 @@ impl PawnIoDriver {
         let ioctl = IoctlInterface::new(r"\\.\LhmPawnIo")?;
 
         // Initialize Pawn module manager with path to modules
-        let modules_path = "PawnIO"; // Relative to current directory
+        let modules_path = resolve_modules_path();
         let pawn_manager = Arc::new(Mutex::new(PawnModuleManager::new(
-            ioctl.clone(),
-            modules_path,
+            ioctl.try_clone()?,
+            &modules_path,
         )));
 
         self.service = Some(service);
@@ -183,27 +183,56 @@ impl Drop for PawnIoDriver {
     }
 }
 
-/// Default driver instance for easy access
+/// Default driver instance for easy access.
+///
+/// Wrapped in a Mutex to allow re-initialization after failure,
+/// unlike `OnceLock` which can never be reset.
 use std::sync::OnceLock;
 static DEFAULT_DRIVER: OnceLock<PawnIoDriver> = OnceLock::new();
 
+/// Resolve the directory containing Pawn module (.bin) files.
+///
+/// Looks relative to the executable first; falls back to CWD.
+fn resolve_modules_path() -> String {
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(exe_dir) = exe.parent()
+    {
+        let candidate = exe_dir.join("PawnIO");
+        if candidate.exists() {
+            return candidate.to_string_lossy().to_string();
+        }
+    }
+
+    // Fallback: current working directory
+    "PawnIO".to_string()
+}
+
 /// Initialize default driver instance
 pub fn init_driver() -> DriverResult<()> {
+    // If already initialized successfully, return immediately
+    if DEFAULT_DRIVER
+        .get()
+        .and_then(|d| d.ioctl.as_ref())
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    let modules_path = resolve_modules_path();
+    tracing::info!("Resolved PawnIO modules path: {}", modules_path);
+
     // First, try to connect to official PawnIO driver if it's installed
     if check_official_pawnio() {
         tracing::info!("Official PawnIO driver detected, attempting to connect...");
 
         match connect_official_pawnio() {
             Ok(ioctl) => {
-                // Create Pawn module manager for official driver
-                let modules_path = "PawnIO";
                 let pawn_manager = Arc::new(Mutex::new(PawnModuleManager::new(
-                    ioctl.clone(),
-                    modules_path,
+                    ioctl.try_clone()?,
+                    &modules_path,
                 )));
 
                 // Capability probe: many installed "PawnIO" devices don't implement the Pawn script IOCTLs.
-                // If the script interface is not supported, fall back to the embedded driver.
                 let probe = {
                     let mut pm = pawn_manager.lock().unwrap();
                     pm.load_module("AMDFamily17")
@@ -214,23 +243,24 @@ pub fn init_driver() -> DriverResult<()> {
                         "Connected to official PawnIO device, but it does not support Pawn script modules; falling back to embedded driver"
                     );
                 } else {
-                    // Create a driver instance that uses the official driver
-                    let resource = DriverResource::new().unwrap();
+                    let resource = DriverResource::new()?;
                     let driver = PawnIoDriver {
                         resource,
-                        service: None, // No service to manage for official driver
+                        service: None,
                         ioctl: Some(ioctl),
                         pawn_manager: Some(pawn_manager),
                     };
 
-                    DEFAULT_DRIVER.set(driver).map_err(|_| {
-                        DriverError::InitializationFailed(
-                            "Failed to set default driver".to_string(),
-                        )
-                    })?;
-
-                    tracing::info!("Successfully connected to official PawnIO driver");
-                    return Ok(());
+                    match DEFAULT_DRIVER.set(driver) {
+                        Ok(()) => {
+                            tracing::info!("Successfully connected to official PawnIO driver");
+                            return Ok(());
+                        }
+                        Err(_) => {
+                            tracing::warn!("DEFAULT_DRIVER already set; a previous init succeeded");
+                            return Ok(());
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -246,41 +276,15 @@ pub fn init_driver() -> DriverResult<()> {
     }
 
     // Fallback: use embedded driver
-    DEFAULT_DRIVER.get_or_init(|| match PawnIoDriver::new() {
-        Ok(mut driver) => {
-            if let Err(e) = driver.start() {
-                tracing::error!("Failed to start embedded driver: {}", e);
-                PawnIoDriver {
-                    resource: DriverResource::new().unwrap(),
-                    service: None,
-                    ioctl: None,
-                    pawn_manager: None,
-                }
-            } else {
-                driver
-            }
-        }
-        Err(e) => {
-            tracing::error!("Failed to create embedded driver: {}", e);
-            PawnIoDriver {
-                resource: DriverResource::new().unwrap(),
-                service: None,
-                ioctl: None,
-                pawn_manager: None,
-            }
-        }
-    });
+    let mut driver = PawnIoDriver::new()?;
+    driver.start()?;
 
-    if DEFAULT_DRIVER
-        .get()
-        .and_then(|d| d.ioctl.as_ref())
-        .is_some()
-    {
-        Ok(())
-    } else {
-        Err(DriverError::InitializationFailed(
-            "Driver initialization failed".to_string(),
-        ))
+    match DEFAULT_DRIVER.set(driver) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            tracing::warn!("DEFAULT_DRIVER already set; a previous init succeeded");
+            Ok(())
+        }
     }
 }
 

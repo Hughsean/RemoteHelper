@@ -3,6 +3,7 @@ use crate::driver::ioctl::IoctlInterface;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 use tracing;
 
@@ -30,42 +31,24 @@ use tracing;
 /// # Ok::<(), hwlib::driver::DriverError>(())
 /// ```
 pub struct PawnModuleManager {
-    ioctl: IoctlInterface,
+    ioctl: Arc<IoctlInterface>,
     loaded_modules: HashMap<String, bool>,
-    module_ioctls: HashMap<String, IoctlInterface>,
     modules_path: String,
     pawn_script_supported: bool,
 }
 
 impl PawnModuleManager {
     /// 创建新的 Pawn 模块管理器。
-    ///
-    /// # 参数
-    ///
-    /// * `ioctl` - 到内核驱动的 IOCTL 接口
-    /// * `modules_path` - 包含 .bin 模块文件的目录
     pub fn new(ioctl: IoctlInterface, modules_path: &str) -> Self {
         Self {
-            ioctl,
+            ioctl: Arc::new(ioctl),
             loaded_modules: HashMap::new(),
-            module_ioctls: HashMap::new(),
             modules_path: modules_path.to_string(),
             pawn_script_supported: true,
         }
     }
 
-    /// 从磁盘加载 Pawn 模块。
-    ///
-    /// 模块会被缓存 - 使用相同名称的后续调用是空操作。
-    ///
-    /// # 参数
-    ///
-    /// * `module_name` - 模块名称（不含 .bin 扩展名）
-    ///
-    /// # 错误
-    ///
-    /// - [`DriverError::IoctlError`] 如果文件未找到或加载失败
-    /// - [`DriverError::NotSupported`] 如果驱动不支持 Pawn 脚本
+    /// 从磁盘加载 Pawn 模块。模块会被缓存，重复加载是空操作。
     pub fn load_module(&mut self, module_name: &str) -> DriverResult<()> {
         if self.loaded_modules.contains_key(module_name) {
             tracing::debug!("Module {} already loaded", module_name);
@@ -125,13 +108,9 @@ impl PawnModuleManager {
             binary_data.len()
         );
 
-        // PawnIO 将已加载的模块与句柄关联。
-        // 为每个模块保留专用句柄，类似 LibreHardwareMonitor 的 C# 封装。
-        let module_ioctl = self.ioctl.clone();
-
-        // 将二进制加载到驱动中
-        if let Err(e) = module_ioctl.load_pawn_binary(module_name, &binary_data) {
-            // 官方的 PawnIO 驱动可能未实现 Pawn 脚本的 IOCTL。
+        // 使用共享句柄加载二进制到驱动中
+        if let Err(e) = self.ioctl.load_pawn_binary(module_name, &binary_data) {
+            // 官方的 PawnIO 驱动可能未实现 Pawn 脚本的 IOCTL
             if matches!(e, DriverError::NotSupported(_)) {
                 self.pawn_script_supported = false;
             }
@@ -139,9 +118,6 @@ impl PawnModuleManager {
             self.loaded_modules.insert(module_name.to_string(), false);
             return Err(e);
         }
-
-        self.module_ioctls
-            .insert(module_name.to_string(), module_ioctl);
 
         // 标记为已加载
         self.loaded_modules.insert(module_name.to_string(), true);
@@ -172,18 +148,15 @@ impl PawnModuleManager {
             parameters.len()
         );
 
-        let module_ioctl = self
-            .module_ioctls
-            .get(module_name)
-            .ok_or_else(|| DriverError::IoctlError(format!("Module {} not loaded", module_name)))?;
-
-        let result = module_ioctl.execute_pawn_function(function_name, parameters)?;
+        let result = self
+            .ioctl
+            .execute_pawn_function(function_name, parameters)?;
 
         tracing::debug!(
-            "Pawn function {}.{} returned: {:?}",
+            "Pawn function {}.{} returned {} values",
             module_name,
             function_name,
-            result
+            result.len()
         );
         Ok(result)
     }
