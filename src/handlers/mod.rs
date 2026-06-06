@@ -2,7 +2,7 @@ use crate::state::AppState;
 use common::{Request, Response};
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, OnceLock};
 use tokio::sync::mpsc;
 
 mod auth;
@@ -11,10 +11,6 @@ mod service;
 mod system;
 
 /// 请求处理器 trait。
-///
-/// 每个 handler 负责处理一种或多种请求类型。
-/// Handler 实例是全局共享的（通过 Arc），因此必须是无状态的；
-/// 每条连接的状态（如认证标志）由连接层独立维护。
 pub trait Handler: Send + Sync + 'static {
     fn can_handle(&self, req: &Request) -> bool;
 
@@ -28,29 +24,36 @@ pub trait Handler: Send + Sync + 'static {
 
 type BoxedHandler = Arc<dyn Handler>;
 
-static REGISTRY: LazyLock<Mutex<Vec<BoxedHandler>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+/// 写一次读多次，无需锁。
+static HANDLERS: OnceLock<Vec<BoxedHandler>> = OnceLock::new();
 
-fn register(h: BoxedHandler) {
-    REGISTRY.lock().unwrap().push(h);
-}
-
-/// 在启动时调用一次，注册所有默认处理器。
+/// 启动时调用一次。
 pub fn register_default_handlers() {
-    register(Arc::new(system::SystemHandler));
-    register(Arc::new(service::ServiceHandler));
-    register(Arc::new(path::PathHandler));
+    HANDLERS
+        .set(vec![
+            Arc::new(system::SystemHandler),
+            Arc::new(service::ServiceHandler),
+            Arc::new(path::PathHandler),
+        ])
+        .ok();
 }
 
-/// 将请求分派给第一个匹配的 handler。
-/// 返回 `true` 表示找到了对应的 handler。
-pub fn dispatch(req: Request, state: AppState, resp_tx: mpsc::Sender<Response>) -> bool {
-    let registry = REGISTRY.lock().unwrap();
-    for handler in registry.iter() {
+/// 线性扫描匹配的 handler，无锁。
+/// 返回 `true` 表示找到并已派发。
+pub fn dispatch(
+    req: Request,
+    state: AppState,
+    resp_tx: mpsc::Sender<Response>,
+) -> bool {
+    let Some(handlers) = HANDLERS.get() else {
+        tracing::error!("handlers not registered — missing register_default_handlers() call at startup");
+        return false;
+    };
+    for handler in handlers {
         if handler.can_handle(&req) {
             let handler = Arc::clone(handler);
-            let tx = resp_tx.clone();
             tokio::spawn(async move {
-                handler.handle(req, state, tx).await;
+                handler.handle(req, state, resp_tx).await;
             });
             return true;
         }
