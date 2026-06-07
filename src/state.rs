@@ -94,14 +94,25 @@ impl AppState {
         }
     }
 
-    /// 读取 CPU 温度缓存。
-    /// 使用 Acquire 语义确保观察到所有先前的 Release 写入。
+    /// 写入 CPU 温度缓存（Release 语义）。
+    pub fn set_cpu_temp(&self, val: Option<f32>) {
+        let bits = val.map_or(u32::MAX, |v| v.to_bits());
+        self.cpu_temp_cache.store(bits, Ordering::Release);
+    }
+
+    /// 读取 CPU 温度缓存（Acquire 语义）。
     pub fn get_cpu_temp(&self) -> Option<f32> {
         let bits = self.cpu_temp_cache.load(Ordering::Acquire);
         (bits != u32::MAX).then(|| f32::from_bits(bits))
     }
 
-    /// 读取 CPU 功率缓存。
+    /// 写入 CPU 功率缓存（Release 语义）。
+    pub fn set_cpu_power(&self, val: Option<f32>) {
+        let bits = val.map_or(u32::MAX, |v| v.to_bits());
+        self.cpu_power_cache.store(bits, Ordering::Release);
+    }
+
+    /// 读取 CPU 功率缓存（Acquire 语义）。
     pub fn get_cpu_power(&self) -> Option<f32> {
         let bits = self.cpu_power_cache.load(Ordering::Acquire);
         (bits != u32::MAX).then(|| f32::from_bits(bits))

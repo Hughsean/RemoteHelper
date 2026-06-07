@@ -44,6 +44,11 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::new(config.clone());
     tracing::info!("应用程序状态初始化完成");
 
+    // 初始化 hwlib 硬件驱动（非阻塞，失败也不影响启动）
+    if let Err(e) = hwlib::driver::init_driver() {
+        tracing::warn!("hwlib 驱动初始化失败（CPU 硬件传感器不可用）: {}", e);
+    }
+
     // 注册请求处理器
     handlers::register_default_handlers();
 

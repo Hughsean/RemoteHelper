@@ -1,5 +1,8 @@
 .select {
   position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: stretch;
 }
 
 .select-trigger {
@@ -9,6 +12,7 @@
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto;
   padding: 8px 12px;
   border: none;
   border-radius: calc(0.5rem);
@@ -22,8 +26,11 @@
   transition: background-color 100ms ease-out;
   font-family: inherit;
   font-size: inherit;
-  line-height: inherit;
-  width: 100%;
+  line-height: 1;
+  width: auto;
+  white-space: nowrap;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .select-trigger span[data-placeholder="true"] {
@@ -67,6 +74,10 @@
     var(--dark, var(--primary-color-5));
   color: var(--secondary-color-1);
   outline: none;
+}
+
+.select-trigger:active {
+  transform: none;
 }
 
 .select-list {

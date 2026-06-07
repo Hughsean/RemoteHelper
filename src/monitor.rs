@@ -4,11 +4,12 @@ use tokio::task::JoinHandle;
 
 /// 启动后台系统监控任务。
 ///
-/// 定期刷新 sysinfo 指标和 GPU 数据。若无客户端在最近 10 秒内
-/// 读取数据则自动降频以节约资源。
+/// 定期刷新 sysinfo 指标、GPU 数据和 CPU 硬件传感器。
+/// 若无客户端在最近 10 秒内读取数据则自动降频以节约资源。
 pub fn spawn(state: AppState) -> JoinHandle<()> {
     tokio::spawn(async move {
         let mut first_pause = false;
+        let mut sensor_hub: Option<hwlib::sensors::SensorHub> = None;
 
         loop {
             let interval_ms = *state.refresh_interval.read().await;
@@ -86,6 +87,34 @@ pub fn spawn(state: AppState) -> JoinHandle<()> {
                     // 当 NVML 不可用或设备访问失败时，清空缓存中的即时值
                     cache.temperature = None;
                     cache.power_watts = None;
+                }
+            }
+
+            // 通过 hwlib 读取 CPU 硬件传感器（温度 / 功率）
+            {
+                hwlib::sensors::ensure_sensor_hub(&mut sensor_hub, "monitor");
+                if let Some(hub) = &mut sensor_hub {
+                    match hub.read_all() {
+                        Ok((cpu_readings, _)) => {
+                            for reading in &cpu_readings {
+                                if let Some(ref val) = reading.value {
+                                    match reading.sensor_type {
+                                        hwlib::core::SensorType::Temperature => {
+                                            state.set_cpu_temp(Some(val.value));
+                                        }
+                                        hwlib::core::SensorType::Power => {
+                                            state.set_cpu_power(Some(val.value));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::debug!("hwlib 传感器读取失败: {}", e);
+                            state.set_cpu_temp(None);
+                            state.set_cpu_power(None);
+                        }
+                    }
                 }
             }
         }

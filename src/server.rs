@@ -52,13 +52,14 @@ async fn handle_connection_inner(socket: TcpStream, state: AppState) -> Result<(
     let writer_crypto = crypto.clone();
 
     let writer = tokio::spawn(async move {
-        let cry_guard = writer_crypto;
         while let Some(response) = resp_rx.recv().await {
             let mut sock_guard = write_half.lock().await;
-            let mut c = cry_guard.lock().await;
-            if let Err(e) =
-                crate::protocol::frame::send_encrypted_response(&mut sock_guard, &mut c, &response)
-                    .await
+            if let Err(e) = crate::protocol::frame::send_encrypted_response(
+                &mut sock_guard,
+                &writer_crypto,
+                &response,
+            )
+            .await
             {
                 error!("Failed to send response: {}", e);
                 break;

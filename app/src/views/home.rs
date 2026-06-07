@@ -317,7 +317,7 @@ pub fn Home() -> Element {
                             }
                         },
                         SelectTrigger { class: "select-trigger",
-                            SelectValue {}
+                            SelectValue { placeholder: update_interval().to_display().to_string() }
                             svg {
                                 class: "select-expand-icon",
                                 view_box: "0 0 24 24",

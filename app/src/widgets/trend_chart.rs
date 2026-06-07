@@ -354,7 +354,7 @@ pub fn TrendChart(
                                 }
                             },
                             SelectTrigger { class: "select-trigger",
-                                SelectValue {}
+                                SelectValue { placeholder: chart_data.time_window.to_display().to_string() }
                                 svg {
                                     class: "select-expand-icon",
                                     view_box: "0 0 24 24",

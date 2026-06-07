@@ -75,6 +75,7 @@ base64.workspace = true
 x25519-dalek.workspace = true
 dirs.workspace = true
 reqwest.workspace = true
+hwlib.workspace = true
 # wasm-bindgen-futures.workspace = true
 [profile.release]
 opt-level = 3

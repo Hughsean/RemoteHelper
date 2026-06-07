@@ -18,7 +18,7 @@ pub struct DriverResource {
 impl DriverResource {
     /// Create new driver resource manager
     pub fn new() -> DriverResult<Self> {
-        let temp_dir = std::env::temp_dir().join("lhm_pawnio");
+        let temp_dir = std::env::temp_dir().join("remotehelper_pawnio");
         fs::create_dir_all(&temp_dir)?;
 
         Ok(Self {
