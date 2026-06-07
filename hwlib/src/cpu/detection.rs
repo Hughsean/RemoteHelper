@@ -105,12 +105,12 @@ impl CpuDetection {
             .get_processor_topology_info()
             .map(|t| {
                 let tpc = t.threads_per_core() as u32;
-                if tpc > 0 { threads / tpc } else { threads }
+                threads.checked_div(tpc).unwrap_or(threads)
             })
             .unwrap_or_else(|| {
                 // Fallback: SMT=2 assumed for AMD, 1 for Intel
                 if manufacturer == "AMD" {
-                    (threads + 1) / 2
+                    threads.div_ceil(2)
                 } else {
                     threads
                 }

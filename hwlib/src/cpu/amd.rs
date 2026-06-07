@@ -173,7 +173,6 @@ impl AmdCpu {
         match source {
             TemperatureSource::Unavailable => {
                 // 已知不可用，跳过
-                return;
             }
             TemperatureSource::Msr0x590 => {
                 // 缓存了 MSR 路径，直接尝试

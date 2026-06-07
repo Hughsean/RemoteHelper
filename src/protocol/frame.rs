@@ -23,7 +23,7 @@ pub async fn read_next_request(
     buf: &mut [u8],
 ) -> Result<FrameResult> {
     let mut cry = crypto.lock().await;
-    common::transport::recv_frame::<Request>(read_half, &mut *cry, buf).await
+    common::transport::recv_frame::<Request>(read_half, &mut cry, buf).await
 }
 
 /// 加密 `Response` 后按帧格式写入流中。

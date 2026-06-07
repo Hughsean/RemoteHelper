@@ -138,7 +138,7 @@ pub struct PhysicalMemoryRequest {
 /// - The PawnIO kernel driver processes IOCTL requests synchronously and
 ///   each `DeviceIoControl` call is atomic with respect to the handle
 /// - Overlapped I/O is not used, so there is no shared `OVERLAPPED` state
-//
+///
 /// Handle-based wrapper for communicating with the PawnIO kernel driver via IOCTL.
 pub struct IoctlInterface {
     device_handle: winapi::um::winnt::HANDLE,
