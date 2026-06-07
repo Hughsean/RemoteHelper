@@ -5,7 +5,7 @@
 [![Dioxus](https://img.shields.io/badge/Dioxus-v0.7-green.svg)](https://dioxuslabs.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-一个基于 Rust 的远程系统监控与进程管理工具，专为 Windows 系统设计。支持 Web 控制面板和桌面客户端。
+一个基于 Rust 的远程系统监控与进程管理工具，支持 Windows 和 macOS。提供 Web 控制面板和桌面客户端。
 
 ## ✨ 特性
 
@@ -17,6 +17,7 @@
   - **Web 客户端**：基于 WebAssembly 的浏览器应用
   - **桌面客户端**：Tauri v2 系统托盘应用
 - 📝 **日志管理**：服务/隧道日志在超过 10MB 时轮转；主服务器日志 `logs/server.log` 默认不自动轮转
+- 🧪 **Mock 调试模式**：无需连接服务器即可在本地模拟硬件数据，加速前端开发
 - ⚡ **高性能**：异步 Tokio 运行时，支持并发连接
 
 ## 🏗️ 架构
@@ -37,15 +38,14 @@ RemoteHelper/
 │       ├── crypto.rs      # 加密会话
 │       └── func.rs        # 工具函数
 ├── client/                # 客户端库
-│   └── src/lib.rs         # TCP 客户端实现
-├── app/                   # Dioxus Web 应用
-│   ├── src/               # 前端代码
-│   │   ├── app.rs         # 主组件
-│   │   └── components/    # UI 组件
-│   └── src-tauri/         # Tauri 桌面应用
-│       └── src/
-│           ├── lib.rs     # Tauri 设置
-│           └── command.rs # IPC 命令
+│   └── src/lib.rs         # TCP 客户端实现（含 Mock 模式）
+├── app/                   # Dioxus 前端应用 (Web + 桌面)
+│   ├── src/
+│   │   ├── main.rs        # 路由与入口
+│   │   ├── views/         # 页面：登录、首页、服务管理
+│   │   └── widgets/       # 自定义组件：图表、卡片、对话框
+│   └── assets/            # CSS 样式资源
+├── PawnIO/                # PawnIO 子模块
 └── hwlib/                 # 硬件抽象层（未使用）
 ```
 
@@ -111,23 +111,19 @@ cargo build --release
 ./target/release/RemoteHelperServer.exe
 ```
 
-#### 生产部署（Windows 服务）
+#### 生产部署
 
-完整的生产环境部署指南，请查看 [deployment/DEPLOY.md](deployment/DEPLOY.md)
+```bash
+# 编译 Release 版本
+cargo build --release
 
-**快速部署**：
+# 将编译产物和 config.toml 部署到目标目录
+cp target/release/RemoteHelperServer.exe /path/to/deploy/
+cp config.toml /path/to/deploy/
 
-```powershell
-# 以管理员身份运行 PowerShell
-.\deployment\deploy.ps1 -Install
+# 如需注册为系统服务，可使用 NSSM 等工具
+# nssm install RemoteHelperServer /path/to/deploy/RemoteHelperServer.exe
 ```
-
-这将自动：
-
-- ✅ 编译 Release 版本
-- ✅ 部署到指定目录
-- ✅ 创建 Windows 服务（自启动）
-- ✅ 配置日志和故障恢复
 
 ### 4. 运行客户端
 
@@ -168,12 +164,6 @@ cargo run --bin RemoteHelperServer
 
 # 生成密钥对
 cargo run --bin keygen
-
-# 测试客户端认证
-cargo run --bin test_real_ip
-
-# 生成自签名证书（未使用）
-cargo run --bin gen_cert
 ```
 
 ### 客户端连接
@@ -293,8 +283,7 @@ cargo check --workspace
 
 1. `src/server.rs` → `process_authenticated_request()`
 2. `client/src/lib.rs` → `send_request()` 调用
-3. `app/src-tauri/src/command.rs` → Tauri 命令
-4. `app/src/command/mod.rs` → WASM 绑定
+3. `app/src/views/` → 页面中对应的请求处理
 
 ## 🐛 故障排除
 
@@ -345,7 +334,7 @@ cargo check --workspace
 - [ ] 每客户端速率限制
 - [ ] Prometheus 指标端点
 - [ ] 多 GPU 支持
-- [ ] 跨平台支持（Linux/macOS）
+- [ ] Linux 平台支持
 
 ## 📄 许可证
 
@@ -367,4 +356,4 @@ cargo check --workspace
 
 ---
 
-**注意**：本项目目前专为 Windows 系统设计，未来可能支持其他平台。
+**注意**：本项目当前支持 Windows 和 macOS，未来可能扩展更多平台支持。

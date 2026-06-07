@@ -1,5 +1,4 @@
-use crate::core::{Control, Identifier, Parameter, Sensor, SensorType, SensorValue};
-use std::collections::VecDeque;
+use crate::core::{Identifier, Sensor, SensorType, SensorValue};
 use std::time::Duration;
 
 /// CPU 的温度传感器
@@ -8,7 +7,7 @@ pub struct TemperatureSensor {
     identifier: Identifier,
     name: String,
     value: Option<f64>,
-    values: VecDeque<SensorValue>,
+    values: Vec<SensorValue>,
     time_window: Duration,
 }
 
@@ -18,7 +17,7 @@ impl TemperatureSensor {
             identifier,
             name,
             value: None,
-            values: VecDeque::new(),
+            values: Vec::new(),
             time_window: Duration::from_secs(60),
         }
     }
@@ -26,10 +25,22 @@ impl TemperatureSensor {
     pub fn update_value(&mut self, value: f64) {
         self.value = Some(value);
         let sensor_value = SensorValue::new(value as f32, "°C");
-        self.values.push_back(sensor_value);
+        self.values.push(sensor_value);
 
+        // Evict by count cap
         while self.values.len() > 100 {
-            self.values.pop_front();
+            self.values.remove(0);
+        }
+
+        // Evict by time window
+        let now = std::time::SystemTime::now();
+        while let Some(oldest) = self.values.first() {
+            match now.duration_since(oldest.timestamp) {
+                Ok(age) if age > self.time_window => {
+                    self.values.remove(0);
+                }
+                _ => break,
+            }
         }
     }
 }
@@ -47,60 +58,12 @@ impl Sensor for TemperatureSensor {
         &self.name
     }
 
-    fn index(&self) -> usize {
-        0
-    }
-
-    fn is_default_hidden(&self) -> bool {
-        false
-    }
-
-    fn min_value(&self) -> Option<f32> {
-        self.values
-            .iter()
-            .map(|v| v.value)
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-
-    fn max_value(&self) -> Option<f32> {
-        self.values
-            .iter()
-            .map(|v| v.value)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-
     fn value(&self) -> Option<f32> {
         self.value.map(|v| v as f32)
     }
 
     fn values(&self) -> &[SensorValue] {
-        self.values.as_slices().0
-    }
-
-    fn values_time_window(&self) -> Duration {
-        self.time_window
-    }
-
-    fn set_values_time_window(&mut self, window: Duration) {
-        self.time_window = window;
-    }
-
-    fn control(&self) -> Option<&dyn Control> {
-        None
-    }
-
-    fn parameters(&self) -> &[Box<dyn Parameter>] {
-        &[]
-    }
-
-    fn reset_min(&mut self) {}
-    fn reset_max(&mut self) {}
-    fn clear_values(&mut self) {
-        self.values.clear();
-    }
-
-    fn update(&mut self) -> Result<(), crate::core::SensorError> {
-        Ok(())
+        &self.values
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -118,7 +81,7 @@ pub struct PowerSensor {
     identifier: Identifier,
     name: String,
     value: Option<f64>,
-    values: VecDeque<SensorValue>,
+    values: Vec<SensorValue>,
     time_window: Duration,
 }
 
@@ -128,7 +91,7 @@ impl PowerSensor {
             identifier,
             name,
             value: None,
-            values: VecDeque::new(),
+            values: Vec::new(),
             time_window: Duration::from_secs(60),
         }
     }
@@ -136,10 +99,22 @@ impl PowerSensor {
     pub fn update_value(&mut self, value: f64) {
         self.value = Some(value);
         let sensor_value = SensorValue::new(value as f32, "W");
-        self.values.push_back(sensor_value);
+        self.values.push(sensor_value);
 
+        // Evict by count cap
         while self.values.len() > 100 {
-            self.values.pop_front();
+            self.values.remove(0);
+        }
+
+        // Evict by time window
+        let now = std::time::SystemTime::now();
+        while let Some(oldest) = self.values.first() {
+            match now.duration_since(oldest.timestamp) {
+                Ok(age) if age > self.time_window => {
+                    self.values.remove(0);
+                }
+                _ => break,
+            }
         }
     }
 }
@@ -157,60 +132,12 @@ impl Sensor for PowerSensor {
         &self.name
     }
 
-    fn index(&self) -> usize {
-        0
-    }
-
-    fn is_default_hidden(&self) -> bool {
-        false
-    }
-
-    fn min_value(&self) -> Option<f32> {
-        self.values
-            .iter()
-            .map(|v| v.value)
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-
-    fn max_value(&self) -> Option<f32> {
-        self.values
-            .iter()
-            .map(|v| v.value)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-
     fn value(&self) -> Option<f32> {
         self.value.map(|v| v as f32)
     }
 
     fn values(&self) -> &[SensorValue] {
-        self.values.as_slices().0
-    }
-
-    fn values_time_window(&self) -> Duration {
-        self.time_window
-    }
-
-    fn set_values_time_window(&mut self, window: Duration) {
-        self.time_window = window;
-    }
-
-    fn control(&self) -> Option<&dyn Control> {
-        None
-    }
-
-    fn parameters(&self) -> &[Box<dyn Parameter>] {
-        &[]
-    }
-
-    fn reset_min(&mut self) {}
-    fn reset_max(&mut self) {}
-    fn clear_values(&mut self) {
-        self.values.clear();
-    }
-
-    fn update(&mut self) -> Result<(), crate::core::SensorError> {
-        Ok(())
+        &self.values
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

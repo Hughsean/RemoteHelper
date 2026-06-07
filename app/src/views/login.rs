@@ -4,13 +4,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use gloo_storage::{LocalStorage, Storage};
 
-#[cfg(not(target_arch = "wasm32"))]
-use std::fs;
-#[cfg(not(target_arch = "wasm32"))]
-use std::path::PathBuf;
-#[cfg(not(target_arch = "wasm32"))]
-use dirs;
-
 const LOGIN_CSS: Asset = asset!("/assets/styling/login.css");
 
 // 登录数据序列化结构
@@ -85,11 +78,7 @@ pub fn Login() -> Element {
                         error_msg.set(None);
 
                         // 保存到本地存储
-                        save_login_data(
-                            server_address(),
-                            file.name(),
-                            password(),
-                        );
+                        save_login_data(server_address(), file.name(), password());
                     }
                     Err(e) => {
                         error_msg.set(Some(format!("读取文件失败: {}", e)));
@@ -125,7 +114,7 @@ pub fn Login() -> Element {
             }
 
             // 解析密钥文件
-            let key_file: common::func::KeyFile = match serde_json::from_str(&key_content) {
+            let key_file: common::keys::KeyFile = match serde_json::from_str(&key_content) {
                 Ok(kf) => kf,
                 Err(e) => {
                     error_msg.set(Some(format!("密钥文件格式错误: {}", e)));
@@ -135,7 +124,7 @@ pub fn Login() -> Element {
             };
 
             // 解密私钥
-            let signing_key = match common::func::decrypt_private_key(&key_file, &pass) {
+            let signing_key = match common::keys::decrypt_private_key(&key_file, &pass) {
                 Ok(key) => key,
                 Err(e) => {
                     error_msg.set(Some(e));
@@ -165,11 +154,7 @@ pub fn Login() -> Element {
                     drop(guard);
 
                     // 保存登录数据到本地存储
-                    save_login_data(
-                        server_address(),
-                        key_file_name(),
-                        password(),
-                    );
+                    save_login_data(server_address(), key_file_name(), password());
 
                     // 跳转到仪表板测试页面
                     navigator.push("/home");
@@ -276,6 +261,19 @@ pub fn Login() -> Element {
                         " 生成密钥"
                     }
                 }
+
+                if cfg!(debug_assertions) {
+                    hr {}
+                    p { class: "debug-hint", "🔧 调试模式 — 无需服务器即可查看 UI" }
+                    button {
+                        class: "btn-debug-login",
+                        onclick: move |_| {
+                            client::MOCK_MODE.store(true, std::sync::atomic::Ordering::Relaxed);
+                            navigator.push("/home");
+                        },
+                        "调试登录（跳过认证）"
+                    }
+                }
             }
         }
     }
@@ -309,13 +307,21 @@ fn load_login_data() -> LoginData {
 
 #[cfg(target_arch = "wasm32")]
 fn save_login_data(server_address: String, key_file_name: String, password: String) {
-    let login_data = LoginData { server_address, key_file_name, password };
+    let login_data = LoginData {
+        server_address,
+        key_file_name,
+        password,
+    };
     let _ = LocalStorage::set("login_data", &login_data);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn save_login_data(server_address: String, key_file_name: String, password: String) {
-    let login_data = LoginData { server_address, key_file_name, password };
+    let login_data = LoginData {
+        server_address,
+        key_file_name,
+        password,
+    };
     if let Some(mut p) = dirs::config_dir() {
         p.push("remotehelper");
         if let Err(e) = std::fs::create_dir_all(&p) {

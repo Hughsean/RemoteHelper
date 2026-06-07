@@ -1,10 +1,8 @@
 // Dioxus prelude 包含了 Dioxus 应用中使用的许多常见项。在需要 Dioxus 的地方导入它是好的做法
 use dioxus::prelude::*;
 
-use views::{Home, Login, Services, Test};
+use views::{Home, Login, Services};
 
-/// 官方组件模块，包含应用的所有共享组件。这些组件是 Dioxus 应用的构建块。
-mod components;
 /// 定义一个包含应用所有布局和路由 UI 的视图模块。
 mod views;
 /// 自定义组件模块
@@ -20,13 +18,9 @@ enum Route {
     #[route("/")]
     Login {},
 
-    // 仪表板测试页面
+    // 仪表板页面
     #[route("/home")]
     Home {},
-
-    // 测试页面
-    #[route("/test")]
-    Test {},
 
     // 服务管理页面
     #[route("/services")]
@@ -40,7 +34,7 @@ enum Route {
 const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 
 fn main() {
-    let _guard = common::func::tracing_init(None, None, tracing::Level::DEBUG);
+    let _guard = common::logging::tracing_init(None, None, tracing::Level::DEBUG);
 
     #[cfg(feature = "desktop")]
     {
@@ -64,7 +58,7 @@ fn main() {
         // macOS 自定义中文菜单
         #[cfg(target_os = "macos")]
         {
-            use dioxus::desktop::muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+            use dioxus::desktop::muda::{Menu, PredefinedMenuItem, Submenu};
 
             let menu = Menu::new();
 

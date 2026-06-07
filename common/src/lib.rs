@@ -1,5 +1,7 @@
 pub mod crypto;
-pub mod func;
+pub mod keys;
+pub mod logging;
+pub mod transport;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]

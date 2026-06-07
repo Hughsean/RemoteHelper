@@ -3,6 +3,7 @@ use crate::driver::ioctl::IoctlInterface;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 use tracing;
 
@@ -30,42 +31,68 @@ use tracing;
 /// # Ok::<(), hwlib::driver::DriverError>(())
 /// ```
 pub struct PawnModuleManager {
-    ioctl: IoctlInterface,
+    ioctl: Arc<IoctlInterface>,
     loaded_modules: HashMap<String, bool>,
-    module_ioctls: HashMap<String, IoctlInterface>,
     modules_path: String,
     pawn_script_supported: bool,
+    /// 驱动中当前驻留的模块名。
+    ///
+    /// PawnIO 驱动一次只保留一个模块 — 加载新模块会驱逐旧模块。
+    /// 此字段追踪哪个模块在驱动里，以便切换时自动重载。
+    current_module: Option<String>,
 }
 
 impl PawnModuleManager {
     /// 创建新的 Pawn 模块管理器。
     ///
-    /// # 参数
-    ///
-    /// * `ioctl` - 到内核驱动的 IOCTL 接口
-    /// * `modules_path` - 包含 .bin 模块文件的目录
-    pub fn new(ioctl: IoctlInterface, modules_path: &str) -> Self {
+    /// 接收已打开的 `Arc<IoctlInterface>`，以便与调用方共享同一个内核驱动句柄。
+    /// C# LibreHardwareMonitor 在同一个 handle 上执行 LoadBinary 和 Execute，
+    /// 创建新 handle 可能导致 Execute 返回 ERROR_INVALID_PARAMETER。
+    pub fn new(ioctl: Arc<IoctlInterface>, modules_path: &str) -> Self {
         Self {
             ioctl,
             loaded_modules: HashMap::new(),
-            module_ioctls: HashMap::new(),
             modules_path: modules_path.to_string(),
             pawn_script_supported: true,
+            current_module: None,
         }
     }
 
-    /// 从磁盘加载 Pawn 模块。
+    /// 读取模块二进制数据（磁盘或嵌入回退）。
+    fn read_module_binary(&self, module_name: &str) -> DriverResult<Vec<u8>> {
+        let module_path = Path::new(&self.modules_path).join(format!("{}.bin", module_name));
+
+        if module_path.exists() {
+            match fs::read(&module_path) {
+                Ok(b) => return Ok(b),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to read module file {:?}: {}, falling back to embedded",
+                        module_path,
+                        e
+                    );
+                }
+            }
+        }
+
+        if let Some(embedded) = crate::driver::driver_resource::embedded_module_bytes(module_name) {
+            tracing::info!(
+                "Module file {:?} not found, using embedded binary",
+                module_path
+            );
+            Ok(embedded.to_vec())
+        } else {
+            Err(DriverError::IoctlError(format!(
+                "Module file not found: {:?}",
+                module_path
+            )))
+        }
+    }
+
+    /// 从磁盘加载 Pawn 模块到驱动。
     ///
-    /// 模块会被缓存 - 使用相同名称的后续调用是空操作。
-    ///
-    /// # 参数
-    ///
-    /// * `module_name` - 模块名称（不含 .bin 扩展名）
-    ///
-    /// # 错误
-    ///
-    /// - [`DriverError::IoctlError`] 如果文件未找到或加载失败
-    /// - [`DriverError::NotSupported`] 如果驱动不支持 Pawn 脚本
+    /// 注意：PawnIO 驱动一次只保留一个模块。加载新模块会驱逐旧模块，
+    /// 因此 [`call_function`] 在调用前会自动重载正确的模块。
     pub fn load_module(&mut self, module_name: &str) -> DriverResult<()> {
         if self.loaded_modules.contains_key(module_name) {
             tracing::debug!("Module {} already loaded", module_name);
@@ -79,45 +106,7 @@ impl PawnModuleManager {
             ));
         }
 
-        // 构造模块文件路径
-        let module_path = Path::new(&self.modules_path).join(format!("{}.bin", module_name));
-
-        // 尝试从磁盘读取模块二进制；如果不存在或读取失败，回退到嵌入数据（如果可用）
-        let binary_data: Vec<u8> = if module_path.exists() {
-            match fs::read(&module_path) {
-                Ok(b) => b,
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to read module file {:?}: {}, falling back to embedded",
-                        module_path,
-                        e
-                    );
-                    if let Some(embedded) =
-                        crate::driver::driver_resource::embedded_module_bytes(module_name)
-                    {
-                        embedded.to_vec()
-                    } else {
-                        return Err(DriverError::IoctlError(format!(
-                            "Failed to read module file {:?}: {}",
-                            module_path, e
-                        )));
-                    }
-                }
-            }
-        } else if let Some(embedded) =
-            crate::driver::driver_resource::embedded_module_bytes(module_name)
-        {
-            tracing::info!(
-                "Module file {:?} not found, using embedded binary",
-                module_path
-            );
-            embedded.to_vec()
-        } else {
-            return Err(DriverError::IoctlError(format!(
-                "Module file not found: {:?}",
-                module_path
-            )));
-        };
+        let binary_data = self.read_module_binary(module_name)?;
 
         tracing::info!(
             "Loading Pawn module: {} ({} bytes)",
@@ -125,13 +114,9 @@ impl PawnModuleManager {
             binary_data.len()
         );
 
-        // PawnIO 将已加载的模块与句柄关联。
-        // 为每个模块保留专用句柄，类似 LibreHardwareMonitor 的 C# 封装。
-        let module_ioctl = self.ioctl.clone();
-
-        // 将二进制加载到驱动中
-        if let Err(e) = module_ioctl.load_pawn_binary(module_name, &binary_data) {
-            // 官方的 PawnIO 驱动可能未实现 Pawn 脚本的 IOCTL。
+        // 发送二进制到驱动
+        if let Err(e) = self.ioctl.load_pawn_binary(module_name, &binary_data) {
+            // 官方的 PawnIO 驱动可能未实现 Pawn 脚本的 IOCTL
             if matches!(e, DriverError::NotSupported(_)) {
                 self.pawn_script_supported = false;
             }
@@ -140,11 +125,9 @@ impl PawnModuleManager {
             return Err(e);
         }
 
-        self.module_ioctls
-            .insert(module_name.to_string(), module_ioctl);
-
-        // 标记为已加载
+        // 标记为已加载 + 追踪驱动中的当前模块
         self.loaded_modules.insert(module_name.to_string(), true);
+        self.current_module = Some(module_name.to_string());
 
         tracing::info!("Successfully loaded Pawn module: {}", module_name);
         Ok(())
@@ -172,20 +155,75 @@ impl PawnModuleManager {
             parameters.len()
         );
 
-        let module_ioctl = self
-            .module_ioctls
-            .get(module_name)
-            .ok_or_else(|| DriverError::IoctlError(format!("Module {} not loaded", module_name)))?;
-
-        let result = module_ioctl.execute_pawn_function(function_name, parameters)?;
+        let result = self
+            .ioctl
+            .execute_pawn_function(function_name, parameters)?;
 
         tracing::debug!(
-            "Pawn function {}.{} returned: {:?}",
+            "Pawn function {}.{} returned {} values",
             module_name,
             function_name,
-            result
+            result.len()
         );
         Ok(result)
+    }
+
+    /// Execute a Pawn function with an explicit output size in 64-bit cells.
+    pub fn execute_function_with_output_len(
+        &self,
+        module_name: &str,
+        function_name: &str,
+        parameters: &[u64],
+        output_values: usize,
+    ) -> DriverResult<Vec<u64>> {
+        if !self.loaded_modules.get(module_name).unwrap_or(&false) {
+            return Err(DriverError::IoctlError(format!(
+                "Module {} not loaded",
+                module_name
+            )));
+        }
+
+        tracing::debug!(
+            "Executing Pawn function: {}.{} with {} parameters, {} output values",
+            module_name,
+            function_name,
+            parameters.len(),
+            output_values
+        );
+
+        let result = self.ioctl.execute_pawn_function_with_output_len(
+            function_name,
+            parameters,
+            output_values,
+        )?;
+
+        tracing::debug!(
+            "Pawn function {}.{} returned {} values",
+            module_name,
+            function_name,
+            result.len()
+        );
+        Ok(result)
+    }
+
+    /// 确保指定模块当前驻留在驱动中（必要时重载）。
+    ///
+    /// PawnIO 驱动一次只保留一个模块 — 先前的模块被驱逐后必须重载。
+    fn ensure_driver_module(&mut self, module_name: &str) -> DriverResult<()> {
+        if self.current_module.as_deref() == Some(module_name) {
+            return Ok(());
+        }
+
+        tracing::debug!(
+            "Switching Pawn module: {} -> {}",
+            self.current_module.as_deref().unwrap_or("none"),
+            module_name
+        );
+
+        let binary = self.read_module_binary(module_name)?;
+        self.ioctl.load_pawn_binary(module_name, &binary)?;
+        self.current_module = Some(module_name.to_string());
+        Ok(())
     }
 
     /// Execute a Pawn function with automatic module loading
@@ -200,12 +238,35 @@ impl PawnModuleManager {
                 "Pawn script interface is not supported by the connected driver".to_string(),
             ));
         }
-        // Load module if not already loaded
+        // 确保模块二进制已知（首次加载时录入 loaded_modules）
         if !self.loaded_modules.contains_key(module_name) {
             self.load_module(module_name)?;
         }
+        // 驱动一次只存一个模块 — 必要时重载
+        self.ensure_driver_module(module_name)?;
 
         self.execute_function(module_name, function_name, args)
+    }
+
+    /// Execute a Pawn function with automatic module loading and explicit output size.
+    pub fn call_function_with_output_len(
+        &mut self,
+        module_name: &str,
+        function_name: &str,
+        args: &[u64],
+        output_values: usize,
+    ) -> DriverResult<Vec<u64>> {
+        if !self.pawn_script_supported {
+            return Err(DriverError::NotSupported(
+                "Pawn script interface is not supported by the connected driver".to_string(),
+            ));
+        }
+        if !self.loaded_modules.contains_key(module_name) {
+            self.load_module(module_name)?;
+        }
+        self.ensure_driver_module(module_name)?;
+
+        self.execute_function_with_output_len(module_name, function_name, args, output_values)
     }
 
     /// Check if a module is loaded
@@ -245,14 +306,43 @@ impl PawnModuleManager {
     /// 如果读取失败或驱动未初始化则返回 [`DriverError`]。
     pub fn read_msr_amd(&mut self, register: u32) -> DriverResult<u64> {
         // Prefer Pawn module when available; fallback to direct IOCTL if script interface is unsupported.
-        if self.pawn_script_supported
-            && let Ok(result) =
-                self.call_function("AMDFamily17", "ioctl_read_msr", &[register as u64])
-        {
-            return Ok(result[0]);
+        if self.pawn_script_supported {
+            match self.call_function_with_output_len(
+                "AMDFamily17",
+                "ioctl_read_msr",
+                &[register as u64],
+                1,
+            ) {
+                Ok(result) if !result.is_empty() => {
+                    tracing::debug!("Pawn MSR read 0x{:X} = 0x{:X}", register, result[0]);
+                    return Ok(result[0]);
+                }
+                Ok(_) => {
+                    tracing::debug!(
+                        "Pawn MSR read 0x{:X}: empty result, treating as failure",
+                        register
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Pawn MSR read failed for 0x{:X}: {} — falling back to direct IOCTL",
+                        register,
+                        e
+                    );
+                }
+            }
         }
 
-        self.ioctl.read_msr(register)
+        match self.ioctl.read_msr(register) {
+            Ok(val) => {
+                tracing::debug!("Direct IOCTL MSR read 0x{:X} = 0x{:X}", register, val);
+                Ok(val)
+            }
+            Err(e) => {
+                tracing::warn!("Direct IOCTL MSR read 0x{:X} also failed: {}", register, e);
+                Err(e)
+            }
+        }
     }
 
     /// 在 AMD CPU 上读取 SMN（系统管理网络）寄存器。
@@ -268,8 +358,28 @@ impl PawnModuleManager {
     /// 如果 Pawn 脚本不可用则返回 [`DriverError::NotSupported`]。
     pub fn read_smn_amd(&mut self, offset: u32) -> DriverResult<u32> {
         if self.pawn_script_supported {
-            let result = self.call_function("AMDFamily17", "ioctl_read_smn", &[offset as u64])?;
-            return Ok(result[0] as u32);
+            match self.call_function_with_output_len(
+                "AMDFamily17",
+                "ioctl_read_smn",
+                &[offset as u64],
+                1,
+            ) {
+                Ok(result) if !result.is_empty() => return Ok(result[0] as u32),
+                Ok(_) => {
+                    tracing::debug!(
+                        "Pawn SMN read 0x{:X}: empty result, treating as failure",
+                        offset
+                    );
+                    return Err(DriverError::InvalidResponse(format!(
+                        "Pawn SMN read 0x{:X} returned no values",
+                        offset
+                    )));
+                }
+                Err(e) => {
+                    tracing::warn!("Pawn SMN read failed for 0x{:X}: {}", offset, e);
+                    return Err(e);
+                }
+            }
         }
 
         Err(DriverError::NotSupported(

@@ -7,7 +7,7 @@ use winapi::um::fileapi::{CreateFileA, OPEN_EXISTING};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::ioapiset::DeviceIoControl;
 use winapi::um::winnt::{
-    FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE, HANDLE,
+    FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, GENERIC_WRITE,
 };
 
 use tracing;
@@ -129,33 +129,40 @@ pub struct PhysicalMemoryRequest {
     pub size: u32,
 }
 
-/// Pawn binary load request structure
-#[repr(C)]
-#[derive(Debug)]
-pub struct PawnLoadRequest {
-    pub binary_data: *const u8,
-    pub binary_size: u32,
-    pub module_name: [u8; 32], // Fixed-size array for module name
-}
-
-/// IOCTL interface for communicating with PawnIO driver
+/// IOCTL interface for communicating with PawnIO driver.
+///
+/// Each instance holds an independent Windows `HANDLE` obtained via `CreateFile`.
+/// The underlying `HANDLE` is safe to use from multiple threads because:
+/// - `CreateFile` with `FILE_SHARE_READ | FILE_SHARE_WRITE` creates a handle
+///   that can be concurrently accessed
+/// - The PawnIO kernel driver processes IOCTL requests synchronously and
+///   each `DeviceIoControl` call is atomic with respect to the handle
+/// - Overlapped I/O is not used, so there is no shared `OVERLAPPED` state
+///
+/// Handle-based wrapper for communicating with the PawnIO kernel driver via IOCTL.
 pub struct IoctlInterface {
-    device_handle: HANDLE,
+    device_handle: winapi::um::winnt::HANDLE,
     device_name: String,
 }
 
-// Windows HANDLE is thread-safe for read operations
+// SAFETY: HANDLE from CreateFile is thread-safe for concurrent DeviceIoControl calls.
 unsafe impl Send for IoctlInterface {}
 unsafe impl Sync for IoctlInterface {}
 
+impl IoctlInterface {
+    /// 尝试克隆 IOCTL 接口，创建一个新的设备句柄。
+    ///
+    /// 每个句柄独立运行；内核驱动设备是无状态的，
+    /// 因此不需要担心句柄之间的状态共享问题。
+    pub fn try_clone(&self) -> DriverResult<Self> {
+        IoctlInterface::new(&self.device_name)
+    }
+}
+
 impl Clone for IoctlInterface {
     fn clone(&self) -> Self {
-        // For now, create a new handle. In a real implementation,
-        // you might want to share the handle or use a reference counted approach
-        match IoctlInterface::new(&self.device_name) {
-            Ok(interface) => interface,
-            Err(_) => panic!("Failed to clone IoctlInterface"),
-        }
+        self.try_clone()
+            .expect("Failed to clone IoctlInterface: device handle exhausted or driver not running")
     }
 }
 
@@ -340,14 +347,29 @@ impl IoctlInterface {
         function_name: &str,
         parameters: &[u64],
     ) -> DriverResult<Vec<u64>> {
+        self.execute_pawn_function_with_output_len(function_name, parameters, 32)
+    }
+
+    /// Execute Pawn function with an explicit output size in 64-bit cells.
+    pub fn execute_pawn_function_with_output_len(
+        &self,
+        function_name: &str,
+        parameters: &[u64],
+        output_values: usize,
+    ) -> DriverResult<Vec<u64>> {
         if function_name.len() >= 32 {
             return Err(DriverError::IoctlError(
                 "Function name too long (max 31 chars)".to_string(),
             ));
         }
-        if parameters.len() > 8 {
+        if parameters.len() > 32 {
             return Err(DriverError::IoctlError(
-                "Too many parameters (max 8)".to_string(),
+                "Too many parameters (max 32)".to_string(),
+            ));
+        }
+        if output_values > 32 {
+            return Err(DriverError::IoctlError(
+                "Too many output values (max 32)".to_string(),
             ));
         }
 
@@ -363,9 +385,7 @@ impl IoctlInterface {
             input.extend_from_slice(&(param as i64).to_le_bytes());
         }
 
-        // Output buffer: PawnIO expects the caller to provide the expected output length.
-        // For our current usage (register reads), a single int64 return value is expected.
-        let mut output = vec![0u8; 8];
+        let mut output = vec![0u8; output_values * 8];
 
         let bytes_returned = self.device_io_control_bytes(
             ioctl_codes::IOCTL_PIO_EXECUTE_FN,
@@ -374,7 +394,7 @@ impl IoctlInterface {
         )?;
 
         if bytes_returned == 0 {
-            return Ok(vec![0]);
+            return Ok(Vec::new());
         }
 
         if bytes_returned % 8 != 0 {
@@ -542,7 +562,7 @@ impl IoctlInterface {
 
         if result == 0 {
             let error = unsafe { winapi::um::errhandlingapi::GetLastError() };
-            return Err(match error {
+            let msg = match error {
                 1 => DriverError::NotSupported(format!(
                     "DeviceIoControl not supported (code: 0x{:X}): error {}",
                     ioctl_code, error
@@ -555,7 +575,9 @@ impl IoctlInterface {
                     "DeviceIoControl failed (code: 0x{:X}): error {}",
                     ioctl_code, error
                 )),
-            });
+            };
+            tracing::warn!("{}", msg);
+            return Err(msg);
         }
 
         Ok(bytes_returned as usize)

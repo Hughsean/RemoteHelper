@@ -1,18 +1,18 @@
-use crate::components::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
-use crate::views::{Services, Test};
+use crate::views::Services;
 use crate::widgets::{
     DataSeries, MetricCard, MetricCardData, MetricItem, TrendChart, TrendChartData,
 };
 use dioxus::prelude::*;
+use dioxus_primitives::select::{Select, SelectList, SelectOption, SelectTrigger, SelectValue};
 
 const HOME_CSS: Asset = asset!("/assets/styling/home.css");
+const SELECT_CSS: Asset = asset!("/assets/components/select/style.css");
 
 /// 页面视图选项
 #[derive(Clone, PartialEq, Debug)]
 enum PageView {
     Home,
     Services,
-    Test,
 }
 
 // impl PageView {
@@ -130,7 +130,11 @@ pub fn Home() -> Element {
             // 检查是否暂停
             let current_interval = update_interval();
             if let Some(interval_ms) = current_interval.to_millis() {
-                match client::send_request(common::Request::GetStatus { interval_ms: None }).await {
+                match client::send_request(common::Request::GetStatus {
+                    interval_ms: Some(interval_ms),
+                })
+                .await
+                {
                     Ok(common::Response::Status(info)) => {
                         let timestamp = info.timestamp;
 
@@ -266,6 +270,7 @@ pub fn Home() -> Element {
 
     rsx! {
         document::Link { rel: "stylesheet", href: HOME_CSS }
+        document::Link { rel: "stylesheet", href: SELECT_CSS }
 
         div { class: "home-container",
             // Header bar with update interval control
@@ -292,22 +297,13 @@ pub fn Home() -> Element {
                         },
                         "服务管理"
                     }
-                    if cfg!(debug_assertions) {
-                        button {
-                            class: "nav-button",
-                            class: if *current_view.read() == PageView::Test { "nav-button active" } else { "nav-button" },
-                            onclick: move |_| {
-                                current_view.set(PageView::Test);
-                            },
-                            "测试页面"
-                        }
-                    }
                 }
 
                 div { class: "header-controls",
                     label { class: "update-interval-label", "更新间隔:" }
-                    Select {
-                        value: use_memo(move || Some(Some(update_interval().to_display().to_string()))),
+                    Select::<String> {
+                        class: "select",
+                        default_value: Some(update_interval().to_display().to_string()),
                         on_value_change: move |value: Option<String>| {
                             if let Some(v) = value {
                                 let interval = match v.as_str() {
@@ -320,25 +316,36 @@ pub fn Home() -> Element {
                                 update_interval.set(interval);
                             }
                         },
-                        placeholder: "".to_string(),
-                        SelectTrigger { SelectValue {} }
-                        SelectList {
+                        SelectTrigger { class: "select-trigger",
+                            SelectValue { placeholder: update_interval().to_display().to_string() }
+                            svg {
+                                class: "select-expand-icon",
+                                view_box: "0 0 24 24",
+                                xmlns: "http://www.w3.org/2000/svg",
+                                polyline { points: "6 9 12 15 18 9" }
+                            }
+                        }
+                        SelectList { class: "select-list",
                             SelectOption::<String> {
+                                class: "select-option",
                                 index: use_signal(|| 0),
                                 value: "0.5秒".to_string(),
                                 "0.5秒"
                             }
                             SelectOption::<String> {
+                                class: "select-option",
                                 index: use_signal(|| 1),
                                 value: "1秒".to_string(),
                                 "1秒"
                             }
                             SelectOption::<String> {
+                                class: "select-option",
                                 index: use_signal(|| 2),
                                 value: "3秒".to_string(),
                                 "3秒"
                             }
                             SelectOption::<String> {
+                                class: "select-option",
                                 index: use_signal(|| 3),
                                 value: "暂停".to_string(),
                                 "暂停"
@@ -367,9 +374,6 @@ pub fn Home() -> Element {
                 },
                 PageView::Services => rsx! {
                     div { class: "content-section", Services {} }
-                },
-                PageView::Test => rsx! {
-                    div { class: "content-section", Test {} }
                 },
             }
         }

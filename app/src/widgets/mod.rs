@@ -1,3 +1,5 @@
+mod card;
+
 mod metric_card;
 pub use metric_card::{MetricCard, MetricCardData, MetricItem};
 

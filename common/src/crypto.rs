@@ -5,11 +5,38 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
 };
 use anyhow::{Result, anyhow};
-use rand::rngs::OsRng;
 use sha2::{Digest, Sha256};
-use x25519_dalek::{EphemeralSecret, PublicKey};
+use x25519_dalek::{PublicKey, X25519_BASEPOINT_BYTES, x25519};
 
 type AeadNonce = GenericArray<u8, U12>;
+
+pub struct EphemeralSecret([u8; 32]);
+
+pub struct SharedSecret([u8; 32]);
+
+impl EphemeralSecret {
+    pub fn diffie_hellman(self, their_public: &PublicKey) -> SharedSecret {
+        SharedSecret(x25519(self.0, their_public.to_bytes()))
+    }
+}
+
+impl SharedSecret {
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0
+    }
+}
+
+impl Drop for EphemeralSecret {
+    fn drop(&mut self) {
+        self.0.fill(0);
+    }
+}
+
+impl Drop for SharedSecret {
+    fn drop(&mut self) {
+        self.0.fill(0);
+    }
+}
 
 pub struct CryptoSession {
     cipher: Aes256Gcm,
@@ -31,8 +58,9 @@ impl CryptoSession {
     pub fn new(shared_secret: [u8; 32], is_server: bool) -> Self {
         // Derive session key from shared secret
         // Simple: SHA256(secret) -> 32 bytes
-        let key_bytes = Sha256::digest(shared_secret);
-        let cipher = Aes256Gcm::new(&key_bytes);
+        let key_bytes: [u8; 32] = Sha256::digest(shared_secret).into();
+        let cipher = Aes256Gcm::new_from_slice(&key_bytes)
+            .expect("SHA256 output length for AES-256 key must be 32 bytes");
 
         // Start nonce at 0. Each session has unique shared_secret from X25519 ECDH,
         // so nonce reuse across different connections is not a concern.
@@ -87,7 +115,7 @@ impl CryptoSession {
 }
 
 pub fn generate_ephemeral() -> (EphemeralSecret, PublicKey) {
-    let secret = EphemeralSecret::random_from_rng(OsRng);
-    let public = PublicKey::from(&secret);
+    let secret = EphemeralSecret(rand::random::<[u8; 32]>());
+    let public = PublicKey::from(x25519(secret.0, X25519_BASEPOINT_BYTES));
     (secret, public)
 }
