@@ -151,7 +151,7 @@ impl Drop for DriverResource {
 // AMD Family 17h driver (Zen/Zen+/Zen2/Zen3/Zen4 architectures)
 // This driver works for AMD Family 17h and 19h (Zen through Zen 4)
 const AMD_FAMILY_17_BIN: &[u8] = include_bytes!("../../../PawnIO/AMDFamily17.bin");
-const AMD_FAMILY_17_HASH: &str = "374d4bc3e88284d08f2c65e292df5340c6a034affc30b614db6e780d7094d117";
+const AMD_FAMILY_17_HASH: &str = "099dc01d6db97ea997fec4a461e191cc64b9d7ce47c9d2153c451c56c2adcf50";
 
 // AMD Family 0F driver (legacy)
 #[allow(dead_code)]
@@ -167,15 +167,15 @@ const AMD_FAMILY_10_HASH: &str = "79be1396621aa44eb149c5dc6d1bab4519b9cfa49a32af
 
 // Ryzen SMU driver (enhanced in 0.2.1)
 const RYZEN_SMU_BIN: &[u8] = include_bytes!("../../../PawnIO/RyzenSMU.bin");
-const RYZEN_SMU_HASH: &str = "8cec3a2d03b19d585fd75e36be2875fde8825834968509582d4351201dc2871a";
+const RYZEN_SMU_HASH: &str = "dad38b36a08e2da982d4397619aee7264e32be088ea6bcb781b066adfb00efc0";
 
 // Isa Bridge EC driver (NEW in PawnIO 0.2.1)
 const ISA_BRIDGE_EC_BIN: &[u8] = include_bytes!("../../../PawnIO/IsaBridgeEC.bin");
-const ISA_BRIDGE_EC_HASH: &str = "7218c633384bd019cce09e8df91f74996f980765ac44dde0f22b0b5318c20f03";
+const ISA_BRIDGE_EC_HASH: &str = "6e3be076aba7cc43f5086504eacee6be42acc56530f98a26d22ef2bcce6e1fd3";
 
 // Intel MSR driver
 const INTEL_MSR_BIN: &[u8] = include_bytes!("../../../PawnIO/IntelMSR.bin");
-const INTEL_MSR_HASH: &str = "d09fa2d4232f92d9902fc90b058adc55ae5469b9b6f2f3f1441184796945bad1";
+const INTEL_MSR_HASH: &str = "5bfda87500160076158befc77300f81a388d72b11df2c794a3939ebe66777098";
 
 // LPC ACPI EC driver
 const LPC_ACPI_EC_BIN: &[u8] = include_bytes!("../../../PawnIO/LpcACPIEC.bin");
@@ -183,7 +183,7 @@ const LPC_ACPI_EC_HASH: &str = "c38fd116e7aff4d1fdb0a494e296be0a6708e5a22fc72f14
 
 // LPC CrOS EC driver
 const LPC_CROS_EC_BIN: &[u8] = include_bytes!("../../../PawnIO/LpcCrOSEC.bin");
-const LPC_CROS_EC_HASH: &str = "277ed6ce6b5f647d5dae9b06c83ed39e904974b06f95598d49f4737237974776";
+const LPC_CROS_EC_HASH: &str = "4c604c9def5d903a2cc8a07b51f5b44407050da2417587a50ee4b3d40a236468";
 
 // LPC IO driver
 const LPC_IO_BIN: &[u8] = include_bytes!("../../../PawnIO/LpcIO.bin");
@@ -191,15 +191,15 @@ const LPC_IO_HASH: &str = "3dcf8b2bc80ff642d97c4608511a818642b5bf315ff53df3df393
 
 // SMBus I801 driver
 const SMBUS_I801_BIN: &[u8] = include_bytes!("../../../PawnIO/SmbusI801.bin");
-const SMBUS_I801_HASH: &str = "76b082a144027244fe7bbf3ca0e987e7dfa279aa87e0ccc2a6a918e10e2038e1";
+const SMBUS_I801_HASH: &str = "c561fd4a2669ec4e52676fdc6905f54edf70c7308efc93b4126ad644ac00a319";
 
 // SMBus NCT6793 driver
 const SMBUS_NCT6793_BIN: &[u8] = include_bytes!("../../../PawnIO/SmbusNCT6793.bin");
-const SMBUS_NCT6793_HASH: &str = "385bd1b229faa44aefe2eb1f938ac629f6d897f1a4931dab5341b18b3bd432c1";
+const SMBUS_NCT6793_HASH: &str = "4767b71f8ab870d6414ceb15adfdcddac4e539928481ed590463e481253ecd1b";
 
 // SMBus PIIX4 driver
 const SMBUS_PIIX4_BIN: &[u8] = include_bytes!("../../../PawnIO/SmbusPIIX4.bin");
-const SMBUS_PIIX4_HASH: &str = "3f8b44c93eb030d59fb68c6fdc6857c61313eab2b6aa0ed64595396d71bf3ea3";
+const SMBUS_PIIX4_HASH: &str = "0a5a8166ffde0ca12db6f897f5dce295e885a9629954f544bf315b2cce6f00ba";
 
 /// Return embedded PawnIO module binary if available
 ///
@@ -254,6 +254,28 @@ mod tests {
     #[test]
     fn test_embedded_module_exists() {
         assert!(embedded_module_bytes("AMDFamily17").is_some());
+    }
+
+    #[test]
+    fn test_embedded_hashes_match() {
+        fn assert_hash(data: &[u8], expected: &str) {
+            let mut hasher = Sha256::new();
+            hasher.update(data);
+            assert_eq!(to_lower_hex(&hasher.finalize()), expected);
+        }
+
+        assert_hash(AMD_FAMILY_17_BIN, AMD_FAMILY_17_HASH);
+        assert_hash(AMD_FAMILY_0F_BIN, AMD_FAMILY_0F_HASH);
+        assert_hash(AMD_FAMILY_10_BIN, AMD_FAMILY_10_HASH);
+        assert_hash(RYZEN_SMU_BIN, RYZEN_SMU_HASH);
+        assert_hash(ISA_BRIDGE_EC_BIN, ISA_BRIDGE_EC_HASH);
+        assert_hash(INTEL_MSR_BIN, INTEL_MSR_HASH);
+        assert_hash(LPC_ACPI_EC_BIN, LPC_ACPI_EC_HASH);
+        assert_hash(LPC_CROS_EC_BIN, LPC_CROS_EC_HASH);
+        assert_hash(LPC_IO_BIN, LPC_IO_HASH);
+        assert_hash(SMBUS_I801_BIN, SMBUS_I801_HASH);
+        assert_hash(SMBUS_NCT6793_BIN, SMBUS_NCT6793_HASH);
+        assert_hash(SMBUS_PIIX4_BIN, SMBUS_PIIX4_HASH);
     }
 
     #[test]

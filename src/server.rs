@@ -75,7 +75,7 @@ async fn handle_connection_inner(socket: TcpStream, state: AppState) -> Result<(
         let req = match crate::protocol::frame::read_next_request(&mut read_half, &crypto, &mut buf)
             .await
         {
-            Ok(FrameResult::Request(req)) => req,
+            Ok(FrameResult::Message(req)) => req,
             Ok(FrameResult::Invalid(msg)) => {
                 // JSON 解析失败 — 返回错误但不断开连接
                 let _ = resp_tx.send(Response::Error(msg)).await;

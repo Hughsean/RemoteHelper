@@ -347,14 +347,29 @@ impl IoctlInterface {
         function_name: &str,
         parameters: &[u64],
     ) -> DriverResult<Vec<u64>> {
+        self.execute_pawn_function_with_output_len(function_name, parameters, 32)
+    }
+
+    /// Execute Pawn function with an explicit output size in 64-bit cells.
+    pub fn execute_pawn_function_with_output_len(
+        &self,
+        function_name: &str,
+        parameters: &[u64],
+        output_values: usize,
+    ) -> DriverResult<Vec<u64>> {
         if function_name.len() >= 32 {
             return Err(DriverError::IoctlError(
                 "Function name too long (max 31 chars)".to_string(),
             ));
         }
-        if parameters.len() > 8 {
+        if parameters.len() > 32 {
             return Err(DriverError::IoctlError(
-                "Too many parameters (max 8)".to_string(),
+                "Too many parameters (max 32)".to_string(),
+            ));
+        }
+        if output_values > 32 {
+            return Err(DriverError::IoctlError(
+                "Too many output values (max 32)".to_string(),
             ));
         }
 
@@ -370,10 +385,7 @@ impl IoctlInterface {
             input.extend_from_slice(&(param as i64).to_le_bytes());
         }
 
-        // Output buffer: allocate enough space for up to 8 x i64 return values.
-        // PawnIO returns the actual number of bytes written; we then parse into i64s.
-        let max_output_values = 8usize;
-        let mut output = vec![0u8; max_output_values * 8];
+        let mut output = vec![0u8; output_values * 8];
 
         let bytes_returned = self.device_io_control_bytes(
             ioctl_codes::IOCTL_PIO_EXECUTE_FN,
@@ -382,7 +394,7 @@ impl IoctlInterface {
         )?;
 
         if bytes_returned == 0 {
-            return Ok(vec![0]);
+            return Ok(Vec::new());
         }
 
         if bytes_returned % 8 != 0 {
@@ -550,7 +562,7 @@ impl IoctlInterface {
 
         if result == 0 {
             let error = unsafe { winapi::um::errhandlingapi::GetLastError() };
-            return Err(match error {
+            let msg = match error {
                 1 => DriverError::NotSupported(format!(
                     "DeviceIoControl not supported (code: 0x{:X}): error {}",
                     ioctl_code, error
@@ -563,7 +575,9 @@ impl IoctlInterface {
                     "DeviceIoControl failed (code: 0x{:X}): error {}",
                     ioctl_code, error
                 )),
-            });
+            };
+            tracing::warn!("{}", msg);
+            return Err(msg);
         }
 
         Ok(bytes_returned as usize)

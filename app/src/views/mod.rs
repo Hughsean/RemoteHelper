@@ -8,8 +8,5 @@ pub use login::Login;
 mod home;
 pub use home::Home;
 
-mod test;
-pub use test::Test;
-
 mod services;
 pub use services::Services;

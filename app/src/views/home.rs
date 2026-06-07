@@ -1,4 +1,4 @@
-use crate::views::{Services, Test};
+use crate::views::Services;
 use crate::widgets::{
     DataSeries, MetricCard, MetricCardData, MetricItem, TrendChart, TrendChartData,
 };
@@ -13,7 +13,6 @@ const SELECT_CSS: Asset = asset!("/assets/components/select/style.css");
 enum PageView {
     Home,
     Services,
-    Test,
 }
 
 // impl PageView {
@@ -298,16 +297,6 @@ pub fn Home() -> Element {
                         },
                         "服务管理"
                     }
-                    if cfg!(debug_assertions) {
-                        button {
-                            class: "nav-button",
-                            class: if *current_view.read() == PageView::Test { "nav-button active" } else { "nav-button" },
-                            onclick: move |_| {
-                                current_view.set(PageView::Test);
-                            },
-                            "测试页面"
-                        }
-                    }
                 }
 
                 div { class: "header-controls",
@@ -385,9 +374,6 @@ pub fn Home() -> Element {
                 },
                 PageView::Services => rsx! {
                     div { class: "content-section", Services {} }
-                },
-                PageView::Test => rsx! {
-                    div { class: "content-section", Test {} }
                 },
             }
         }

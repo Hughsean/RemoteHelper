@@ -54,7 +54,7 @@ pub use service_manager::DriverService;
 pub struct PawnIoDriver {
     resource: DriverResource,
     service: Option<DriverService>,
-    ioctl: Option<IoctlInterface>,
+    ioctl: Option<Arc<IoctlInterface>>,
     pawn_manager: Option<Arc<Mutex<PawnModuleManager>>>,
 }
 
@@ -85,12 +85,12 @@ impl PawnIoDriver {
         service.start()?;
 
         // Initialize IOCTL interface
-        let ioctl = IoctlInterface::new(r"\\.\LhmPawnIo")?;
+        let ioctl = Arc::new(IoctlInterface::new(r"\\.\LhmPawnIo")?);
 
-        // Initialize Pawn module manager with path to modules
+        // Initialize Pawn module manager — share the SAME handle
         let modules_path = resolve_modules_path();
         let pawn_manager = Arc::new(Mutex::new(PawnModuleManager::new(
-            ioctl.try_clone()?,
+            ioctl.clone(),
             &modules_path,
         )));
 
@@ -125,9 +125,9 @@ impl PawnIoDriver {
     }
 
     /// Get IOCTL interface reference
-    pub fn ioctl(&self) -> DriverResult<&IoctlInterface> {
+    pub fn ioctl(&self) -> DriverResult<Arc<IoctlInterface>> {
         self.ioctl
-            .as_ref()
+            .clone()
             .ok_or_else(|| DriverError::NotInitialized("Driver not started".to_string()))
     }
 
@@ -227,8 +227,11 @@ pub fn init_driver() -> DriverResult<()> {
 
         match connect_official_pawnio() {
             Ok(ioctl) => {
+                // Share the same kernel handle for LoadBinary & Execute,
+                // matching C# LibreHardwareMonitor's PawnIo class behavior.
+                let pawn_ioctl = Arc::new(ioctl);
                 let pawn_manager = Arc::new(Mutex::new(PawnModuleManager::new(
-                    ioctl.try_clone()?,
+                    pawn_ioctl.clone(),
                     &modules_path,
                 )));
 
@@ -247,7 +250,7 @@ pub fn init_driver() -> DriverResult<()> {
                     let driver = PawnIoDriver {
                         resource,
                         service: None,
-                        ioctl: Some(ioctl),
+                        ioctl: Some(pawn_ioctl.clone()),
                         pawn_manager: Some(pawn_manager),
                     };
 
@@ -344,17 +347,34 @@ pub fn check_official_pawnio() -> bool {
 pub fn connect_official_pawnio() -> DriverResult<IoctlInterface> {
     tracing::info!("Attempting to connect to official PawnIO driver...");
 
-    // Official PawnIO uses "\\.\PawnIO" as device name
-    match IoctlInterface::new(r"\\.\PawnIO") {
-        Ok(ioctl) => {
-            tracing::info!("Successfully connected to official PawnIO driver");
-            Ok(ioctl)
-        }
-        Err(e) => {
-            tracing::warn!("Failed to connect to official PawnIO driver: {}", e);
-            Err(e)
+    // LibreHardwareMonitor opens the kernel device path directly. Keep the
+    // DOS-device form as a fallback for older/custom installs.
+    let device_names = [r"\\?\GLOBALROOT\Device\PawnIO", r"\\.\PawnIO"];
+    let mut last_error = None;
+
+    for device_name in device_names {
+        match IoctlInterface::new(device_name) {
+            Ok(ioctl) => {
+                tracing::info!(
+                    "Successfully connected to official PawnIO driver via {}",
+                    device_name
+                );
+                return Ok(ioctl);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to connect to official PawnIO driver via {}: {}",
+                    device_name,
+                    e
+                );
+                last_error = Some(e);
+            }
         }
     }
+
+    Err(last_error.unwrap_or_else(|| {
+        DriverError::IoctlError("No official PawnIO device path was attempted".to_string())
+    }))
 }
 
 /// Get default driver instance

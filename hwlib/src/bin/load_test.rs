@@ -11,7 +11,7 @@ type SamplePoint = (Instant, Option<u64>, Option<u64>, Option<f32>, Option<f32>)
 fn main() {
     // Init tracing to file + stdout at TRACE level
     let _guard =
-        common::func::tracing_init(Some("logs"), Some("load_test.log"), tracing::Level::TRACE);
+        common::logging::tracing_init(Some("logs"), Some("load_test.log"), tracing::Level::TRACE);
     tracing::info!("Starting load test");
 
     // Init driver

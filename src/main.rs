@@ -1,12 +1,12 @@
 mod cleanup;
 mod config;
 mod handlers;
+mod health;
 mod monitor;
 mod process;
 mod protocol;
 mod server;
 mod state;
-mod utils;
 
 use crate::config::AppConfig;
 use crate::state::AppState;
@@ -18,9 +18,10 @@ async fn main() -> anyhow::Result<()> {
     // 初始化 tracing
     #[cfg(debug_assertions)]
     let _guard =
-        common::func::tracing_init(Some("logs"), Some("server.log"), tracing::Level::DEBUG);
+        common::logging::tracing_init(Some("logs"), Some("server.log"), tracing::Level::DEBUG);
     #[cfg(not(debug_assertions))]
-    let _guard = common::func::tracing_init(Some("logs"), Some("server.log"), tracing::Level::INFO);
+    let _guard =
+        common::logging::tracing_init(Some("logs"), Some("server.log"), tracing::Level::INFO);
 
     tracing::info!("正在启动 RemoteHelper 服务器实例");
 
@@ -106,7 +107,7 @@ async fn wait_for_network(config: &AppConfig) {
         let mut sleep_time = 3;
         loop {
             let connected =
-                utils::test_http_503(config.web_panel.health_check_url.as_ref().unwrap(), timeout)
+                health::test_http_503(config.web_panel.health_check_url.as_ref().unwrap(), timeout)
                     .await
                     .unwrap_or(false);
 

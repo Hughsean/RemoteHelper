@@ -4,7 +4,7 @@ use tracing::{info, warn};
 
 fn main() -> Result<()> {
     // init tracing
-    let _guard = common::func::tracing_init(None, None, tracing::Level::INFO);
+    let _guard = common::logging::tracing_init(None, None, tracing::Level::INFO);
     info!("Starting motherboard test CLI");
 
     // Initialize driver

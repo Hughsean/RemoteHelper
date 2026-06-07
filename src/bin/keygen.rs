@@ -1,4 +1,4 @@
-use common::func::encrypt_private_key;
+use common::keys::encrypt_private_key;
 use ed25519_dalek::SigningKey;
 use std::fs::File;
 use std::io::{self, Write};

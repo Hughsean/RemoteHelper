@@ -114,7 +114,7 @@ pub fn Login() -> Element {
             }
 
             // 解析密钥文件
-            let key_file: common::func::KeyFile = match serde_json::from_str(&key_content) {
+            let key_file: common::keys::KeyFile = match serde_json::from_str(&key_content) {
                 Ok(kf) => kf,
                 Err(e) => {
                     error_msg.set(Some(format!("密钥文件格式错误: {}", e)));
@@ -124,7 +124,7 @@ pub fn Login() -> Element {
             };
 
             // 解密私钥
-            let signing_key = match common::func::decrypt_private_key(&key_file, &pass) {
+            let signing_key = match common::keys::decrypt_private_key(&key_file, &pass) {
                 Ok(key) => key,
                 Err(e) => {
                     error_msg.set(Some(e));

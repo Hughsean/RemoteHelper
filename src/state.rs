@@ -13,16 +13,11 @@ use tokio::sync::{Mutex, Notify, RwLock};
 /// 便于记录元数据（例如启动时间）并提供统一的操作方法。
 pub struct ServiceProcess {
     pub child: Child,
-    #[allow(dead_code)]
-    pub started_at: std::time::SystemTime,
 }
 
 impl ServiceProcess {
     pub fn new(child: Child) -> Self {
-        Self {
-            child,
-            started_at: std::time::SystemTime::now(),
-        }
+        Self { child }
     }
 
     pub fn pid(&self) -> Option<u32> {
@@ -99,40 +94,17 @@ impl AppState {
         }
     }
 
-    // Atomics helpers for CPU metric caches.
-    // Store uses Release ordering to ensure prior writes are visible to subsequent Acquire loads.
-    // Load uses Acquire ordering to ensure it observes all writes that happened-before the Release store.
-    #[allow(dead_code)]
-    fn store_opt_f32_atomic(a: &Arc<AtomicU32>, val: Option<f32>) {
-        let bits = val.map_or(u32::MAX, |v| v.to_bits());
-        a.store(bits, Ordering::Release);
-    }
-
-    fn load_opt_f32_atomic(a: &Arc<AtomicU32>) -> Option<f32> {
-        let bits = a.load(Ordering::Acquire);
-        if bits == u32::MAX {
-            None
-        } else {
-            Some(f32::from_bits(bits))
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn set_cpu_temp(&self, val: Option<f32>) {
-        Self::store_opt_f32_atomic(&self.cpu_temp_cache, val);
-    }
-
+    /// 读取 CPU 温度缓存。
+    /// 使用 Acquire 语义确保观察到所有先前的 Release 写入。
     pub fn get_cpu_temp(&self) -> Option<f32> {
-        Self::load_opt_f32_atomic(&self.cpu_temp_cache)
+        let bits = self.cpu_temp_cache.load(Ordering::Acquire);
+        (bits != u32::MAX).then(|| f32::from_bits(bits))
     }
 
-    #[allow(dead_code)]
-    pub fn set_cpu_power(&self, val: Option<f32>) {
-        Self::store_opt_f32_atomic(&self.cpu_power_cache, val);
-    }
-
+    /// 读取 CPU 功率缓存。
     pub fn get_cpu_power(&self) -> Option<f32> {
-        Self::load_opt_f32_atomic(&self.cpu_power_cache)
+        let bits = self.cpu_power_cache.load(Ordering::Acquire);
+        (bits != u32::MAX).then(|| f32::from_bits(bits))
     }
 }
 

@@ -164,12 +164,6 @@ cargo run --bin RemoteHelperServer
 
 # 生成密钥对
 cargo run --bin keygen
-
-# 测试客户端认证
-cargo run --bin test_real_ip
-
-# 生成自签名证书（未使用）
-cargo run --bin gen_cert
 ```
 
 ### 客户端连接
