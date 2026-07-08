@@ -18,10 +18,10 @@ async fn main() -> anyhow::Result<()> {
     // 初始化 tracing
     #[cfg(debug_assertions)]
     let _guard =
-        common::logging::tracing_init(Some("logs"), Some("server.log"), tracing::Level::DEBUG);
+        common::logging::tracing_init(Some("logs"), Some("server"), tracing::Level::DEBUG);
     #[cfg(not(debug_assertions))]
     let _guard =
-        common::logging::tracing_init(Some("logs"), Some("server.log"), tracing::Level::INFO);
+        common::logging::tracing_init(Some("logs"), Some("server"), tracing::Level::INFO);
 
     tracing::info!("正在启动 RemoteHelper 服务器实例");
 
