@@ -17,11 +17,9 @@ use std::time::Duration;
 async fn main() -> anyhow::Result<()> {
     // 初始化 tracing
     #[cfg(debug_assertions)]
-    let _guard =
-        common::logging::tracing_init(Some("logs"), Some("server"), tracing::Level::DEBUG);
+    let _guard = common::logging::tracing_init(Some("logs"), Some("server"), tracing::Level::DEBUG);
     #[cfg(not(debug_assertions))]
-    let _guard =
-        common::logging::tracing_init(Some("logs"), Some("server"), tracing::Level::INFO);
+    let _guard = common::logging::tracing_init(Some("logs"), Some("server"), tracing::Level::INFO);
 
     tracing::info!("正在启动 RemoteHelper 服务器实例");
 

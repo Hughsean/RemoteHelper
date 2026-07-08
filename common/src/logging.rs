@@ -22,8 +22,10 @@ pub fn tracing_init(
     lvl: tracing::Level,
 ) -> Option<WorkerGuard> {
     // 创建标准输出日志层
-    let timer = tracing_subscriber::fmt::time::OffsetTime::local_rfc_3339()
-        .expect("failed to get local time offset");
+    let timer = tracing_subscriber::fmt::time::OffsetTime::new(
+        time::UtcOffset::current_local_offset().expect("failed to get local time offset"),
+        time::macros::format_description!("[hour]:[minute]:[second]:[subsecond digits:3]"),
+    );
 
     let stdout_layer = tracing_subscriber::fmt::layer()
         .with_file(true)
