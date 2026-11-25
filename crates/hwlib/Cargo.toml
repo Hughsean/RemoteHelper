@@ -1,0 +1,39 @@
+[package]
+name = "hwlib"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Hardware Library for LHM"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+clap.features = ["derive"]
+common.workspace = true
+raw-cpuid.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+winapi.workspace = true
+winapi.features = [
+  "errhandlingapi",
+  "fileapi",
+  "handleapi",
+  "ioapiset",
+  "processthreadsapi",
+  "securitybaseapi",
+  "sysinfoapi",
+  "winsvc",
+]
+
+[[bin]]
+name = "cli"
+path = "src/bin/cli.rs"
+
+[features]
+# 启用实验性的主板传感器支持。
+motherboard_sensors = []
