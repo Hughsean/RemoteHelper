@@ -30,7 +30,7 @@
 
 #### 开发流程
 
-桌面客户端的工具链、启动方式和文件分工见 [app/README.md](app/README.md)。涉及服务端或硬件驱动的改动，在 Windows 上检查整个工作区。
+桌面客户端的工具链、启动方式和文件分工见 [桌面客户端开发指南](crates/app/README.md)。涉及服务端或硬件驱动的改动，在 Windows 上检查整个工作区。
 
 1. **Fork 项目**
 
@@ -120,6 +120,13 @@ Closes #42
 2. **使用 `cargo fmt` 格式化代码**
 3. **通过 `cargo clippy` 检查**（无警告）
 4. **为公共 API 编写文档注释**
+5. **新增代码注释使用中文**
+
+### 工作区布局与依赖
+
+Rust 工作区成员统一放在 `crates/` 下。桌面端包名为 `App`，服务端包名为 `RemoteHelperServer`。在仓库根目录未指定包时，Cargo 默认选择服务端；检查全部成员时使用 `--workspace`。
+
+在根目录 [Cargo.toml](Cargo.toml) 的 `[workspace.dependencies]` 统一声明依赖版本或内部路径。子 crate 用 `依赖名.workspace = true` 引用；仅该 crate 需要的特性用 `依赖名.features = [...]` 声明。平台依赖和构建依赖仍应放在使用者对应的依赖表中。
 
 ### 代码质量要求
 
@@ -163,6 +170,8 @@ cargo test -- --nocapture
 
 ### 编写测试
 
+修改连接或协议时，除了单元测试，还应让客户端与服务端通过本地 TCP 验证：持续轮询跨过连接寿命上限、断线与请求超时的恢复、写操作不自动重放，以及普通响应和历史响应各自的帧大小边界。涉及历史同步时，同时验证连接名额不足的表现。
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -186,7 +195,7 @@ mod tests {
 ### 更新文档
 
 - **README.md**：用户文档、项目结构和开发命令
-- [app/README.md](app/README.md) 记录桌面界面的架构、开发、构建和打包方式
+- [桌面客户端开发指南](crates/app/README.md) 记录桌面界面的架构、开发、构建和打包方式
 - **CHANGELOG.md**：版本变更记录
 - **代码注释**：复杂逻辑说明
 

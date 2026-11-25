@@ -49,7 +49,7 @@ cargo clippy -p App --no-deps --all-targets -- -D warnings
 
 ## 发布
 
-[标签发布流程](../.github/workflows/release.yml)构建三个客户端产物。
+[标签发布流程](../../.github/workflows/release.yml)构建三个客户端产物。
 
 | 平台 | 产物 |
 | --- | --- |
@@ -57,4 +57,4 @@ cargo clippy -p App --no-deps --all-targets -- -D warnings
 | macOS Intel | `RemoteHelper-x86_64-apple-darwin.dmg` |
 | macOS Apple Silicon | `RemoteHelper-aarch64-apple-darwin.dmg` |
 
-macOS 应用包使用 ad hoc 签名，尚未进行 Developer ID 签名或公证。详见[服务端启动与部署](../README.md)。
+macOS 应用包使用 ad hoc 签名，尚未进行 Developer ID 签名或公证。详见[服务端启动与部署](../../README.md)。
