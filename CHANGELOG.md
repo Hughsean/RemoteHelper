@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-11-25
+
+### Fixed
+
+- Windows 客户端将应用图标嵌入可执行文件，修复标题栏、任务栏和文件资源管理器中的图标缺失。
+- macOS 客户端在应用包中生成并嵌入 `icns` 图标，修复 Dock 和访达中的图标缺失。
+
+### Changed
+
+- 清理桌面客户端遗留的 Dioxus 构建配置。
+
+## [2.3.0] - 2026-11-25
+
 ### Changed
 
 - 桌面客户端改用 GPUI Kit，使用原生窗口、文件选择器和深色界面。
@@ -235,6 +248,9 @@ The following features are planned for future releases:
 
 ---
 
+[Unreleased]: https://github.com/Hughsean/RemoteHelper/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.3.1
+[2.3.0]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.3.0
 [2.0.2]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.2
 [2.0.1]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.1
 [2.0.0]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.0

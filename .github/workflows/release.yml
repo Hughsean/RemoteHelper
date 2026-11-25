@@ -35,6 +35,9 @@ jobs:
             ## RemoteHelper ${{ steps.get_version.outputs.version }}
 
             Windows 与 macOS 原生桌面客户端基于 GPUI Kit 构建。
+            发布包包含 Windows x64 可执行文件，以及 macOS Intel、Apple Silicon 的 DMG。
+
+            完整变更见 [CHANGELOG](https://github.com/Hughsean/RemoteHelper/blob/v${{ steps.get_version.outputs.version }}/CHANGELOG.md)。
             在仓库根目录运行 `cargo run -p App` 启动开发版本。
 
   build-client:
