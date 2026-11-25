@@ -24,15 +24,3 @@ tracing.workspace = true
 # 系统工具
 dirs.workspace = true
 gpui-kit = "=0.11.0"
-
-
-[features]
-default = ["desktop"]
-# The feature that are only required for the web = ["dioxus/web"] build target should be optional and only enabled in the web = ["dioxus/web"] feature
-web = []
-# The feature that are only required for the desktop = ["dioxus/desktop"] build target should be optional and only enabled in the desktop = ["dioxus/desktop"] feature
-desktop = []
-# The feature that are only required for the mobile = ["dioxus/mobile"] build target should be optional and only enabled in the mobile = ["dioxus/mobile"] feature
-mobile = []
-# The feature that are only required for the server = ["dioxus/server"] build target should be optional and only enabled in the server = ["dioxus/server"] feature
-server = []
