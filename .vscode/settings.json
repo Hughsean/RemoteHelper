@@ -7,28 +7,22 @@
   // ],
   // "rust-analyzer.cargo.features": "all",
   "rust-analyzer.rustfmt.rangeFormatting.enable": false,
-  "rust-analyzer.files.exclude": [
-    "app/src/components"
-  ],
   // "editor.formatOnSave": false,
   // "editor.rulers": [
   //   100
   // ],
   "files.watcherExclude": {
     "**/target/**": true,
-    "**/node_modules/**": true,
-    "**/.git/**": true,
+    "**/.git/**": true
     // "**/logs/**": true
   },
   "files.exclude": {
     "**/.git": true,
-    "**/target": true,
-    "**/node_modules": true,
+    "**/target": true
     // "**/logs": true
   },
   "search.exclude": {
     "**/target": true,
-    "**/node_modules": true,
     "**/logs": true,
     "**/.git": true
   },

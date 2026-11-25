@@ -17,8 +17,6 @@ license.workspace = true
 description = "Hardware Library for LHM"
 
 [dependencies]
-# Windows API
-windows = { version = "0.62" }
 winapi = { version = "0.3", features = [
   "errhandlingapi",
   "fileapi",
@@ -35,7 +33,6 @@ tokio.workspace = true
 
 # Serialization
 serde.workspace = true
-toml.workspace = true
 
 # Logging
 tracing.workspace = true

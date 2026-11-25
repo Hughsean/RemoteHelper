@@ -11,7 +11,6 @@ anyhow.workspace = true
 base64.workspace = true
 ed25519-dalek.workspace = true
 hmac.workspace = true
-pbkdf2.workspace = true
 rand.workspace = true
 rand_core.workspace = true
 serde.workspace = true
