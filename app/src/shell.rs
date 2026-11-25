@@ -2,7 +2,7 @@
 
 use crate::notifications::Notices;
 use crate::theme::window_tint;
-use crate::ui::page_tab;
+use crate::ui::{ConnectionStatus, page_tab};
 use crate::views::{Dashboard, Login, Services};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
@@ -63,6 +63,7 @@ struct Session {
     page: Page,
     dashboard: Entity<Dashboard>,
     services: Entity<Services>,
+    connection_status: Entity<ConnectionStatus>,
 }
 
 impl RemoteHelper {
@@ -99,7 +100,15 @@ impl RemoteHelper {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let dashboard = cx.new(|cx| Dashboard::new(self.runtime.clone(), cx));
+        let connection_status = cx.new(|_| ConnectionStatus::Connecting);
+        let dashboard = cx.new(|cx| {
+            Dashboard::new(
+                self.runtime.clone(),
+                self.notices,
+                connection_status.clone(),
+                cx,
+            )
+        });
         let services = cx.new(|_| Services::new(self.runtime.clone(), self.notices));
         if page == Page::Services {
             services.update(cx, |view, cx| view.refresh(window, cx));
@@ -110,6 +119,7 @@ impl RemoteHelper {
             page,
             dashboard,
             services,
+            connection_status,
         });
         cx.notify();
     }
@@ -119,6 +129,7 @@ impl RemoteHelper {
             && session.page != Page::Services
         {
             session.page = Page::Services;
+            session.dashboard.update(cx, Dashboard::clear_chart_hover);
             session
                 .services
                 .update(cx, |view, cx| view.refresh(window, cx));
@@ -201,7 +212,9 @@ impl Render for RemoteHelper {
                             .small()
                             .on_click(cx.listener(Self::show_services)),
                         cx,
-                    ));
+                    ))
+                    .child(div().flex_1())
+                    .child(session.connection_status.clone());
                 let footer = h_flex()
                     .h(px(28.))
                     .px_4()
@@ -218,6 +231,9 @@ impl Render for RemoteHelper {
                             .min_w_0()
                             .truncate()
                             .child(session.address.clone()),
+                    )
+                    .children(
+                        dashboard.then(|| Dashboard::interval_control(&session.dashboard, cx)),
                     );
 
                 let page = if dashboard {

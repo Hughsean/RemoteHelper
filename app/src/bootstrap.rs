@@ -24,6 +24,18 @@ pub(crate) fn run(runtime: Handle) {
     });
     application.run(move |cx| {
         gpui_kit::init(cx);
+        // 开发用：只渲染趋势图并截图，不登录。
+        #[cfg(debug_assertions)]
+        if std::env::var_os("REMOTEHELPER_PREVIEW").is_some() {
+            match crate::preview::open(cx) {
+                Ok(()) => {}
+                Err(error) => {
+                    tracing::error!(%error, "无法打开预览窗口");
+                    cx.quit();
+                }
+            }
+            return;
+        }
         match open_main_window(runtime.clone(), cx) {
             Ok(()) => cx.activate(true),
             Err(error) => {

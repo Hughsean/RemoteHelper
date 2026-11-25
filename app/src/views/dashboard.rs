@@ -1,11 +1,12 @@
-use crate::ui::{message, panel, request_error, small_button};
-use crate::views::trend::{SERIES, TrendPlot, series_color};
+use crate::notifications::Notices;
+use crate::ui::{ConnectionStatus, panel, request_error, trend_title};
+use crate::views::trend::{SERIES, TrendPlot, series_colors};
 use common::{Request, Response, SystemInfo};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::StyledExt;
 use gpui_kit::component::{
     ActiveTheme, Icon, Sizable,
-    button::Button,
+    button::{Button, ButtonCustomVariant, ButtonVariants},
     h_flex,
     menu::{DropdownMenu, PopupMenuItem},
     v_flex,
@@ -20,31 +21,37 @@ const INTERVALS: [(Option<u64>, &str); 4] = [
     (Some(3000), "3 秒"),
     (None, "暂停"),
 ];
-const RANGES: [(u64, &str); 4] = [
-    (60_000, "1 分钟"),
-    (300_000, "5 分钟"),
-    (1_800_000, "30 分钟"),
-    (10_800_000, "3 小时"),
-];
+const INTERVAL_FONT_SIZE: f32 = 13.;
+
 pub(crate) struct Dashboard {
     latest: Option<SystemInfo>,
     trend: Entity<TrendPlot>,
     interval: Option<u64>,
-    range: u64,
     visible: [bool; 3],
-    error: Option<String>,
+    refresh_failed: bool,
     _polling: Task<()>,
 }
 
 impl Dashboard {
-    pub(crate) fn new(runtime: Handle, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(
+        runtime: Handle,
+        notices: Notices,
+        connection_status: Entity<ConnectionStatus>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let polling = cx.spawn(async move |this, cx| {
             while let Ok(interval) = this.update(cx, |view, _| view.interval) {
                 if let Some(interval_ms) = interval {
                     let task = runtime.spawn(client::send_request(Request::GetStatus {
                         interval_ms: Some(interval_ms),
                     }));
-                    let result = match task.await {
+                    let response = task.await;
+                    let status = if matches!(response, Ok(Ok(_))) {
+                        ConnectionStatus::Online
+                    } else {
+                        ConnectionStatus::Offline
+                    };
+                    let result = match response {
                         Ok(Ok(Response::Status(info))) => Ok(info),
                         Ok(Ok(response)) => Err(request_error(response)),
                         Ok(Err(error)) => Err(error),
@@ -52,10 +59,16 @@ impl Dashboard {
                     };
                     if this
                         .update(cx, |view, cx| {
+                            connection_status
+                                .update(cx, |connection, cx| connection.set(status, cx));
                             match result {
                                 Ok(info) if view.interval.is_some() => view.record(info, cx),
                                 Ok(_) => {}
-                                Err(error) => view.error = Some(error),
+                                Err(error) if view.interval.is_some() && !view.refresh_failed => {
+                                    view.refresh_failed = true;
+                                    notices.error(format!("无法刷新系统监控：{error}"), cx);
+                                }
+                                Err(_) => {}
                             }
                             cx.notify();
                         })
@@ -71,11 +84,10 @@ impl Dashboard {
         });
         Self {
             latest: None,
-            trend: cx.new(|_| TrendPlot::new(RANGES[0].0, RANGES[3].0)),
+            trend: cx.new(TrendPlot::new),
             interval: Some(1000),
-            range: RANGES[0].0,
             visible: [true; 3],
-            error: None,
+            refresh_failed: false,
             _polling: polling,
         }
     }
@@ -89,226 +101,140 @@ impl Dashboard {
         self.trend
             .update(cx, |plot, cx| plot.record(info.timestamp, values, cx));
         self.latest = Some(info);
-        self.error = None;
-    }
-
-    fn set_range(&mut self, range: u64, cx: &mut Context<Self>) {
-        self.range = range;
-        self.trend.update(cx, |plot, cx| plot.set_range(range, cx));
-        cx.notify();
+        self.refresh_failed = false;
     }
 
     fn set_interval(&mut self, interval: Option<u64>, cx: &mut Context<Self>) {
+        if self.interval.is_none() {
+            self.refresh_failed = false;
+        }
         self.interval = interval;
         self.trend
             .update(cx, |plot, cx| plot.set_interval(interval, cx));
         cx.notify();
     }
 
-    fn option_menu<T: Copy + PartialEq + 'static>(
-        id: &'static str,
-        selected: T,
-        options: &'static [(T, &'static str)],
-        update: fn(&mut Self, T, &mut Context<Self>),
-        cx: &Context<Self>,
-    ) -> impl IntoElement {
-        let label = options
+    pub(crate) fn clear_chart_hover(&mut self, cx: &mut Context<Self>) {
+        self.trend.update(cx, TrendPlot::clear_hover);
+    }
+
+    pub(crate) fn interval_control(dashboard: &Entity<Self>, cx: &App) -> Div {
+        let selected = dashboard.read(cx).interval;
+        let label = INTERVALS
             .iter()
             .find(|(value, _)| *value == selected)
             .map_or("—", |(_, label)| *label);
-        let view = cx.weak_entity();
-        Button::new(id)
-            .small()
-            .outline()
+        let view = dashboard.downgrade();
+        let menu = Button::new("interval")
+            .xsmall()
+            .compact()
+            .ghost()
+            .h(px(20.))
+            .px(px(5.))
+            .accessibility_label(format!("刷新间隔 {label}"))
             .child(
                 h_flex()
-                    .gap_2()
+                    .gap_1()
+                    .text_size(px(INTERVAL_FONT_SIZE))
                     .child(label)
-                    .child(Icon::from(IconName::ChevronDown).small()),
+                    .child(Icon::from(IconName::ChevronDown).size(px(11.))),
             )
-            .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
-                options.iter().fold(menu, |menu, &(value, label)| {
+            .dropdown_menu_with_anchor(Anchor::BottomRight, move |menu, _, _| {
+                INTERVALS.into_iter().fold(menu, |menu, (value, label)| {
                     let view = view.clone();
                     menu.item(
                         PopupMenuItem::new(label)
                             .checked(value == selected)
                             .on_click(move |_, _, cx| {
-                                let _ = view.update(cx, |view, cx| update(view, value, cx));
+                                let _ = view.update(cx, |view, cx| view.set_interval(value, cx));
                             }),
                     )
                 })
-            })
+            });
+        h_flex()
+            .flex_shrink_0()
+            .gap_1p5()
+            .child(
+                div()
+                    .text_size(px(INTERVAL_FONT_SIZE))
+                    .text_color(cx.theme().muted_foreground)
+                    .child("刷新间隔"),
+            )
+            .child(menu)
     }
 
     fn render_chart(&self, cx: &mut Context<Self>) -> Div {
         let muted = cx.theme().muted_foreground;
+        let colors = series_colors(cx);
 
         panel(cx)
             .flex_grow_1()
             .flex_shrink_0()
-            .gap_2()
+            .gap_3()
+            .p_4()
+            .border_color(cx.theme().border.opacity(0.62))
             .child(
                 h_flex()
                     .justify_between()
                     .flex_shrink_0()
-                    .gap_2()
-                    .child(div().text_sm().font_semibold().child("资源使用率趋势"))
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(div().text_xs().text_color(muted).child("时间范围"))
-                            .child(Self::option_menu(
-                                "range",
-                                self.range,
-                                &RANGES,
-                                Self::set_range,
-                                cx,
-                            )),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .flex_shrink_0()
-                    .gap_2()
-                    .children(SERIES.iter().enumerate().map(|(index, (label, _))| {
-                        let color = series_color(index);
-                        h_flex()
-                            .gap_1()
-                            .pl_2()
-                            .child(div().size_2().rounded_full().bg(if self.visible[index] {
-                                color
-                            } else {
-                                muted
-                            }))
-                            .child(small_button(("series", index), *label, false, cx).on_click(
-                                cx.listener(move |view, _, _, cx| {
+                    .gap_3()
+                    .child(trend_title())
+                    .child(h_flex().flex_shrink_0().gap_1().children(
+                        SERIES.iter().enumerate().map(|(index, label)| {
+                            let color = colors[index];
+                            let active = self.visible[index];
+                            let indicator = if active { color } else { muted.opacity(0.6) };
+                            Button::new(("series", index))
+                                .small()
+                                .accessibility_label(*label)
+                                .toggled(active)
+                                .custom(
+                                    ButtonCustomVariant::new(cx)
+                                        .color(color.opacity(if active { 0.07 } else { 0. }))
+                                        .foreground(if active {
+                                            cx.theme().foreground
+                                        } else {
+                                            muted
+                                        })
+                                        .hover(color.opacity(0.18))
+                                        .active(color.opacity(0.25)),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_1p5()
+                                        .child(
+                                            div().w(px(9.)).h(px(2.)).rounded_full().bg(indicator),
+                                        )
+                                        .child(*label),
+                                )
+                                .on_click(cx.listener(move |view, _, _, cx| {
                                     view.visible[index] = !view.visible[index];
                                     view.trend.update(cx, |plot, cx| {
                                         plot.set_visible(index, view.visible[index], cx)
                                     });
                                     cx.notify();
-                                }),
-                            ))
-                    })),
+                                }))
+                        }),
+                    )),
             )
             .child(
                 v_flex()
                     .flex_grow_1()
                     .flex_shrink_0()
-                    .gap_2()
-                    .child(
-                        h_flex()
-                            .items_stretch()
-                            .flex_grow_1()
-                            .flex_shrink_0()
-                            .min_h(px(176.))
-                            .gap_2()
-                            .child(
-                                div()
-                                    .relative()
-                                    .w(px(34.))
-                                    .flex_shrink_0()
-                                    .text_xs()
-                                    .text_color(muted)
-                                    .children(
-                                        ["100%", "75%", "50%", "25%", "0%"]
-                                            .into_iter()
-                                            .enumerate()
-                                            .map(|(index, label)| {
-                                                div()
-                                                    .absolute()
-                                                    .right_0()
-                                                    .top(relative(index as f32 / 4.))
-                                                    .mt(px(-7.))
-                                                    .line_height(px(14.))
-                                                    .child(label)
-                                            }),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .relative()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .bg(cx.theme().background)
-                                    .child(div().absolute().inset_0().child(self.trend.clone())),
-                            ),
-                    )
-                    .child(
-                        h_flex()
-                            .pl(px(42.))
-                            .flex_shrink_0()
-                            .justify_between()
-                            .text_xs()
-                            .text_color(muted)
-                            .child(format!(
-                                "{}前",
-                                RANGES
-                                    .iter()
-                                    .find(|(range, _)| *range == self.range)
-                                    .map_or("", |(_, label)| *label)
-                            ))
-                            .child("现在"),
-                    ),
+                    .min_h(px(240.))
+                    .child(self.trend.clone()),
             )
     }
 }
 
 impl Render for Dashboard {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let muted = cx.theme().muted_foreground;
-        let (status, status_color) = if self.interval.is_none() {
-            ("已暂停", muted)
-        } else if self.error.is_some() {
-            ("刷新失败", cx.theme().danger)
-        } else if self.latest.is_none() {
-            ("正在获取数据", muted)
-        } else {
-            ("实时更新", cx.theme().success)
-        };
-
         v_flex()
             .id("dashboard-scroll")
             .size_full()
             .overflow_y_scroll()
             .gap_3()
             .p_3()
-            .child(
-                h_flex()
-                    .justify_between()
-                    .flex_shrink_0()
-                    .gap_3()
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .child(div().text_lg().font_semibold().child("系统监控"))
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .text_xs()
-                                    .text_color(status_color)
-                                    .child(div().size_2().rounded_full().bg(status_color))
-                                    .child(status),
-                            ),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(div().text_xs().text_color(muted).child("刷新间隔"))
-                            .child(Self::option_menu(
-                                "interval",
-                                self.interval,
-                                &INTERVALS,
-                                Self::set_interval,
-                                cx,
-                            )),
-                    ),
-            )
-            .children(
-                self.error
-                    .as_ref()
-                    .map(|error| message(error.clone(), true, cx)),
-            )
             .child(
                 panel(cx)
                     .flex_shrink_0()
@@ -396,7 +322,7 @@ fn metric_card(
     subtitle: Option<&str>,
     cx: &App,
 ) -> Div {
-    let color = series_color(index);
+    let color = series_colors(cx)[index];
     let theme = cx.theme();
     let percent = percent.filter(|value| value.is_finite());
     v_flex()
@@ -415,7 +341,7 @@ fn metric_card(
                         .text_color(color)
                         .child(Icon::from(icon).small()),
                 )
-                .child(div().text_sm().font_semibold().child(SERIES[index].0)),
+                .child(div().text_sm().font_semibold().child(SERIES[index])),
         )
         .child(
             div()

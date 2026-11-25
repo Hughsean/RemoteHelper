@@ -6,6 +6,8 @@
 mod assets;
 mod bootstrap;
 mod notifications;
+#[cfg(debug_assertions)]
+mod preview;
 mod shell;
 mod theme;
 mod ui;

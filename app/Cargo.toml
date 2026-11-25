@@ -23,6 +23,7 @@ tracing.workspace = true
 
 # 系统工具
 dirs.workspace = true
+time.workspace = true
 gpui-kit = "=0.11.0"
 
 [target.'cfg(windows)'.dependencies]
