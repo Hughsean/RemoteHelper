@@ -9,50 +9,61 @@ env:
   CARGO_TERM_COLOR: always
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  create-release:
-    name: Create Release
+  validate-tag:
+    name: Validate release tag
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.get_version.outputs.version }}
+      version: ${{ steps.version.outputs.version }}
+      bundle_version: ${{ steps.version.outputs.bundle_version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Get version from tag
-        id: get_version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Match the tag against the Cargo workspace
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          metadata=$(cargo metadata --no-deps --format-version 1)
+          for package in App RemoteHelperServer; do
+            expected=$(jq -er --arg package "$package" '.packages[] | select(.name == $package) | .version' <<< "$metadata")
+            if [[ "$GITHUB_REF_NAME" != "v$expected" ]]; then
+              echo "Tag $GITHUB_REF_NAME does not match $package version $expected" >&2
+              exit 1
+            fi
+          done
+          without_build="${version%%+*}"
+          prerelease=false
+          if [[ "$without_build" == *-* ]]; then
+            prerelease=true
+          fi
+          {
+            echo "version=$version"
+            echo "bundle_version=${without_build%%-*}"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: RemoteHelper ${{ steps.get_version.outputs.version }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          body: |
-            ## RemoteHelper ${{ steps.get_version.outputs.version }}
-
-            Windows 与 macOS 原生桌面客户端基于 GPUI Kit 构建。
-            发布包包含 Windows x64 可执行文件，以及 macOS Intel、Apple Silicon 的 DMG。
-
-            完整变更见 [CHANGELOG](https://github.com/Hughsean/RemoteHelper/blob/v${{ steps.get_version.outputs.version }}/CHANGELOG.md)。
-            在仓库根目录运行 `cargo run -p App` 启动开发版本。
-
-  build-client:
-    name: Build native client (${{ matrix.target }})
-    needs: create-release
+  build-packages:
+    name: Build native packages (${{ matrix.target }})
+    needs: validate-tag
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-2022
             target: x86_64-pc-windows-msvc
+            packages: -p App -p RemoteHelperServer
           - platform: macos-15-intel
             target: x86_64-apple-darwin
+            packages: -p App
           - platform: macos-15
             target: aarch64-apple-darwin
+            packages: -p App
 
     runs-on: ${{ matrix.platform }}
     env:
@@ -68,8 +79,8 @@ jobs:
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
 
-      - name: Build client
-        run: cargo build --release -p App --target ${{ matrix.target }}
+      - name: Build native packages
+        run: cargo build --release ${{ matrix.packages }} --target ${{ matrix.target }}
 
       - name: Prepare macOS app icon
         if: runner.os == 'macOS'
@@ -87,17 +98,20 @@ jobs:
           done
           iconutil -c icns dist/icon.iconset -o dist/RemoteHelper.icns
 
-      - name: Package Windows client
+      - name: Package Windows client and server
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $targetDir = "target/${{ matrix.target }}/release"
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/App.exe" "dist/RemoteHelper-${{ matrix.target }}.exe"
+          Copy-Item "$targetDir/App.exe" "dist/RemoteHelper-${{ matrix.target }}.exe"
+          Compress-Archive -Path @("$targetDir/RemoteHelperServer.exe", "$targetDir/keygen.exe", "config.example.toml", "LICENSE") `
+            -DestinationPath "dist/RemoteHelperServer-${{ matrix.target }}.zip"
 
       - name: Package macOS client
         if: runner.os == 'macOS'
         env:
-          APP_VERSION: ${{ needs.create-release.outputs.version }}
+          APP_VERSION: ${{ needs.validate-tag.outputs.bundle_version }}
         shell: bash
         run: |
           bundle="dist/staging/RemoteHelper.app"
@@ -126,8 +140,63 @@ jobs:
           hdiutil create -volname RemoteHelper -srcfolder dist/staging -format UDZO \
             "dist/RemoteHelper-${{ matrix.target }}.dmg"
 
-      - name: Upload Release Assets
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.dmg
+
+  publish:
+    name: Publish GitHub Release
+    needs: [validate-tag, build-packages]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Prepare release notes from the changelog
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          PRERELEASE: ${{ needs.validate-tag.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            if [[ "$PRERELEASE" == true ]]; then
+              printf '> 这是预发布版本，建议先在测试环境验证，再用于日常部署。\n\n'
+            fi
+            awk -v version="$VERSION" '
+              index($0, "## [" version "]") == 1 { found = 1; next }
+              found && /^## / { exit }
+              found && !/^---$/ { print }
+              END { if (!found) exit 1 }
+            ' CHANGELOG.md
+            printf '\n完整记录见 [CHANGELOG](%s/%s/blob/%s/CHANGELOG.md)。\n' \
+              "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_SHA"
+          } > release-notes.md
+
+      - name: Publish release and assets
         uses: softprops/action-gh-release@v2
         with:
+          name: RemoteHelper ${{ needs.validate-tag.outputs.version }}
+          draft: false
+          prerelease: ${{ needs.validate-tag.outputs.prerelease }}
+          make_latest: ${{ needs.validate-tag.outputs.prerelease == 'true' && 'false' || 'true' }}
+          body_path: release-notes.md
           fail_on_unmatched_files: true
-          files: dist/RemoteHelper-${{ matrix.target }}.*
+          files: |
+            dist/RemoteHelper-x86_64-pc-windows-msvc.exe
+            dist/RemoteHelperServer-x86_64-pc-windows-msvc.zip
+            dist/RemoteHelper-x86_64-apple-darwin.dmg
+            dist/RemoteHelper-aarch64-apple-darwin.dmg

@@ -5,7 +5,7 @@ members = ["crates/*"]
 default-members = ["crates/server"]
 
 [workspace.package]
-version = "2.3.1"
+version = "3.0.0-rc.1"
 authors = ["Hughsean<Hughsean.F@outlook.com>"]
 edition = "2024"
 license = "MIT"

@@ -49,7 +49,7 @@ cargo clippy -p App --no-deps --all-targets -- -D warnings
 
 ## 发布
 
-[标签发布流程](../../.github/workflows/release.yml)构建三个客户端产物。
+[标签发布流程](../../.github/workflows/release.yml)构建三个客户端产物，并另外发布 Windows x64 服务端压缩包。
 
 | 平台 | 产物 |
 | --- | --- |

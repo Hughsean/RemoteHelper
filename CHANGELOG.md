@@ -7,13 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0-rc.1] - 2026-11-26
+
+### Added
+
+- Windows 服务端可在后台持续记录 CPU、内存、网络及可用的温度、功率等指标。历史按 UTC 日期保存，支持写入中断后恢复，并按天数或容量清理。
+- 桌面端支持分页同步历史、按服务端身份隔离本地缓存，以及登录前离线回看。趋势图会区分采样缺口、时钟回拨、未同步区间和已被服务端清理的历史。
+- 新增历史设置页，可查看存储状态和调整本地缓存；配置过权限的管理员还可调整服务端历史设置并确认时钟异常。
+
+### 升级说明
+
+1. **远程历史需同时升级客户端和 Windows 服务端。** 备份现有 `config.toml`、服务端身份文件和历史目录（如已存在）。旧服务端仍可用于实时监控，但不会提供远程历史；已固定指纹的地址不会自动降级到旧协议。
+2. 若尚未初始化服务端身份，在部署目录运行 `RemoteHelperServer.exe --init-server-identity`，随后正常启动服务端。通过可信渠道核对命令输出的 SHA-256 指纹，再在客户端确认并连接。若需远程修改历史设置，将客户端公钥同时加入 `[web_panel].authorized_keys` 和 `[history].admin_keys`，再重启服务端。
+3. 远程历史和实时请求分别使用 TCP 连接；如果并发上限被设为 `1`，应提高上限后再使用历史同步。服务端历史文件默认写入配置目录下的 `history/`，不加密，请限制访问权限。
+
+### 下载
+
+| 平台 | 文件 |
+| --- | --- |
+| Windows x64 桌面端 | `RemoteHelper-x86_64-pc-windows-msvc.exe` |
+| Windows x64 服务端 | `RemoteHelperServer-x86_64-pc-windows-msvc.zip`（含服务端、`keygen`、配置示例和许可证） |
+| macOS 15+ Intel | `RemoteHelper-x86_64-apple-darwin.dmg` |
+| macOS 15+ Apple Silicon | `RemoteHelper-aarch64-apple-darwin.dmg` |
+
+macOS 安装包使用临时签名（ad hoc），未做 Developer ID 签名或公证。
+
 ### Fixed
 
 - macOS 客户端关闭窗口后，点击 Dock 图标会重新打开窗口，并回到关闭前的界面：已登录时恢复原来的页面，停在登录页时仍显示登录页。
 
 ### Changed
 
-- 桌面客户端按「入口 / 装配 / 外壳 / 页面」分层拆分 `app/src/main.rs`，页面移入 `app/src/views/`，主题、共用构件和图标资源独立成模块。
+- Rust 工作区成员统一移入 `crates/`，共享依赖集中声明；桌面端与服务端包名保持不变。桌面端按入口、装配、外壳和页面分层。
 - 桌面客户端随系统深浅模式切换配色。窗口使用原生模糊材质，卡片采用分层半透明背景。
 - 登录页使用一体化表单，切换页面时使用短距离滑入动效。客户端消息在独立通知层显示，新增服务在悬浮弹窗中操作。
 - 顶部导航使用三色圆点显示连接状态。监控页在底栏提供刷新间隔选择。
@@ -261,7 +286,8 @@ The following features are planned for future releases:
 
 ---
 
-[Unreleased]: https://github.com/Hughsean/RemoteHelper/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/Hughsean/RemoteHelper/compare/v3.0.0-rc.1...HEAD
+[3.0.0-rc.1]: https://github.com/Hughsean/RemoteHelper/compare/v2.3.1...v3.0.0-rc.1
 [2.3.1]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.3.1
 [2.3.0]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.3.0
 [2.0.2]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.2
