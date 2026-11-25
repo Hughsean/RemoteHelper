@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- macOS 客户端关闭窗口后，点击 Dock 图标会重新打开窗口，并回到关闭前的界面：已登录时恢复原来的页面，停在登录页时仍显示登录页。
+
 ### Changed
 
 - 桌面客户端按「入口 / 装配 / 外壳 / 页面」分层拆分 `app/src/main.rs`，页面移入 `app/src/views/`，主题、共用构件和图标资源独立成模块。

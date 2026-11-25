@@ -27,8 +27,8 @@ cargo clippy -p App --no-deps --all-targets -- -D warnings
 | 文件 | 职责 |
 | --- | --- |
 | [src/main.rs](src/main.rs) | 进程入口：日志和 Tokio 运行时 |
-| [src/bootstrap.rs](src/bootstrap.rs) | GPUI 应用装配：资源、主题和开窗 |
-| [src/shell.rs](src/shell.rs) | 根视图：登录页与会话页切换 |
+| [src/bootstrap.rs](src/bootstrap.rs) | GPUI 应用装配：资源、主题、窗口重开（Dock 图标还原）和开窗 |
+| [src/shell.rs](src/shell.rs) | 根视图：登录页与会话页切换、关闭前界面记忆 |
 | [src/theme.rs](src/theme.rs) | 主题初始化与配色 |
 | [src/ui.rs](src/ui.rs) | 面板、字段、提示文字和导航按钮等共用构件 |
 | [src/assets.rs](src/assets.rs) | 图标资源和资源加载测试 |
