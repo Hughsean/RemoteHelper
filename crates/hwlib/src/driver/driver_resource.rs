@@ -153,16 +153,14 @@ impl Drop for DriverResource {
 const AMD_FAMILY_17_BIN: &[u8] = include_bytes!("../../../../PawnIO/AMDFamily17.bin");
 const AMD_FAMILY_17_HASH: &str = "099dc01d6db97ea997fec4a461e191cc64b9d7ce47c9d2153c451c56c2adcf50";
 
-// AMD Family 0F driver (legacy)
-#[allow(dead_code)]
+// 旧版 AMD 模块仅在测试中校验哈希，不嵌入正式构建。
+#[cfg(test)]
 const AMD_FAMILY_0F_BIN: &[u8] = include_bytes!("../../../../PawnIO/AMDFamily0F.bin");
-#[allow(dead_code)]
+#[cfg(test)]
 const AMD_FAMILY_0F_HASH: &str = "1788550c02100ad6bbc91604399ed6e055058ea0f6c0c828c02d9b01a09ad27f";
-
-// AMD Family 10h driver (legacy)
-#[allow(dead_code)]
+#[cfg(test)]
 const AMD_FAMILY_10_BIN: &[u8] = include_bytes!("../../../../PawnIO/AMDFamily10.bin");
-#[allow(dead_code)]
+#[cfg(test)]
 const AMD_FAMILY_10_HASH: &str = "79be1396621aa44eb149c5dc6d1bab4519b9cfa49a32af5e022cb9f9ca887658";
 
 // Ryzen SMU driver (enhanced in 0.2.1)

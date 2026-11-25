@@ -22,17 +22,7 @@ pub mod ioctl_codes {
 
     const FILE_DEVICE_UNKNOWN: u32 = 0x00000022;
     const METHOD_BUFFERED: u32 = 0;
-    #[allow(dead_code)]
-    const METHOD_IN_DIRECT: u32 = 1;
-    #[allow(dead_code)]
-    const METHOD_OUT_DIRECT: u32 = 2;
-    #[allow(dead_code)]
-    const METHOD_NEITHER: u32 = 3;
     const FILE_ANY_ACCESS: u32 = 0;
-    #[allow(dead_code)]
-    const FILE_READ_ACCESS: u32 = 1;
-    #[allow(dead_code)]
-    const FILE_WRITE_ACCESS: u32 = 2;
 
     // PawnIO IOCTL codes
     pub const IOCTL_READ_MSR: u32 =
