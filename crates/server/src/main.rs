@@ -2,6 +2,8 @@ mod cleanup;
 mod config;
 mod handlers;
 mod health;
+mod history;
+mod identity;
 mod monitor;
 mod process;
 mod protocol;
@@ -23,68 +25,119 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("正在启动 RemoteHelper 服务器实例");
 
-    // 加载配置
-    let config = AppConfig::load()?;
+    let mut args = std::env::args_os().skip(1);
+    let config_path = std::path::Path::new(config::CONFIG_PATH);
+    if let Some(arg) = args.next() {
+        anyhow::ensure!(
+            arg == "--init-server-identity",
+            "不支持的命令；用法：--init-server-identity [服务账户标识]"
+        );
+        let reader = args
+            .next()
+            .map(|reader| {
+                reader
+                    .into_string()
+                    .map_err(|_| anyhow::anyhow!("无效的服务账户标识"))
+            })
+            .transpose()?;
+        anyhow::ensure!(
+            args.next().is_none(),
+            "用法：--init-server-identity [服务账户标识]"
+        );
+        let identity = identity::initialize(config_path, reader.as_deref())?;
+        println!("服务端公钥指纹：{}", identity.fingerprint());
+        return Ok(());
+    }
+    let (config, config_bytes) = AppConfig::load()?;
+    let identity = match identity::load(config_path) {
+        Ok(identity) => {
+            tracing::info!(fingerprint = %identity.fingerprint(), "已加载历史服务端身份");
+            Some(std::sync::Arc::new(identity))
+        }
+        Err(err) => {
+            tracing::warn!(%err, "历史服务端身份不可用；仅开放旧版实时连接及本地记录");
+            None
+        }
+    };
 
-    // 网络初始化等待
-    wait_for_network(&config).await;
-
-    tracing::info!("配置文件加载成功");
-    tracing::info!(
-        "Web 面板配置 - 启用: {}, 端口: {}, 最大连接数: {}",
-        config.web_panel.enabled,
-        config.web_panel.local_port,
-        config.web_panel.max_connections
+    let recorder = match history::Recorder::start(
+        config.history.dir.clone(),
+        history::RecorderOptions {
+            enabled: config.history.enabled,
+            seal_interval: Duration::from_secs(config.history.seal_interval_secs),
+            retention_days: config.history.retention_days,
+            retention_bytes: config.history.retention_bytes,
+            compression_level: config.history.compression_level,
+        },
+    ) {
+        Ok(recorder) => Some(recorder),
+        Err(err) => {
+            tracing::error!(%err, "无法启动历史记录器；实时监控仍可用");
+            None
+        }
+    };
+    let mut state = AppState::new(
+        config.clone(),
+        recorder.as_ref().map(history::Recorder::handle),
+        &config_bytes,
     );
-    tracing::info!("已配置服务数量: {}", config.service.len());
+    state.identity = identity;
+    let monitor = state.monitor.spawn(state.history.clone());
+    let result = match &monitor {
+        Ok(_) => {
+            handlers::register_default_handlers();
+            // 可选硬件驱动初始化时，主机基础指标仍可开始采样。
+            let _driver = std::thread::Builder::new()
+                .name("hardware-driver".into())
+                .spawn(|| {
+                    if let Err(err) = hwlib::driver::init_driver() {
+                        tracing::warn!(%err, "CPU 硬件传感器不可用");
+                    }
+                });
+            tokio::select! {
+                result = serve(&config, &state) => result,
+                _ = shutdown_signal() => Ok(()),
+            }
+        }
+        Err(err) => Err(anyhow::anyhow!("无法启动采样器：{err}")),
+    };
 
-    // 初始化状态
-    let state = AppState::new(config.clone());
-    tracing::info!("应用程序状态初始化完成");
-
-    // 初始化 hwlib 硬件驱动（非阻塞，失败也不影响启动）
-    if let Err(e) = hwlib::driver::init_driver() {
-        tracing::warn!("hwlib 驱动初始化失败（CPU 硬件传感器不可用）: {}", e);
-    }
-
-    // 注册请求处理器
-    handlers::register_default_handlers();
-
-    // 启动后台监控任务
-    let _monitor = monitor::spawn(state.clone());
-
-    // 自动启动服务
-    auto_start_services(&state).await;
-
-    // 自动启动 Web 隧道
-    tracing::info!("正在启动 Web 隧道...");
-    if let Err(e) = process::start_web_tunnel(&state).await {
-        tracing::error!("启动 Web 隧道失败: {}", e);
+    let monitor_result = match monitor {
+        Ok(monitor) => monitor.stop(Duration::from_secs(5)).await,
+        Err(_) => Ok(()),
+    };
+    let recorder_result = if let Some(recorder) = recorder {
+        tokio::task::spawn_blocking(move || recorder.shutdown(Duration::from_secs(10)))
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result.map_err(anyhow::Error::from))
     } else {
-        tracing::info!("Web 隧道启动成功");
+        Ok(())
+    };
+    if let Err(err) = &monitor_result {
+        tracing::error!(%err, "采样器关闭失败");
+    }
+    if let Err(err) = &recorder_result {
+        tracing::error!(%err, "历史记录器关闭失败");
     }
 
-    // 启动 TCP 监听
-    let cleanup_state = state.clone();
-    let port = config.web_panel.local_port;
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    tracing::info!("正在监听 {}", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    let server_state = state.clone();
-    let max_connections = config.web_panel.max_connections;
-
-    tokio::select! {
-        _ = run_accept_loop(listener, server_state, max_connections) => {},
-        _ = shutdown_signal() => {},
-    }
-
-    // 优雅关闭
     tracing::info!("正在关闭，终止子进程...");
-    cleanup::log_remaining_connections(&cleanup_state);
-    cleanup::terminate_services(&cleanup_state).await;
-    cleanup::terminate_web_tunnel(&cleanup_state).await;
-    tracing::info!("关闭完成\n\n\n\n");
+    cleanup::log_remaining_connections(&state);
+    cleanup::terminate_services(&state).await;
+    cleanup::terminate_web_tunnel(&state).await;
+    result.and(monitor_result).and(recorder_result)
+}
+
+async fn serve(config: &AppConfig, state: &AppState) -> anyhow::Result<()> {
+    wait_for_network(config).await;
+    auto_start_services(state).await;
+    if let Err(err) = process::start_web_tunnel(state).await {
+        tracing::error!(%err, "启动 Web 隧道失败");
+    }
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.web_panel.local_port));
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!("正在监听 {}", addr);
+    run_accept_loop(listener, state.clone(), config.web_panel.max_connections).await;
     Ok(())
 }
 
@@ -190,6 +243,9 @@ async fn run_accept_loop(
                     max_connections
                 );
 
+                state
+                    .active_connections
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 let state = state.clone();
                 tokio::spawn(async move {
                     server::handle_connection(socket, state).await;

@@ -48,5 +48,6 @@ pub fn generate_mock_system_info() -> SystemInfo {
         network_rx_bytes: (t * 50_000_000.0) as u64,
         network_tx_speed: (2_000_000.0 + 18_000_000.0 * (t / 3.0).sin().abs()) as u64,
         network_rx_speed: (5_000_000.0 + 45_000_000.0 * (t / 4.0).sin().abs()) as u64,
+        ..SystemInfo::default()
     }
 }

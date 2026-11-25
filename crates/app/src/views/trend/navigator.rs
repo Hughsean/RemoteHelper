@@ -26,8 +26,8 @@ impl TrendPlot {
         let extent = self.drag.map_or(self.view.extent(), |drag| drag.extent);
         let shown = self.view.shown();
         let following = self.view.following();
-        let has_data = !self.history.is_empty();
-        let interactive = self.history.len() > 1;
+        let has_data = self.data_span().is_some();
+        let interactive = self.interactive();
         let with_date = crosses_day(extent.0, extent.1);
         let with_seconds = extent.1 - extent.0 < 600_000.;
         let label = |at| {
@@ -73,7 +73,7 @@ impl TrendPlot {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
-                    if this.history.len() < 2 {
+                    if !this.interactive() {
                         return;
                     }
                     if event.click_count >= 2 {
@@ -169,7 +169,8 @@ impl TrendPlot {
         };
         let status = if following {
             let refreshing = self.interval_ms.is_some();
-            let state_color = if refreshing && has_data {
+            let offline = self.stored.as_ref().is_some_and(|stored| matches!(&stored.status, client::history::SyncStatus::Failed { reason, .. } if reason == "离线查看"));
+            let state_color = if refreshing && !offline && has_data {
                 theme.success
             } else {
                 muted
@@ -180,7 +181,13 @@ impl TrendPlot {
                 .text_size(px(11.))
                 .text_color(state_color)
                 .child(div().size(px(5.)).rounded_full().bg(state_color))
-                .child(if refreshing { "实时" } else { "已暂停" })
+                .child(if offline {
+                    "离线"
+                } else if refreshing {
+                    "实时"
+                } else {
+                    "已暂停"
+                })
                 .into_any_element()
         } else {
             Button::new("trend-live")
@@ -375,7 +382,7 @@ impl Brush {
         let edge = at - self.offset;
         if self.handle == Handle::Start && view.following() {
             // 左手柄按拖动时的坐标换算，窗口右端继续追踪最新采样。
-            view.set_span(view.extent().1 - edge, Duration::ZERO);
+            view.set_span(view.live_edge() - edge, Duration::ZERO);
             return;
         }
 

@@ -55,6 +55,21 @@ pub async fn read_next_request(
     }
 }
 
+const ENCRYPTION_TAG_LENGTH: usize = 16;
+
+pub fn bound_history_response(response: Response) -> Result<Response> {
+    use common::history_api::{
+        HISTORY_FRAME_LIMIT, HistoryError, HistoryErrorCode, HistoryResponse,
+    };
+    if serde_json::to_vec(&response)?.len() <= HISTORY_FRAME_LIMIT - ENCRYPTION_TAG_LENGTH {
+        return Ok(response);
+    }
+    Ok(Response::History(HistoryResponse::Error(HistoryError {
+        code: HistoryErrorCode::BudgetTooSmall,
+        detail: "History response exceeds frame budget".into(),
+    })))
+}
+
 /// 加密 `Response` 后按帧格式写入流中。
 ///
 /// 直接委托给 [`common::transport::send_frame`]。
@@ -62,9 +77,16 @@ pub async fn send_encrypted_response(
     write_half: &mut OwnedWriteHalf,
     crypto: &Arc<Mutex<CryptoSession>>,
     response: &Response,
+    history_negotiated: bool,
 ) -> Result<()> {
     let ciphertext = {
-        let plain_bytes = serde_json::to_vec(response)?;
+        let mut plain_bytes = serde_json::to_vec(response)?;
+        if history_negotiated
+            && plain_bytes.len() > common::history_api::HISTORY_FRAME_LIMIT - ENCRYPTION_TAG_LENGTH
+        {
+            plain_bytes =
+                serde_json::to_vec(&Response::Error("Response exceeds frame budget".into()))?;
+        }
         let mut cry = crypto.lock().await;
         cry.encrypt(&plain_bytes)?
     };
@@ -79,6 +101,22 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use tokio::net::{TcpListener, TcpStream};
+
+    #[test]
+    fn replaces_oversize_history_response_with_structured_error() {
+        use common::history_api::{
+            HISTORY_FRAME_LIMIT, HistoryErrorCode, HistoryResponse, PacketPage,
+        };
+        let message = Response::History(HistoryResponse::Blocks(PacketPage {
+            bytes: "a".repeat(HISTORY_FRAME_LIMIT),
+            offset: 0,
+            next_offset: 4,
+            through: 4,
+            tail_cursor: None,
+        }));
+        assert!(matches!(bound_history_response(message).unwrap(),
+            Response::History(HistoryResponse::Error(err)) if err.code == HistoryErrorCode::BudgetTooSmall));
+    }
 
     #[tokio::test]
     async fn read_next_request_does_not_hold_crypto_lock_while_waiting_for_frame() {

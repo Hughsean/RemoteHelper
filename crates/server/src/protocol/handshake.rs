@@ -1,66 +1,76 @@
-use anyhow::{Result, anyhow};
+use crate::identity::ServerIdentity;
+use anyhow::{Result, anyhow, ensure};
 use base64::prelude::*;
-use common::{Handshake, crypto::CryptoSession};
+use common::{
+    Handshake,
+    crypto::CryptoSession,
+    server_auth::{HANDSHAKE_MAX, HISTORY_VERSION, decode_base64},
+};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, tcp::OwnedReadHalf, tcp::OwnedWriteHalf};
 use tokio::sync::Mutex;
 use x25519_dalek::PublicKey;
 
-/// 执行 X25519 密钥交换握手，之后返回拆分的读写半端和加密会话。
-///
-/// 所有参数由所有权转移，确保调用侧无需持有中间态。
 pub async fn perform_handshake(
     mut socket: TcpStream,
+    identity: Option<&ServerIdentity>,
 ) -> Result<(
     OwnedReadHalf,
     Arc<Mutex<OwnedWriteHalf>>,
     Arc<Mutex<CryptoSession>>,
+    Option<[u8; 32]>,
 )> {
     let peer_addr = socket.peer_addr().ok();
-    tracing::info!("正在处理来自 {:?} 的连接", peer_addr);
-
-    let mut buf = [0u8; 1024];
-
-    // 1. 读取 ClientHello
+    tracing::info!(?peer_addr, "正在处理连接");
+    let mut buf = [0u8; HANDSHAKE_MAX];
     let len = socket.read_u32().await? as usize;
-    if len > buf.len() {
-        return Err(anyhow!("Handshake message too large"));
-    }
+    ensure!(
+        (1..=HANDSHAKE_MAX).contains(&len),
+        "Invalid handshake message size"
+    );
     socket.read_exact(&mut buf[..len]).await?;
-
-    let client_hello: Handshake = serde_json::from_slice(&buf[..len])?;
-    let client_pub_bytes = match client_hello {
-        Handshake::ClientHello { public_key } => BASE64_STANDARD.decode(public_key)?,
+    let hello = serde_json::from_slice::<Handshake>(&buf[..len])?;
+    let (client_public, offered) = match hello {
+        Handshake::ClientHello {
+            public_key,
+            history_versions,
+        } => (decode_base64(&public_key)?, history_versions),
         _ => return Err(anyhow!("Expected ClientHello")),
     };
 
-    // 2. 生成服务器密钥与共享密钥
     let (secret, server_public) = common::crypto::generate_ephemeral();
-    let server_pub_b64 = BASE64_STANDARD.encode(server_public.as_bytes());
+    let shared_secret = secret.diffie_hellman(&PublicKey::from(client_public));
+    ensure!(
+        shared_secret.to_bytes() != [0; 32],
+        "Non-contributory client public key"
+    );
 
-    // 3. 发送 ServerHello
-    let resp = Handshake::ServerHello {
-        public_key: server_pub_b64,
+    let (history, transcript_hash) = match identity.filter(|_| offered.contains(&HISTORY_VERSION)) {
+        Some(identity) => {
+            let (proof, hash) =
+                identity.proof(&client_public, server_public.as_bytes(), &offered)?;
+            (Some(proof), Some(hash))
+        }
+        None => (None, None),
     };
-    let resp_bytes = serde_json::to_vec(&resp)?;
-    socket.write_u32(resp_bytes.len() as u32).await?;
-    socket.write_all(&resp_bytes).await?;
+    let response = serde_json::to_vec(&Handshake::ServerHello {
+        public_key: BASE64_STANDARD.encode(server_public.as_bytes()),
+        history,
+    })?;
+    ensure!(
+        response.len() <= HANDSHAKE_MAX,
+        "Handshake message too large"
+    );
+    socket.write_u32(response.len() as u32).await?;
+    socket.write_all(&response).await?;
 
-    // 4. 初始化加密会话
-    let client_pub_array: [u8; 32] = client_pub_bytes
-        .try_into()
-        .map_err(|_| anyhow!("Invalid client public key length"))?;
-    let client_public_key = PublicKey::from(client_pub_array);
-    let shared_secret = secret.diffie_hellman(&client_public_key);
+    let (read, write) = socket.into_split();
     let crypto = CryptoSession::new(shared_secret.to_bytes(), true);
-
-    tracing::info!("与 {:?} 建立加密会话", peer_addr);
-
-    // 5. 拆分 socket
-    let (socket_read, socket_write) = socket.into_split();
-    let socket_write = Arc::new(Mutex::new(socket_write));
-    let crypto = Arc::new(Mutex::new(crypto));
-
-    Ok((socket_read, socket_write, crypto))
+    Ok((
+        read,
+        Arc::new(Mutex::new(write)),
+        Arc::new(Mutex::new(crypto)),
+        transcript_hash,
+    ))
 }

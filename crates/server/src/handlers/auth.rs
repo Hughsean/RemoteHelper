@@ -1,58 +1,42 @@
 use crate::state::AppState;
-use base64::prelude::*;
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use common::server_auth::{decode_base64, history_login_message};
+use ed25519_dalek::{Signature, VerifyingKey};
 
-/// 验证 Ed25519 签名。
-pub fn verify_login(state: &AppState, pub_key_b64: &str, sig_b64: &str, challenge: &str) -> bool {
-    tracing::debug!(
-        "Verifying login for public key: {}...",
-        &pub_key_b64.chars().take(16).collect::<String>()
-    );
-
+/// 验证授权客户端公钥；历史协商成功时，签名还必须绑定握手摘要。
+pub fn verify_login(
+    state: &AppState,
+    public_key: &str,
+    signature: &str,
+    challenge: &str,
+    transcript_hash: Option<&[u8; 32]>,
+) -> bool {
     if !state
         .config
         .web_panel
         .authorized_keys
-        .contains(&pub_key_b64.to_string())
+        .iter()
+        .any(|key| key == public_key)
     {
-        tracing::warn!("未授权的公钥尝试登录");
         return false;
     }
-
-    let pub_key_bytes = match BASE64_STANDARD.decode(pub_key_b64) {
-        Ok(b) => b,
-        Err(_) => return false,
+    let (Ok(key), Ok(signature), Ok(challenge)) = (
+        decode_base64(public_key),
+        decode_base64(signature),
+        decode_base64(challenge),
+    ) else {
+        return false;
     };
-
-    let sig_bytes = match BASE64_STANDARD.decode(sig_b64) {
-        Ok(b) => b,
-        Err(_) => return false,
+    let Ok(key) = VerifyingKey::from_bytes(&key) else {
+        return false;
     };
-
-    let challenge_bytes = match BASE64_STANDARD.decode(challenge) {
-        Ok(b) => b,
-        Err(_) => return false,
-    };
-
-    let verifying_key =
-        match VerifyingKey::from_bytes(pub_key_bytes.as_slice().try_into().unwrap_or(&[0; 32])) {
-            Ok(k) => k,
-            Err(_) => return false,
-        };
-
-    let signature = match Signature::from_slice(&sig_bytes) {
-        Ok(s) => s,
-        Err(_) => {
-            tracing::warn!("无效的签名格式");
-            return false;
+    let extended;
+    let message: &[u8] = match transcript_hash {
+        Some(hash) => {
+            extended = history_login_message(&challenge, hash);
+            &extended
         }
+        None => &challenge,
     };
-
-    let result = verifying_key.verify(&challenge_bytes, &signature).is_ok();
-    if result {
-        tracing::info!("登录验证成功");
-    } else {
-        tracing::warn!("登录验证失败 - 签名无效");
-    }
-    result
+    key.verify_strict(message, &Signature::from_bytes(&signature))
+        .is_ok()
 }

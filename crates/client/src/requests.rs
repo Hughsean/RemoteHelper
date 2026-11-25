@@ -14,6 +14,9 @@ use std::time::Duration;
 /// 在 Mock 模式下直接返回合成数据。
 /// 若连接断开则自动重建并重试一次（5 秒超时）。
 pub async fn send_request(req: Request) -> Result<Response, String> {
+    if matches!(req, Request::History(_)) {
+        return Err("History requests require a dedicated verified connection".into());
+    }
     if MOCK_MODE.load(Ordering::Relaxed) {
         return Ok(match req {
             Request::GetStatus { .. } => Response::Status(crate::mock::generate_mock_system_info()),
@@ -25,44 +28,43 @@ pub async fn send_request(req: Request) -> Result<Response, String> {
 
     let mut guard = CONNECTION.lock().await;
 
-    if guard.is_none() {
-        *guard = Some(crate::connection::connect_and_auth().await?);
-    }
-
-    let conn = guard
-        .as_mut()
-        .ok_or("Connection not initialized".to_string())?;
-
+    let mut conn = match guard.take() {
+        Some(conn) => conn,
+        None => crate::connection::connect_and_auth().await?,
+    };
     let mut recv_buf = vec![0u8; 65536];
 
-    // 第一次尝试
-    let result = tokio::time::timeout(Duration::from_secs(5), async {
+    // 往返完成之前不归还连接：超时或调用方取消时，不能再读取上一请求的响应。
+    let attempt = tokio::time::timeout(Duration::from_secs(5), async {
         conn.send(&req).await?;
         conn.recv(&mut recv_buf).await
     })
     .await
     .map_err(|_| "Request timed out".to_string())?;
-
-    match result {
-        Ok(resp) => Ok(resp),
-        Err(e) => {
-            log::warn!("Request failed ({}). Reconnecting...", e);
-            // 丢弃旧连接，重建
-            *guard = None;
-            *guard = Some(crate::connection::connect_and_auth().await?);
-            let conn = guard
-                .as_mut()
-                .ok_or("Connection not initialized".to_string())?;
-
-            // 重试一次
-            let resp = tokio::time::timeout(Duration::from_secs(5), async {
-                conn.send(&req).await?;
-                conn.recv(&mut recv_buf).await
+    match attempt {
+        Ok(response) => {
+            *guard = Some(conn);
+            Ok(response)
+        }
+        Err(error) => {
+            // 写操作可能已经完成，不能因为响应丢失就重放它。
+            if !matches!(
+                req,
+                Request::GetStatus { .. } | Request::ListServices | Request::QueryPath { .. }
+            ) {
+                return Err(error);
+            }
+            log::warn!("Read request failed ({error}). Reconnecting...");
+            drop(conn);
+            let mut replacement = crate::connection::connect_and_auth().await?;
+            let response = tokio::time::timeout(Duration::from_secs(5), async {
+                replacement.send(&req).await?;
+                replacement.recv(&mut recv_buf).await
             })
             .await
             .map_err(|_| "Retry request timed out".to_string())??;
-
-            Ok(resp)
+            *guard = Some(replacement);
+            Ok(response)
         }
     }
 }

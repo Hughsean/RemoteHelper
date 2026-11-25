@@ -1,7 +1,8 @@
 use crate::notifications::Notices;
 use crate::ui::{ConnectionStatus, panel, request_error, trend_title};
-use crate::views::trend::{SERIES, TrendPlot, series_colors};
-use common::{Request, Response, SystemInfo};
+use crate::views::trend::{Playback, SERIES, TrendPlot, series_colors};
+use client::history::{HistoryCache, HistoryQuery, HistorySync, SyncStatus};
+use common::{Request, Response, SystemInfo, history_api::TimeRange};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::StyledExt;
 use gpui_kit::component::{
@@ -12,7 +13,10 @@ use gpui_kit::component::{
     v_flex,
 };
 use gpui_kit::*;
-use std::time::Duration;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant, SystemTime},
+};
 use tokio::runtime::Handle;
 
 const INTERVALS: [(Option<u64>, &str); 4] = [
@@ -29,6 +33,8 @@ pub(crate) struct Dashboard {
     interval: Option<u64>,
     visible: [bool; 3],
     refresh_failed: bool,
+    poll_active: bool,
+    history_task: Option<Task<()>>,
     _polling: Task<()>,
 }
 
@@ -40,7 +46,9 @@ impl Dashboard {
         cx: &mut Context<Self>,
     ) -> Self {
         let polling = cx.spawn(async move |this, cx| {
-            while let Ok(interval) = this.update(cx, |view, _| view.interval) {
+            while let Ok(interval) =
+                this.update(cx, |view, _| view.interval.filter(|_| view.poll_active))
+            {
                 if let Some(interval_ms) = interval {
                     let task = runtime.spawn(client::send_request(Request::GetStatus {
                         interval_ms: Some(interval_ms),
@@ -59,6 +67,9 @@ impl Dashboard {
                     };
                     if this
                         .update(cx, |view, cx| {
+                            if !view.poll_active {
+                                return;
+                            }
                             connection_status
                                 .update(cx, |connection, cx| connection.set(status, cx));
                             match result {
@@ -88,6 +99,8 @@ impl Dashboard {
             interval: Some(1000),
             visible: [true; 3],
             refresh_failed: false,
+            poll_active: true,
+            history_task: None,
             _polling: polling,
         }
     }
@@ -99,7 +112,7 @@ impl Dashboard {
             info.gpu_usage.map(|value| value as f32),
         ];
         self.trend
-            .update(cx, |plot, cx| plot.record(info.timestamp, values, cx));
+            .update(cx, |plot, cx| plot.record_live(&info, values, cx));
         self.latest = Some(info);
         self.refresh_failed = false;
     }
@@ -112,6 +125,149 @@ impl Dashboard {
         self.trend
             .update(cx, |plot, cx| plot.set_interval(interval, cx));
         cx.notify();
+    }
+
+    pub(crate) fn set_polling(&mut self, active: bool, cx: &mut Context<Self>) {
+        self.poll_active = active;
+        if !active {
+            self.clear_chart_hover(cx);
+        }
+    }
+
+    pub(crate) fn history_sources(
+        &mut self,
+        runtime: Handle,
+        sync: Option<Arc<HistorySync>>,
+        cache: Option<HistoryCache>,
+        anchor: Option<i64>,
+        window: Duration,
+        refresh: Duration,
+        clear: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.history_task = None;
+        let window_ms = window.as_millis().clamp(1, i64::MAX as u128) as i64;
+        self.trend.update(cx, |plot, cx| {
+            plot.set_history_window(window_ms as u64, cx);
+            if clear {
+                plot.set_history(HistoryQuery::default(), cx);
+            }
+        });
+        if sync.is_none() && cache.is_none() {
+            return;
+        }
+        let offline = sync.is_none();
+        self.history_task = Some(cx.spawn(async move |this, cx| {
+            let mut read_cache = cache;
+            let mut query_band = None;
+            let mut query_pending = true;
+            let mut online_error = None;
+            let mut active: Option<AbortWork<Result<HistoryCache, client::history::HistoryError>>> =
+                None;
+            let mut deadline = Instant::now();
+            while let Ok(viewport) = this.update(cx, |view, cx| view.trend.read(cx).history_range())
+            {
+                let fallback = || {
+                    let to = anchor.unwrap_or_else(wall_ms).saturating_add(1);
+                    TimeRange {
+                        from: to.saturating_sub(window_ms),
+                        to,
+                    }
+                };
+                let visible = viewport.unwrap_or_else(fallback);
+                if query_band
+                    .is_none_or(|band: TimeRange| visible.from < band.from || visible.to > band.to)
+                {
+                    let pad = (visible.to.saturating_sub(visible.from) / 8)
+                        .clamp(30_000, 6 * 60 * 60_000);
+                    query_band = Some(TimeRange {
+                        from: visible.from.saturating_sub(pad),
+                        to: visible.to.saturating_add(pad),
+                    });
+                    active = None;
+                    query_pending = true;
+                    deadline = Instant::now() + Duration::from_millis(150);
+                }
+                let band = query_band.unwrap_or(visible);
+                if active.as_ref().is_some_and(|work| work.0.is_finished()) {
+                    let mut completed = active.take().expect("已完成的历史同步任务");
+                    match (&mut completed.0).await {
+                        Ok(Ok(cache)) => {
+                            read_cache = Some(cache);
+                            online_error = None;
+                        }
+                        Ok(Err(err)) => {
+                            online_error = Some(err.to_string());
+                        }
+                        Err(err) => {
+                            online_error = Some(err.to_string());
+                        }
+                    }
+                    query_pending = true;
+                    deadline = Instant::now()
+                        + if online_error.is_some() {
+                            refresh.min(Duration::from_secs(10))
+                        } else {
+                            refresh
+                        };
+                }
+                if query_pending {
+                    if let Some(cache) = read_cache
+                        .clone()
+                        .or_else(|| sync.as_ref().and_then(|sync| sync.active_cache()))
+                    {
+                        let mut work =
+                            AbortWork(runtime.spawn(async move { cache.query(band).await }));
+                        if let Ok(Ok(mut query)) = (&mut work.0).await {
+                            if offline || online_error.is_some() {
+                                query.status = SyncStatus::Failed {
+                                    at_ms: wall_ms(),
+                                    reason: online_error
+                                        .clone()
+                                        .unwrap_or_else(|| "离线查看".into()),
+                                };
+                            }
+                            let mut prepare = AbortWork(
+                                runtime.spawn_blocking(move || Playback::new(query, Some(band))),
+                            );
+                            let Ok(prepared) = (&mut prepare.0).await else {
+                                break;
+                            };
+                            let applied = this.update(cx, |view, cx| {
+                                let visible =
+                                    view.trend.read(cx).history_range().unwrap_or(visible);
+                                if visible.from < band.from || visible.to > band.to {
+                                    return false;
+                                }
+                                view.trend
+                                    .update(cx, |plot, cx| plot.set_prepared_history(prepared, cx));
+                                true
+                            });
+                            match applied {
+                                Ok(true) => query_pending = false,
+                                Ok(false) => {}
+                                Err(_) => return,
+                            }
+                        } else {
+                            query_pending = false;
+                        }
+                    } else {
+                        query_pending = false;
+                    }
+                }
+                if active.is_none()
+                    && Instant::now() >= deadline
+                    && let Some(sync) = sync.clone()
+                {
+                    active = Some(AbortWork(
+                        runtime.spawn(async move { sync.refresh(Some(band)).await }),
+                    ));
+                }
+                cx.background_executor()
+                    .timer(Duration::from_millis(250))
+                    .await;
+            }
+        }));
     }
 
     pub(crate) fn clear_chart_hover(&mut self, cx: &mut Context<Self>) {
@@ -258,6 +414,22 @@ impl Render for Dashboard {
             )
             .child(self.render_chart(cx))
     }
+}
+
+struct AbortWork<T>(tokio::task::JoinHandle<T>);
+
+impl<T> Drop for AbortWork<T> {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+fn wall_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| i64::try_from(d.as_millis()).ok())
+        .unwrap_or_default()
 }
 
 fn cpu_card(info: Option<&SystemInfo>, cx: &App) -> Div {

@@ -1,11 +1,11 @@
 use crate::config::{AppConfig, ServiceConfig};
-use nvml_wrapper::Nvml;
+use crate::history::RecorderHandle;
+use crate::monitor::Monitor;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
-use sysinfo::{Networks, System};
+use std::sync::atomic::AtomicUsize;
 use tokio::process::Child;
-use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::sync::{Mutex, RwLock};
 
 /// 服务进程信息（系统模式）
 ///
@@ -44,78 +44,37 @@ impl ServiceProcess {
     }
 }
 
-#[derive(Clone, Default, Debug)]
-pub struct GpuCache {
-    pub usage: Option<u32>,
-    pub memory_used: Option<u64>,
-    pub memory_total: Option<u64>,
-    pub model: Option<String>,
-    /// GPU 温度（摄氏度），从 NVML 读取
-    pub temperature: Option<f32>,
-    /// GPU 功率（瓦特），从 NVML 读取并转换为 W
-    pub power_watts: Option<f32>,
-}
-
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub dynamic_services: Arc<RwLock<Vec<ServiceConfig>>>,
-    pub sys: Arc<RwLock<System>>,
-    pub networks: Arc<RwLock<Networks>>,
-    pub nvml: Arc<RwLock<Option<Nvml>>>,
-    pub gpu_cache: Arc<RwLock<GpuCache>>,
-    pub cpu_temp_cache: Arc<AtomicU32>,
-    pub cpu_power_cache: Arc<AtomicU32>,
-    pub refresh_interval: Arc<RwLock<u64>>,
-    pub last_read_time: Arc<RwLock<std::time::Instant>>,
-    pub update_notify: Arc<Notify>,
+    pub monitor: Monitor,
+    pub history: Option<RecorderHandle>,
+    pub identity: Option<Arc<crate::identity::ServerIdentity>>,
+    pub(crate) history_settings: Arc<Mutex<crate::handlers::settings::RuntimeSettings>>,
     pub service_processes: Arc<RwLock<HashMap<usize, ServiceProcess>>>,
     pub web_tunnel_process: Arc<Mutex<Option<Child>>>,
     pub active_connections: Arc<AtomicUsize>,
 }
 
 impl AppState {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(config: AppConfig, history: Option<RecorderHandle>, config_bytes: &[u8]) -> Self {
         Self {
+            history_settings: Arc::new(Mutex::new(
+                crate::handlers::settings::RuntimeSettings::new(
+                    config.history.clone(),
+                    config_bytes,
+                ),
+            )),
+            monitor: Monitor::new(&config.history),
+            history,
+            identity: None,
             config: Arc::new(config),
             dynamic_services: Arc::new(RwLock::new(Vec::new())),
-            sys: Arc::new(RwLock::new(System::new_all())),
-            networks: Arc::new(RwLock::new(Networks::new_with_refreshed_list())),
-            nvml: Arc::new(RwLock::new(Nvml::init().ok())),
-            gpu_cache: Arc::new(RwLock::new(GpuCache::default())),
-            cpu_temp_cache: Arc::new(AtomicU32::new(u32::MAX)),
-            cpu_power_cache: Arc::new(AtomicU32::new(u32::MAX)),
-            refresh_interval: Arc::new(RwLock::new(1000)), // 默认 1 秒
-            last_read_time: Arc::new(RwLock::new(std::time::Instant::now())),
-            update_notify: Arc::new(Notify::new()),
             service_processes: Arc::new(RwLock::new(HashMap::new())),
             web_tunnel_process: Arc::new(Mutex::new(None)),
             active_connections: Arc::new(AtomicUsize::new(0)),
         }
-    }
-
-    /// 写入 CPU 温度缓存（Release 语义）。
-    pub fn set_cpu_temp(&self, val: Option<f32>) {
-        let bits = val.map_or(u32::MAX, |v| v.to_bits());
-        self.cpu_temp_cache.store(bits, Ordering::Release);
-    }
-
-    /// 读取 CPU 温度缓存（Acquire 语义）。
-    pub fn get_cpu_temp(&self) -> Option<f32> {
-        let bits = self.cpu_temp_cache.load(Ordering::Acquire);
-        (bits != u32::MAX).then(|| f32::from_bits(bits))
-    }
-
-    /// 写入 CPU 功率缓存（Release 语义）。
-    pub fn set_cpu_power(&self, val: Option<f32>) {
-        let bits = val.map_or(u32::MAX, |v| v.to_bits());
-        self.cpu_power_cache.store(bits, Ordering::Release);
-    }
-
-    /// 读取 CPU 功率缓存（Acquire 语义）。
-    pub fn get_cpu_power(&self) -> Option<f32> {
-        let bits = self.cpu_power_cache.load(Ordering::Acquire);
-        (bits != u32::MAX).then(|| f32::from_bits(bits))
     }
 }
 

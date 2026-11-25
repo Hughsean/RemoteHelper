@@ -1,36 +1,81 @@
 use gpui_kit::*;
 
-#[derive(Clone, Copy)]
-pub(super) struct PlotPoint {
-    pub(super) at: u64,
-    pub(super) value: f32,
+/// 折桶周期，以及该桶中当前连续有效片段的覆盖时长。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct MeanCoverage {
+    pub(super) bucket_ms: u64,
+    pub(super) valid_ms: u64,
 }
 
-/// 一段有读数的采样。读数从采样时刻保持到下次采样，缺失时结束当前段。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct StepReading {
+    pub(super) value: f32,
+    /// 原始阶梯的读数没有均值周期。
+    pub(super) mean: Option<MeanCoverage>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct PlotPoint {
+    pub(super) at: i64,
+    pub(super) reading: StepReading,
+}
+
+impl PlotPoint {
+    pub(super) fn raw(at: i64, value: f32) -> Self {
+        Self {
+            at,
+            reading: StepReading { value, mean: None },
+        }
+    }
+}
+
+/// 无空缺的一段阶梯；有效区间的结束时刻不包含在段内。
 pub(super) struct StepRun {
     points: Vec<PlotPoint>,
-    missing_at: Option<u64>,
+    end: i64,
+    inclusive_end: bool,
 }
 
 impl StepRun {
-    pub(super) fn new(points: Vec<PlotPoint>, missing_at: Option<u64>) -> Self {
-        Self { points, missing_at }
+    pub(super) fn new(points: Vec<PlotPoint>, end: i64) -> Self {
+        Self {
+            points,
+            end,
+            inclusive_end: false,
+        }
     }
 
-    fn end(&self) -> f64 {
-        self.missing_at
-            .unwrap_or(self.points[self.points.len() - 1].at) as f64
+    /// 兼容只有采样时刻、没有尾点周期的输入：保留尾点，但不向未来延伸。
+    pub(super) fn include_terminal(runs: &mut Vec<Self>, point: PlotPoint) {
+        if let Some(run) = runs.last_mut().filter(|run| run.end == point.at) {
+            let last = &run.points[run.points.len() - 1];
+            // 尾点没有覆盖权重；若仍在同一桶，保留这一桶已算出的均值。
+            let same_bucket = last.reading.mean.is_some_and(|mean| {
+                let bucket = i128::from(mean.bucket_ms);
+                i128::from(last.at).div_euclid(bucket) == i128::from(point.at).div_euclid(bucket)
+            });
+            if !same_bucket {
+                run.points.push(point);
+            }
+            run.inclusive_end = true;
+        } else {
+            runs.push(Self {
+                points: vec![point],
+                end: point.at,
+                inclusive_end: true,
+            });
+        }
     }
 
     fn ends_before(&self, at: f64) -> bool {
-        let end = self.end();
-        end < at || (self.missing_at.is_some() && end == at)
+        let end = self.end as f64;
+        end < at || (!self.inclusive_end && end == at)
     }
 
-    pub(super) fn value_at(runs: &[Self], at: f64) -> Option<f32> {
+    pub(super) fn reading_at(runs: &[Self], at: f64) -> Option<StepReading> {
         let run = runs.get(runs.partition_point(|run| run.ends_before(at)))?;
         let index = run.points.partition_point(|point| point.at as f64 <= at);
-        Some(run.points[index.checked_sub(1)?].value)
+        Some(run.points[index.checked_sub(1)?].reading)
     }
 }
 
@@ -68,8 +113,8 @@ pub(super) fn paint_steps(
             .saturating_sub(1);
         let last = points.partition_point(|point| point.at as f64 <= end);
         let from = (points[first].at as f64).max(start);
-        let to = run.end().min(end);
-        let mut value = points[first].value;
+        let to = (run.end as f64).min(end);
+        let mut value = points[first].reading.value;
         let initial = position(from, value);
         if from == to {
             let radius = px(if overview { 1. } else { 2. });
@@ -89,14 +134,14 @@ pub(super) fn paint_steps(
         line.move_to(initial);
         area.move_to(initial);
         for next in &points[first + 1..last] {
-            if next.value != value {
+            if next.reading.value != value {
                 let corner = position(next.at as f64, value);
-                let jump = position(next.at as f64, next.value);
+                let jump = position(next.at as f64, next.reading.value);
                 line.line_to(corner);
                 line.line_to(jump);
                 area.line_to(corner);
                 area.line_to(jump);
-                value = next.value;
+                value = next.reading.value;
             }
         }
         let final_point = position(to, value);
@@ -121,16 +166,10 @@ mod tests {
     #[test]
     fn readouts_change_at_the_sample_and_leave_missing_intervals_empty() {
         let runs = [
-            StepRun::new(
-                vec![
-                    PlotPoint { at: 10, value: 0.2 },
-                    PlotPoint { at: 23, value: 0.8 },
-                ],
-                Some(29),
-            ),
-            StepRun::new(vec![PlotPoint { at: 42, value: 0.4 }], None),
+            StepRun::new(vec![PlotPoint::raw(10, 0.2), PlotPoint::raw(23, 0.8)], 29),
+            StepRun::new(vec![PlotPoint::raw(42, 0.4)], 43),
         ];
-        let value = |at| StepRun::value_at(&runs, at);
+        let value = |at| StepRun::reading_at(&runs, at).map(|reading| reading.value);
         assert_eq!(value(9.9), None);
         assert_eq!(value(10.), Some(0.2));
         assert_eq!(value(22.9), Some(0.2));
@@ -139,6 +178,7 @@ mod tests {
         assert_eq!(value(29.), None);
         assert_eq!(value(41.9), None);
         assert_eq!(value(42.), Some(0.4));
-        assert_eq!(value(42.1), None);
+        assert_eq!(value(42.1), Some(0.4));
+        assert_eq!(value(43.), None);
     }
 }

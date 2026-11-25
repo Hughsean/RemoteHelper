@@ -22,8 +22,10 @@
 //! ```
 
 mod connection;
+pub mod history;
 mod mock;
 mod requests;
+mod server_pins;
 mod state;
 
 use common::crypto::CryptoSession;
@@ -39,18 +41,58 @@ use tokio::net::TcpStream;
 pub struct EncryptedConnection {
     stream: TcpStream,
     crypto: CryptoSession,
+    server_identity: Option<common::server_auth::ServerIdentity>,
 }
 
 impl EncryptedConnection {
+    async fn recv_history(
+        self,
+        mut buffer: Vec<u8>,
+    ) -> Result<(Self, Vec<u8>, common::Response), String> {
+        use tokio::io::AsyncReadExt;
+        let mut conn = self;
+        let len = conn.stream.read_u32().await.map_err(|e| e.to_string())? as usize;
+        if !(16..=buffer.len().min(common::history_api::HISTORY_FRAME_LIMIT)).contains(&len) {
+            return Err("无效的历史响应帧长度".into());
+        }
+        conn.stream
+            .read_exact(&mut buffer[..len])
+            .await
+            .map_err(|e| e.to_string())?;
+        // 连接与缓冲区一并移交，取消后不会被下一请求误用。
+        tokio::task::spawn_blocking(move || {
+            let plain = conn
+                .crypto
+                .decrypt(&buffer[..len])
+                .map_err(|e| e.to_string())?;
+            let response = serde_json::from_slice(&plain).map_err(|e| e.to_string())?;
+            Ok((conn, buffer, response))
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+
     /// 从已握手的流和加密会话创建新实例。
     pub fn new(stream: TcpStream, crypto: CryptoSession) -> Self {
-        Self { stream, crypto }
+        Self {
+            stream,
+            crypto,
+            server_identity: None,
+        }
+    }
+
+    /// 持久绑定且完成扩展登录的服务端身份；旧协议返回 None。
+    pub fn server_identity(&self) -> Option<&common::server_auth::ServerIdentity> {
+        self.server_identity.as_ref()
     }
 
     /// 加密并发送一个请求帧。
     ///
     /// 内部调用 [`common::transport::send_frame`]。
     pub async fn send(&mut self, req: &common::Request) -> Result<(), String> {
+        if matches!(req, common::Request::History(_)) && self.server_identity.is_none() {
+            return Err("History requires a verified and pinned server identity".into());
+        }
         common::transport::send_frame(&mut self.stream, &mut self.crypto, req)
             .await
             .map_err(|e| format!("Send failed: {}", e))
@@ -61,10 +103,15 @@ impl EncryptedConnection {
     /// `buf` 是复用缓冲区 —— 帧数据不能超过 `buf.len()` 字节。
     /// 内部调用 [`common::transport::recv_frame`]。
     pub async fn recv(&mut self, buf: &mut [u8]) -> Result<common::Response, String> {
+        let frame_limit = if self.server_identity.is_some() {
+            buf.len().min(common::history_api::HISTORY_FRAME_LIMIT)
+        } else {
+            buf.len()
+        };
         match common::transport::recv_frame::<common::Response>(
             &mut self.stream,
             &mut self.crypto,
-            buf,
+            &mut buf[..frame_limit],
         )
         .await
         .map_err(|e| format!("Receive failed: {}", e))?
@@ -80,7 +127,13 @@ impl EncryptedConnection {
 
 pub use common::keys::KeyFile;
 
-pub use connection::connect_and_auth;
+pub use connection::{
+    ServerProbe, connect_and_auth, connect_verified, connect_with_pin, probe_server,
+};
+pub use ed25519_dalek::SigningKey;
 pub use mock::generate_mock_system_info;
 pub use requests::{query_path, send_request};
+pub use server_pins::{
+    confirm_server_identity, list_server_pins, load_server_pin, rebind_server_identity,
+};
 pub use state::{CONNECTION, MOCK_MODE, SERVER_ADDRESS, SIGNING_KEY};

@@ -1,19 +1,41 @@
 pub mod crypto;
+pub mod history_api;
 pub mod keys;
 pub mod logging;
+pub mod server_auth;
 pub mod transport;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Handshake {
-    ClientHello { public_key: String },
-    ServerHello { public_key: String },
+    ClientHello {
+        public_key: String,
+        #[serde(
+            default,
+            skip_serializing_if = "Vec::is_empty",
+            deserialize_with = "server_auth::decode_versions"
+        )]
+        history_versions: Vec<u16>,
+    },
+    ServerHello {
+        public_key: String,
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "server_auth::decode_proof"
+        )]
+        history: Option<server_auth::ServerProof>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Request {
     GetChallenge,
     Login {
+        public_key: String,
+        signature: String,
+    },
+    LoginHistory {
         public_key: String,
         signature: String,
     },
@@ -33,6 +55,7 @@ pub enum Request {
     QueryPath {
         path: String,
     },
+    History(history_api::HistoryRequest),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -51,11 +74,26 @@ pub enum Response {
     Services(Vec<ServiceInfo>),
     ServiceAdded(usize),
     PathSuggestions(Vec<PathItem>),
+    History(history_api::HistoryResponse),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SampleIdentity {
+    pub session_id: [u8; 16],
+    pub sample_seq: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct SystemInfo {
     pub timestamp: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_identity: Option<SampleIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period_ms: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network_tx_speed_valid: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network_rx_speed_valid: Option<bool>,
     pub cpu_usage: f32,
     pub memory_usage: u64,
     pub total_memory: u64,
@@ -97,7 +135,11 @@ pub struct ServiceInfo {
 
 impl PartialEq for SystemInfo {
     fn eq(&self, other: &Self) -> bool {
-        self.timestamp == other.timestamp
+        match (self.sample_identity, other.sample_identity) {
+            (Some(a), Some(b)) => a == b,
+            (None, None) => self.timestamp == other.timestamp,
+            _ => false,
+        }
     }
 }
 

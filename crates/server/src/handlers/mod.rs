@@ -6,9 +6,11 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::mpsc;
 
 mod auth;
+pub(crate) mod history;
 mod path;
 mod service;
-mod system;
+pub(crate) mod settings;
+pub(crate) mod system;
 
 /// 请求处理器 trait。
 pub trait Handler: Send + Sync + 'static {
@@ -31,7 +33,6 @@ static HANDLERS: OnceLock<Vec<BoxedHandler>> = OnceLock::new();
 pub fn register_default_handlers() {
     HANDLERS
         .set(vec![
-            Arc::new(system::SystemHandler),
             Arc::new(service::ServiceHandler),
             Arc::new(path::PathHandler),
         ])

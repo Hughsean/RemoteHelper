@@ -4,10 +4,7 @@
 //! 缩放以指针下的时刻为不动点，窗口宽度在缓动期间按倍率等速变化（几何插值），
 //! 滚轮用 167 ms，跳转或切换范围用 250 ms，拖拽直接更新显示窗口。
 
-use std::{
-    sync::OnceLock,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 use time::{OffsetDateTime, UtcOffset, format_description::FormatItem, macros::format_description};
 
 /// 滚轮缩放与平移的缓动时长。
@@ -55,6 +52,8 @@ pub(super) struct Viewport {
     shown: (f64, f64),
     extent: (f64, f64),
     wanted: f64,
+    default_span: f64,
+    live_edge: f64,
     follow: bool,
     tween: Option<Tween>,
 }
@@ -66,6 +65,8 @@ impl Default for Viewport {
             shown: (0., DEFAULT_SPAN_MS),
             extent: (0., 1.),
             wanted: DEFAULT_SPAN_MS,
+            default_span: DEFAULT_SPAN_MS,
+            live_edge: 1.,
             follow: true,
             tween: None,
         }
@@ -85,6 +86,10 @@ impl Viewport {
         self.follow
     }
 
+    pub(super) fn live_edge(&self) -> f64 {
+        self.live_edge
+    }
+
     /// 当前窗口宽度。
     pub(super) fn span(&self) -> f64 {
         (self.view.1 - self.view.0).max(1.)
@@ -102,21 +107,31 @@ impl Viewport {
 
     /// 记录范围随采样变长；跟随最新时窗口一起前移。
     pub(super) fn extend(&mut self, first: f64, clock: f64) {
-        self.extent = (first, clock.max(first + 1.));
+        self.extend_history(first, clock, clock);
+    }
+
+    pub(super) fn target(&self) -> (f64, f64) {
+        self.view
+    }
+
+    pub(super) fn extend_history(&mut self, first: f64, last: f64, clock: f64) {
+        self.extent = (first, last.max(first + 1.));
+        self.live_edge = clock.clamp(self.extent.0 + 1., self.extent.1);
         if self.follow {
             self.anchor();
             if self.tween.is_none() {
                 self.shown = self.view;
             }
-        } else if self.view.0 < first {
-            // 缓冲区淘汰旧采样后，历史窗口仍需落在可用范围内。
-            self.set_window(first, first + self.span(), Duration::ZERO);
+        } else if self.view.0 < first || self.view.1 > self.extent.1 {
+            // 两侧都可能随保留策略收缩。
+            self.set_window(self.view.0, self.view.1, Duration::ZERO);
         }
     }
 
     fn anchor(&mut self) {
-        let span = self.wanted.clamp(self.narrowest(), self.length());
-        self.view = (self.extent.1 - span, self.extent.1);
+        let available = self.live_edge - self.extent.0;
+        let span = self.wanted.clamp(NARROWEST.min(available), available);
+        self.view = (self.live_edge - span, self.live_edge);
     }
 
     /// 推进缓动一帧；返回是否还在缓动中。
@@ -188,9 +203,17 @@ impl Viewport {
         self.retarget(duration);
     }
 
+    pub(super) fn set_default_span(&mut self, span: f64) {
+        let apply = self.follow && self.wanted == self.default_span;
+        self.default_span = span.max(1.);
+        if apply {
+            self.reset(Duration::ZERO);
+        }
+    }
+
     /// 回到打开界面时的窗口宽度，并恢复跟随。
     pub(super) fn reset(&mut self, duration: Duration) {
-        self.wanted = DEFAULT_SPAN_MS;
+        self.wanted = self.default_span;
         self.go_latest(duration);
     }
 
@@ -240,7 +263,8 @@ pub(super) fn tick_times(start: f64, end: f64, width: f32) -> Vec<f64> {
         .into_iter()
         .find(|step| *step >= minimum)
         .unwrap_or_else(|| (minimum / DAY_MS).ceil() * DAY_MS);
-    let offset = f64::from(local_offset().whole_seconds()) * 1000.;
+    // 参考窗口中点选刻度基准；每个刻度标签仍按其自身时刻换算时区。
+    let offset = f64::from(local_offset(start + (end - start) / 2.).whole_seconds()) * 1000.;
     let mut at = ((start + offset) / step).ceil() * step - offset;
     let mut times = Vec::new();
     while at < end && times.len() < 16 {
@@ -286,12 +310,11 @@ pub(super) fn crosses_day(start: f64, end: f64) -> bool {
 fn date(at: f64) -> Option<OffsetDateTime> {
     OffsetDateTime::from_unix_timestamp_nanos(at as i128 * 1_000_000)
         .ok()
-        .map(|at| at.to_offset(local_offset()))
+        .map(|at| at.to_offset(UtcOffset::local_offset_at(at).unwrap_or(UtcOffset::UTC)))
 }
 
-fn local_offset() -> UtcOffset {
-    static OFFSET: OnceLock<UtcOffset> = OnceLock::new();
-    *OFFSET.get_or_init(|| UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC))
+fn local_offset(at: f64) -> UtcOffset {
+    date(at).map_or(UtcOffset::UTC, |date| date.offset())
 }
 
 #[cfg(test)]
@@ -305,6 +328,8 @@ mod tests {
             shown: (last - span, last),
             extent: (first, last),
             wanted: span,
+            default_span: super::DEFAULT_SPAN_MS,
+            live_edge: last,
             follow: false,
             tween: None,
         }
@@ -415,10 +440,22 @@ mod tests {
         assert!(!times.is_empty());
         let step = times[1] - times[0];
         for at in &times {
-            let offset = f64::from(local_offset().whole_seconds()) * 1000.;
+            let offset = f64::from(local_offset(31_234.).whole_seconds()) * 1000.;
             assert!(((at + offset) / step).fract().abs() < 1e-9);
         }
         assert!(times.iter().all(|at| *at >= 1_234. && *at < 61_234.));
+    }
+
+    #[test]
+    fn rollback_keeps_later_wall_time_navigable_without_following_it() {
+        let mut view = Viewport::default();
+        view.set_default_span(60_000.);
+        view.extend_history(0., 900_000., 420_000.);
+        assert_eq!(view.shown(), (360_000., 420_000.));
+        assert_eq!(view.extent(), (0., 900_000.));
+        view.set_window(750_000., 900_000., std::time::Duration::ZERO);
+        view.extend_history(35_000., 840_000., 425_000.);
+        assert_eq!(view.shown(), (690_000., 840_000.));
     }
 
     #[test]

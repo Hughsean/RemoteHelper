@@ -6,12 +6,18 @@
 
 mod aggregation;
 mod navigator;
+mod playback;
+mod status;
 mod step;
 mod viewport;
 
 use self::navigator::Brush;
-use self::step::{StepRun, paint_steps, value_y};
+pub(super) use self::playback::Playback;
+use self::playback::{Band, LivePoint, Mark};
+use self::step::{StepReading, StepRun, paint_steps, value_y};
 use self::viewport::{FAST, SLOW, Viewport, date_time, tick_label, tick_times};
+use client::history::HistoryQuery;
+use common::{SystemInfo, history_api::TimeRange};
 use gpui_kit::base::StyledExt;
 use gpui_kit::component::{ActiveTheme, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder;
@@ -92,7 +98,15 @@ struct Built {
 }
 
 pub(crate) struct TrendPlot {
+    // 保留预览和无采样身份的旧服务端入口。
     history: VecDeque<Sample>,
+    live: VecDeque<LivePoint>,
+    live_epoch: u64,
+    live_extent: Option<(i64, i64)>,
+    stored: Option<Playback>,
+    stored_anchor: Option<i64>,
+    bands: Rc<[Band]>,
+    marks: Rc<[Mark]>,
     steps: Rc<[Vec<StepRun>; 3]>,
     /// 进度条上整段历史的概览。
     nav_runs: Option<(usize, Rc<[StepRun]>)>,
@@ -113,6 +127,13 @@ impl TrendPlot {
     pub(crate) fn new(_: &mut Context<Self>) -> Self {
         Self {
             history: VecDeque::new(),
+            live: VecDeque::new(),
+            live_epoch: 0,
+            live_extent: None,
+            stored: None,
+            stored_anchor: None,
+            bands: Rc::from([]),
+            marks: Rc::from([]),
             steps: Default::default(),
             nav_runs: None,
             timeline: None,
@@ -169,6 +190,140 @@ impl TrendPlot {
         cx.notify();
     }
 
+    pub(crate) fn record_live(
+        &mut self,
+        info: &SystemInfo,
+        values: [Option<f32>; 3],
+        cx: &mut Context<Self>,
+    ) {
+        let Some(interval) = self.interval_ms else {
+            return;
+        };
+        if info.sample_identity.is_none()
+            && self.live.is_empty()
+            && self
+                .stored
+                .as_ref()
+                .is_none_or(|stored| stored.extent.is_none())
+        {
+            self.record(info.timestamp, values, cx);
+            return;
+        }
+        let Ok(at) = i64::try_from(info.timestamp) else {
+            return;
+        };
+        let period = info
+            .period_ms
+            .map(i64::from)
+            .filter(|&period| period > 0)
+            .unwrap_or_else(|| i64::try_from(interval).unwrap_or(i64::MAX).clamp(1, 60_000));
+        let previous = self.live.back();
+        if previous.is_some_and(|point| match (point.identity, info.sample_identity) {
+            (Some(old), Some(new)) => {
+                old.session_id == new.session_id && old.sample_seq >= new.sample_seq
+            }
+            (None, None) => point.at == at,
+            _ => false,
+        }) {
+            return;
+        }
+        let rollback = previous.is_some_and(|point| point.at > at);
+        let cut = rollback
+            || previous.is_some_and(|point| {
+                point.identity.map(|id| id.session_id)
+                    != info.sample_identity.map(|id| id.session_id)
+            });
+        if cut {
+            self.live_epoch = self.live_epoch.saturating_add(1);
+        }
+        self.live.push_back(LivePoint {
+            at,
+            period,
+            identity: info.sample_identity,
+            values: values.map(|value| {
+                value
+                    .filter(|v| v.is_finite())
+                    .map(|v| v.clamp(0., 100.) / 100.)
+            }),
+            epoch: self.live_epoch,
+            rollback,
+        });
+        if self.live.len() > MAX_SAMPLES {
+            self.live.pop_front();
+            self.live_extent =
+                self.live
+                    .iter()
+                    .map(|point| point.at)
+                    .fold(None::<(i64, i64)>, |extent, at| {
+                        Some(extent.map_or((at, at), |(first, last)| (first.min(at), last.max(at))))
+                    });
+        } else {
+            self.live_extent = Some(
+                self.live_extent
+                    .map_or((at, at), |(first, last)| (first.min(at), last.max(at))),
+            );
+        }
+        let now = Instant::now();
+        self.timeline = Some(match self.timeline {
+            Some(timeline) if !rollback && timeline.to <= at as f64 => timeline.advance(
+                info.timestamp,
+                now,
+                Duration::from_millis(interval.saturating_add(100)),
+            ),
+            _ => Timeline::resting(at as f64, now),
+        });
+        self.invalidate();
+        self.update_extent(self.clock(now, cx.reduce_motion()));
+        cx.notify();
+    }
+
+    /// 清除持久化历史时保留实时样本。
+    pub(crate) fn set_history(&mut self, query: HistoryQuery, cx: &mut Context<Self>) {
+        self.set_prepared_history(Playback::new(query, self.history_range()), cx);
+    }
+
+    pub(super) fn set_prepared_history(&mut self, stored: Playback, cx: &mut Context<Self>) {
+        self.stored_anchor = stored
+            .latest
+            .or_else(|| {
+                self.stored_anchor.filter(|at| {
+                    stored
+                        .extent
+                        .is_some_and(|extent| extent.from <= *at && *at <= extent.to)
+                })
+            })
+            .or_else(|| stored.extent.map(|extent| extent.to));
+        self.stored = Some(stored);
+        self.invalidate();
+        self.update_extent(self.clock(Instant::now(), cx.reduce_motion()));
+        cx.notify();
+    }
+
+    pub(crate) fn set_history_window(&mut self, window_ms: u64, cx: &mut Context<Self>) {
+        self.view.set_default_span(window_ms as f64);
+        cx.notify();
+    }
+
+    /// 后台查询使用目标窗口；缓存解码器另外保留两边相邻段的样本。
+    pub(crate) fn history_range(&self) -> Option<TimeRange> {
+        self.data_span()?;
+        let (a, b) = self.view.target();
+        let (shown_a, shown_b) = self.view.shown();
+        let bucket = self.bucket_for(a, b, self.chart_width());
+        let target = aligned_range(a, b, bucket);
+        let shown = aligned_range(
+            shown_a,
+            shown_b,
+            self.bucket_for(shown_a, shown_b, self.chart_width()),
+        );
+        Some((target.from.min(shown.from), target.to.max(shown.to)).into())
+    }
+
+    fn invalidate(&mut self) {
+        self.built = None;
+        self.nav_runs = None;
+    }
+
     pub(crate) fn set_interval(&mut self, interval_ms: Option<u64>, cx: &mut Context<Self>) {
         let was_paused = self.interval_ms.is_none();
         self.interval_ms = interval_ms;
@@ -181,11 +336,16 @@ impl TrendPlot {
                     timeline.at(now)
                 };
                 self.timeline = Some(Timeline::resting(at, now));
-            } else if let (true, Some(milliseconds), Some(latest)) =
-                (was_paused, interval_ms, self.history.back())
-            {
+            } else if let (true, Some(milliseconds), Some(latest)) = (
+                was_paused,
+                interval_ms,
+                self.live
+                    .back()
+                    .and_then(|point| u64::try_from(point.at).ok())
+                    .or_else(|| self.history.back().map(|point| point.at)),
+            ) {
                 self.timeline =
-                    Some(timeline.advance(latest.at, now, Duration::from_millis(milliseconds)));
+                    Some(timeline.advance(latest, now, Duration::from_millis(milliseconds)));
             }
         }
         cx.notify();
@@ -202,14 +362,53 @@ impl TrendPlot {
         match self.timeline {
             Some(timeline) if reduced_motion => timeline.to,
             Some(timeline) => timeline.at(now),
-            None => self.history.back().map_or(0., |sample| sample.at as f64),
+            None => self
+                .stored_anchor
+                .map(|at| at as f64)
+                .or_else(|| self.history.back().map(|sample| sample.at as f64))
+                .unwrap_or(0.),
         }
     }
 
     fn data_span(&self) -> Option<(f64, f64)> {
-        let first = self.history.front()?.at as f64;
-        let last = self.history.back()?.at as f64;
-        Some((first, last))
+        let legacy = self
+            .history
+            .front()
+            .zip(self.history.back())
+            .map(|(a, b)| (a.at as f64, b.at as f64));
+        let live = self.live_extent.map(|(a, b)| (a as f64, b as f64));
+        let stored = self
+            .stored
+            .as_ref()
+            .and_then(|data| data.extent)
+            .map(|extent| (extent.from as f64, extent.to as f64));
+        [legacy, live, stored]
+            .into_iter()
+            .flatten()
+            .reduce(|(a, b), (c, d)| (a.min(c), b.max(d)))
+    }
+
+    fn update_extent(&mut self, clock: f64) {
+        if let Some((first, last)) = self.data_span() {
+            self.view.extend_history(first, last, clock);
+        }
+    }
+
+    fn modern(&self) -> bool {
+        self.stored
+            .as_ref()
+            .is_some_and(|stored| stored.extent.is_some())
+            || !self.live.is_empty()
+    }
+
+    fn interactive(&self) -> bool {
+        self.data_span().is_some_and(|(first, last)| last > first)
+    }
+
+    fn chart_width(&self) -> f32 {
+        self.chart_bounds
+            .get()
+            .map_or(740., |bounds| f32::from(bounds.size.width))
     }
 
     fn chart_fraction(&self, x: Pixels) -> Option<f32> {
@@ -229,7 +428,7 @@ impl TrendPlot {
     fn on_scroll(&mut self, event: &ScrollEvent, _: &mut Window, cx: &mut Context<Self>) {
         let delta = event.delta.pixel_delta(px(20.));
         let (dx, dy) = (f64::from(delta.x), f64::from(delta.y));
-        if self.history.len() < 2
+        if !self.interactive()
             || self.drag.is_some()
             || (dy == 0. && (!event.modifiers.shift || dx == 0.))
         {
@@ -281,17 +480,36 @@ impl TrendPlot {
     }
 
     /// 缩放到密集历史时，根据屏幕宽度选时间桶；平移时复用已构建的范围。
+    fn bucket_for(&self, a: f64, b: f64, width: f32) -> u64 {
+        let target = (width / 2.6).round().clamp(60., 640.) as usize;
+        let range: TimeRange = (a.floor() as i64, (b.floor() as i64).saturating_add(1)).into();
+        let visible = if self.modern() {
+            let stored = self
+                .stored
+                .as_ref()
+                .map_or(0, |stored| stored.visible_count(range));
+            let live = self
+                .live
+                .iter()
+                .filter(|point| range.from <= point.at && point.at < range.to)
+                .count();
+            // 尾段常与实时样本重复，不能把同一段采样密度计算两次。
+            stored.max(live)
+        } else {
+            let first = self
+                .history
+                .partition_point(|sample| (sample.at as f64) < a);
+            let last = self
+                .history
+                .partition_point(|sample| (sample.at as f64) <= b);
+            last.saturating_sub(first)
+        };
+        aggregation::bucket_size((b - a).max(1.), target, visible)
+    }
+
     fn sync_steps(&mut self, width: f32) {
         let (a, b) = self.view.shown();
-        let span = (b - a).max(1.);
-        let target = (width / 2.6).round().clamp(60., 640.) as usize;
-        let visible_first = self
-            .history
-            .partition_point(|sample| (sample.at as f64) < a);
-        let visible_last = self
-            .history
-            .partition_point(|sample| (sample.at as f64) <= b);
-        let bucket = aggregation::bucket_size(span, target, visible_last - visible_first);
+        let bucket = self.bucket_for(a, b, width);
         if self
             .built
             .is_none_or(|built| bucket != built.bucket || a < built.start || b > built.end)
@@ -302,24 +520,31 @@ impl TrendPlot {
 
     fn rebuild(&mut self, bucket: u64) {
         let (a, b) = self.view.shown();
-        let span = (b - a).max(1.);
-        let bucket_ms = bucket as f64;
-        let margin = (span * 0.1).max(bucket_ms);
-        // 构建范围扩到完整的时间桶，避免拖动时可见桶的平均值在边缘变化。
-        let start = ((a - margin) / bucket_ms).floor() * bucket_ms;
-        let end = ((b + margin) / bucket_ms).ceil() * bucket_ms;
-        let first = self
-            .history
-            .partition_point(|sample| (sample.at as f64) < start)
-            .saturating_sub(2);
-        let last = (self
-            .history
-            .partition_point(|sample| (sample.at as f64) <= end)
-            + 2)
-        .clamp(first, self.history.len());
-        self.steps = Rc::new(std::array::from_fn(|index| {
-            aggregation::runs(self.history.range(first..last), index, bucket)
-        }));
+        let range = aligned_range(a, b, bucket);
+        let (start, end) = (range.from as f64, range.to as f64);
+        if self.modern() {
+            let merged = playback::merge(self.stored.as_ref(), &self.live, range);
+            self.steps = Rc::new(
+                merged
+                    .series
+                    .map(|series| aggregation::covered_runs(series, bucket)),
+            );
+            self.bands = merged.bands.into();
+            self.marks = merged.marks.into();
+        } else {
+            let first = self
+                .history
+                .partition_point(|sample| (sample.at as f64) < start)
+                .saturating_sub(2);
+            let last = (self
+                .history
+                .partition_point(|sample| (sample.at as f64) <= end)
+                + 2)
+            .clamp(first, self.history.len());
+            self.steps = Rc::new(std::array::from_fn(|index| {
+                aggregation::runs(self.history.range(first..last), index, bucket)
+            }));
+        }
         self.built = Some(Built { start, end, bucket });
     }
 
@@ -328,11 +553,18 @@ impl TrendPlot {
             && let Some((first, last)) = self.data_span()
             && let Some(index) = self.visible.iter().position(|visible| *visible)
         {
-            let bucket = aggregation::bucket_size(last - first, 640, self.history.len());
-            self.nav_runs = Some((
-                index,
-                aggregation::runs(&self.history, index, bucket).into(),
-            ));
+            let count = self.history.len()
+                + self.live.len()
+                + self.stored.as_ref().map_or(0, |stored| stored.count);
+            let bucket = aggregation::bucket_size(last - first, 640, count);
+            let runs = if self.modern() {
+                let extent = (first.floor() as i64, (last.ceil() as i64).saturating_add(1)).into();
+                let mut merged = playback::merge(self.stored.as_ref(), &self.live, extent);
+                aggregation::covered_runs(std::mem::take(&mut merged.series[index]), bucket)
+            } else {
+                aggregation::runs(&self.history, index, bucket)
+            };
+            self.nav_runs = Some((index, runs.into()));
         }
     }
 
@@ -340,7 +572,8 @@ impl TrendPlot {
     fn tooltip(
         &self,
         at: f64,
-        values: [Option<f32>; SERIES.len()],
+        values: [Option<StepReading>; SERIES.len()],
+        annotation: Option<String>,
         cx: &App,
     ) -> Option<AnyElement> {
         let (x, y) = self.hover?;
@@ -378,19 +611,32 @@ impl TrendPlot {
                             div()
                                 .font_semibold()
                                 .text_color(cx.theme().foreground)
-                                .child(format!("{:.1}%", value * 100.)),
+                                .child(match value.mean {
+                                    Some(mean) => format!(
+                                        "{:.1}% · 有效 {}",
+                                        value.value * 100.,
+                                        status::duration(mean.valid_ms)
+                                    ),
+                                    None => format!("{:.1}%", value.value * 100.),
+                                }),
                         ),
                 );
             }
+        }
+        let annotated = annotation.is_some();
+        if let Some(annotation) = annotation {
+            rows.push(div().text_xs().child(annotation));
         }
         if rows.len() == 1 {
             return None;
         }
 
-        let width = if bucket == aggregation::RAW {
+        let width = if annotated {
+            242.
+        } else if bucket == aggregation::RAW {
             136.
         } else {
-            188.
+            212.
         };
         let height = 16. + 18. * rows.len() as f32;
         let chart_width = f32::from(bounds.size.width);
@@ -475,14 +721,39 @@ impl TrendPlot {
     }
 }
 
+/// UTC 整桶范围另留缓冲；余数按欧几里得定义计算，兼顾纪元前时间。
+fn aligned_range(a: f64, b: f64, bucket: u64) -> TimeRange {
+    let width = i128::from(bucket.max(1));
+    let margin = ((b - a) * 0.1).ceil().max(width as f64);
+    let from = i128::from((a - margin).floor() as i64);
+    let to = i128::from((b + margin).ceil() as i64);
+    let limit = |value: i128| value.clamp(i64::MIN.into(), i64::MAX.into()) as i64;
+    (
+        limit(from.div_euclid(width) * width),
+        limit((to - 1).div_euclid(width) * width + width),
+    )
+        .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::aligned_range;
+
+    #[test]
+    fn history_query_covers_full_utc_buckets_and_carry_in_margin() {
+        let range = aligned_range(-1_050.25, 18_300.75, 5_000);
+        assert_eq!(range, (-10_000, 25_000).into());
+        assert_eq!(range.from.rem_euclid(5_000), 0);
+        assert_eq!(range.to.rem_euclid(5_000), 0);
+    }
+}
+
 impl Render for TrendPlot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let now = Instant::now();
         let reduced_motion = cx.reduce_motion();
         let clock = self.clock(now, reduced_motion);
-        if let Some((first, _)) = self.data_span() {
-            self.view.extend(first, clock);
-        }
+        self.update_extent(clock);
         let tweening = self.view.advance(now, !reduced_motion);
         let flowing = self.interval_ms.is_some()
             && !reduced_motion
@@ -491,9 +762,7 @@ impl Render for TrendPlot {
             window.request_animation_frame();
         }
         let chart_bounds = self.chart_bounds.clone();
-        let measured_width = chart_bounds
-            .get()
-            .map_or(740., |bounds| f32::from(bounds.size.width));
+        let measured_width = self.chart_width();
         self.sync_steps(measured_width);
         self.sync_overview();
         let (start, end) = self.view.shown();
@@ -506,17 +775,18 @@ impl Render for TrendPlot {
         let muted = cx.theme().muted_foreground;
         let crosshair = muted.opacity(0.7);
         let chart = cx.weak_entity();
+        let has_data = self.data_span().is_some();
         let hover = self
             .hover_mapping()
-            .filter(|_| self.drag.is_none() && !self.history.is_empty());
+            .filter(|_| self.drag.is_none() && has_data);
         let hover_values = hover.map_or([None; SERIES.len()], |(_, at)| {
             std::array::from_fn(|index| {
                 visible[index]
-                    .then(|| StepRun::value_at(&self.steps[index], at))
+                    .then(|| StepRun::reading_at(&self.steps[index], at))
                     .flatten()
             })
         });
-        let ticks: Vec<_> = if self.history.is_empty() {
+        let ticks: Vec<_> = if !has_data {
             Vec::new()
         } else {
             tick_times(start, end, measured_width)
@@ -526,9 +796,35 @@ impl Render for TrendPlot {
         };
         let label_inset = (45. / measured_width.max(1.)).min(0.5);
         let tick_lines: Vec<_> = ticks.iter().map(|(fraction, _)| *fraction).collect();
-        let tooltip = hover.and_then(|(_, at)| self.tooltip(at, hover_values, cx));
+        let sync = self.stored.as_ref().map(|stored| &stored.status);
+        let annotation = hover.and_then(|(_, at)| {
+            status::annotation(
+                &self.bands,
+                &self.marks,
+                at,
+                span * 5. / f64::from(measured_width.max(1.)),
+                sync,
+            )
+        });
+        let tooltip = hover.and_then(|(_, at)| self.tooltip(at, hover_values, annotation, cx));
         let steps = self.steps.clone();
-        let empty = if self.history.is_empty() {
+        let bands = self.bands.clone();
+        let marks = self.marks.clone();
+        let status_colors = status::Colors::new(cx);
+        let legend = self.stored.as_ref().map(|stored| {
+            status::legend(
+                &self.bands,
+                &self.marks,
+                (start, end),
+                &stored.status,
+                stored.truncated,
+                status_colors,
+                muted,
+            )
+        });
+        let empty = if !has_data && self.stored.is_some() {
+            Some("此主机没有可用历史数据")
+        } else if !has_data {
             Some("等待采样数据")
         } else if !visible.contains(&true) {
             Some("选择指标以显示趋势")
@@ -630,6 +926,13 @@ impl Render for TrendPlot {
                                         window.with_content_mask(
                                             Some(ContentMask { bounds }),
                                             |window| {
+                                                status::paint_bands(
+                                                    &bands,
+                                                    (start, end),
+                                                    bounds,
+                                                    status_colors,
+                                                    window,
+                                                );
                                                 let mut rules = PathBuilder::stroke(px(1.));
                                                 for index in 0..=4 {
                                                     let y = bounds.top()
@@ -658,6 +961,13 @@ impl Render for TrendPlot {
                                                         );
                                                     }
                                                 }
+                                                status::paint_marks(
+                                                    &marks,
+                                                    (start, end),
+                                                    bounds,
+                                                    status_colors,
+                                                    window,
+                                                );
                                                 if let Some((fraction, _)) = hover {
                                                     let x = bounds.left()
                                                         + bounds.size.width * fraction;
@@ -672,7 +982,7 @@ impl Render for TrendPlot {
                                                         hover_values.into_iter().enumerate()
                                                     {
                                                         if let Some(value) = value {
-                                                            let y = value_y(bounds, value);
+                                                            let y = value_y(bounds, value.value);
                                                             window.paint_quad(quad(
                                                                 Bounds::new(
                                                                     point(x - px(4.), y - px(4.)),
@@ -736,6 +1046,7 @@ impl Render for TrendPlot {
                         ),
                     ),
             )
+            .children(legend)
             .child(self.navigator(cx))
             .children(self.drag.is_some().then(|| self.navigator_drag_capture(cx)))
     }
