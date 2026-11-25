@@ -49,12 +49,11 @@ cargo clippy -p App --no-deps --all-targets -- -D warnings
 
 ## 发布
 
-[标签发布流程](../../.github/workflows/release.yml)构建三个客户端产物，并另外发布 Windows x64 服务端压缩包。
+[标签发布流程](../../.github/workflows/release.yml)构建 Windows x64 和 macOS Apple Silicon 客户端，并另外发布 Windows x64 服务端压缩包。不再自动发布 Intel Mac 安装包。
 
 | 平台 | 产物 |
 | --- | --- |
 | Windows x64 | `RemoteHelper-x86_64-pc-windows-msvc.exe` |
-| macOS Intel | `RemoteHelper-x86_64-apple-darwin.dmg` |
 | macOS Apple Silicon | `RemoteHelper-aarch64-apple-darwin.dmg` |
 
 macOS 应用包使用 ad hoc 签名，尚未进行 Developer ID 签名或公证。详见[服务端启动与部署](../../README.md)。

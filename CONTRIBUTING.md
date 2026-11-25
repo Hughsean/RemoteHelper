@@ -224,7 +224,7 @@ Pull Request 将经过以下审查：
 2. 更新根 `Cargo.toml` 的 `[workspace.package].version`。
 3. 提交改动后创建 `v<版本号>` 标签，例如 `v3.0.0-rc.1`。
 4. 推送标签触发 [发布工作流](.github/workflows/release.yml)。工作流校验标签与包版本一致，等全部产物构建完成后发布；带预发布后缀的标签不会成为 Latest。
-5. 检查 GitHub Releases 上的 Windows x64 客户端、Windows x64 服务端压缩包和两种 macOS 磁盘映像。
+5. 检查 GitHub Releases 上的 Windows x64 客户端、Windows x64 服务端压缩包和 macOS Apple Silicon 磁盘映像。
 
 ## 📞 联系方式
 

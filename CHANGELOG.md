@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- 后续 GitHub Releases 不再构建或上传 Intel Mac 安装包；macOS 下载仅提供 Apple Silicon 版。Windows x64 客户端和服务端发布不变。
+
 ## [3.0.0-rc.1] - 2026-11-26
 
 ### Added

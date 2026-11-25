@@ -58,9 +58,6 @@ jobs:
           - platform: windows-2022
             target: x86_64-pc-windows-msvc
             packages: -p App -p RemoteHelperServer
-          - platform: macos-15-intel
-            target: x86_64-apple-darwin
-            packages: -p App
           - platform: macos-15
             target: aarch64-apple-darwin
             packages: -p App
@@ -198,5 +195,4 @@ jobs:
           files: |
             dist/RemoteHelper-x86_64-pc-windows-msvc.exe
             dist/RemoteHelperServer-x86_64-pc-windows-msvc.zip
-            dist/RemoteHelper-x86_64-apple-darwin.dmg
             dist/RemoteHelper-aarch64-apple-darwin.dmg
