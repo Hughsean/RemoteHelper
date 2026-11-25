@@ -22,9 +22,10 @@ use tracing;
 ///
 /// ```no_run
 /// use hwlib::driver::{PawnModuleManager, IoctlInterface};
+/// use std::sync::Arc;
 ///
 /// let ioctl = IoctlInterface::new(r"\\.\\LhmPawnIo")?;
-/// let mut manager = PawnModuleManager::new(ioctl, "PawnIO");
+/// let mut manager = PawnModuleManager::new(Arc::new(ioctl), "PawnIO");
 ///
 /// // 读取 AMD SMN 寄存器
 /// let value = manager.read_smn_amd(0x00059800)?;

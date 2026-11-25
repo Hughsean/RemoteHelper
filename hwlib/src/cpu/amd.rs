@@ -33,7 +33,7 @@ enum TemperatureSource {
 ///
 /// ## 温度读取策略（渐进式回退）
 ///
-/// ```
+/// ```text
 /// Family 0x19 (Zen 3/4/5)
 ///   ├── MSR 0x590  ──失败──→  SMN 0x00059800  ──失败──→  Unavailable
 /// Family 0x17 (Zen 1/2)

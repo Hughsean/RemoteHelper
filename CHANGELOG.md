@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- 桌面客户端改用 GPUI Kit，使用原生窗口、文件选择器和深色界面。
+- 监控页使用自适应趋势图，按真实采样时间平滑滚动。刷新间隔和时间范围通过下拉菜单选择。
+- 标签发布流程构建 Windows x64 客户端和 macOS Intel、Apple Silicon 安装映像。
+- 更新用户指南、客户端开发指引和配置示例。
+
+### Removed
+
+- 移除旧客户端代码、样式、构建配置和开发教程。
+
 ## [2.2.0] - 2026-01-03
 
 ### 新增

@@ -30,6 +30,8 @@
 
 #### 开发流程
 
+桌面客户端的工具链、启动方式和文件分工见 [app/README.md](app/README.md)。涉及服务端或硬件驱动的改动，在 Windows 上检查整个工作区。
+
 1. **Fork 项目**
 
    ```bash
@@ -146,10 +148,11 @@ Closes #42
 ### 运行测试
 
 ```bash
-# 运行所有测试
+# 在 Windows 上运行工作区测试
 cargo test --workspace
 
 # 运行特定包的测试
+cargo test -p App
 cargo test -p common
 cargo test -p client
 cargo test -p RemoteHelperServer
@@ -183,7 +186,8 @@ mod tests {
 ### 更新文档
 
 - **README.md**：用户文档和快速开始
-- **copilot-instructions.md**：开发者指南和架构说明
+- [app/README.md](app/README.md) 记录桌面界面的开发、构建和打包方式
+- [.github/copilot-instructions.md](.github/copilot-instructions.md) 记录项目架构和开发约定
 - **CHANGELOG.md**：版本变更记录
 - **代码注释**：复杂逻辑说明
 
@@ -211,8 +215,8 @@ Pull Request 将经过以下审查：
 1. 更新 `CHANGELOG.md`
 2. 更新版本号（`Cargo.toml`）
 3. 创建版本标签
-4. 构建发布版本
-5. 发布到 GitHub Releases
+4. 推送 `v*` 标签触发 [发布工作流](.github/workflows/release.yml)
+5. 检查 GitHub Releases 上的 Windows x64 客户端和两种 macOS 磁盘映像
 
 ## 📞 联系方式
 

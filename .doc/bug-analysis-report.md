@@ -1,5 +1,7 @@
 # RemoteHelper 项目Bug分析报告
 
+这是早期版本的问题分析记录，保留当时的结论供追溯。当前结构和开发命令见[开发指引](../.github/copilot-instructions.md)。
+
 ## 🔍 检测到的Bug和潜在问题
 
 ### ❌ 严重Bug

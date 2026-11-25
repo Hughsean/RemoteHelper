@@ -1,359 +1,115 @@
 # RemoteHelper
 
 [![Rust](https://img.shields.io/badge/Rust-2024_Edition-orange.svg)](https://www.rust-lang.org/)
-[![Tauri](https://img.shields.io/badge/Tauri-v2-blue.svg)](https://tauri.app/)
-[![Dioxus](https://img.shields.io/badge/Dioxus-v0.7-green.svg)](https://dioxuslabs.com/)
+[![GPUI Kit](https://img.shields.io/badge/UI-GPUI_Kit-blue.svg)](https://gpui-kit.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-一个基于 Rust 的远程系统监控与进程管理工具，支持 Windows 和 macOS。提供 Web 控制面板和桌面客户端。
+RemoteHelper 用于监控远程 Windows 主机和管理主机上的服务。Windows 和 macOS 桌面客户端使用 Rust 与 GPUI Kit，通过加密 TCP 连接服务端。
 
-## ✨ 特性
+- **系统监控**显示 CPU、内存和 NVIDIA GPU 的实时指标及历史趋势。温度和功率取决于远程主机的硬件与驱动。
+- **服务管理**支持查看状态与 PID、启动、停止、重启和添加远程服务。
+- **认证**使用 Ed25519 密钥。服务端通过公钥白名单授权客户端，会话使用 X25519 密钥交换和 AES-256-GCM 加密。
+- **离线预览**可在调试版客户端中使用模拟数据查看仪表板。
 
-- 🔒 **端到端加密通信**：基于 X25519 + AES-256-GCM 的安全通信协议
-- 🔐 **Ed25519 身份认证**：使用公钥加密技术的强身份验证
-- 📊 **实时硬件监控**：CPU、内存、GPU（NVIDIA）、网络流量监控
-- 🚀 **进程管理**：启动、停止、重启外部程序（如 frpc 隧道）
-- 🌐 **双客户端支持**：
-  - **Web 客户端**：基于 WebAssembly 的浏览器应用
-  - **桌面客户端**：Tauri v2 系统托盘应用
-- 📝 **日志管理**：服务/隧道日志在超过 10MB 时轮转；主服务器日志 `logs/server.log` 默认不自动轮转
-- 🧪 **Mock 调试模式**：无需连接服务器即可在本地模拟硬件数据，加速前端开发
-- ⚡ **高性能**：异步 Tokio 运行时，支持并发连接
+## 快速开始
 
-## 🏗️ 架构
+### 只体验客户端
 
-项目采用 Cargo Workspace 单体仓库架构：
+在仓库根目录运行以下命令，在登录页点击「使用模拟数据」。
 
-```
-RemoteHelper/
-├── src/                    # 服务器主程序
-│   ├── main.rs            # 入口点
-│   ├── server.rs          # TCP 连接处理
-│   ├── state.rs           # 全局状态管理
-│   ├── process.rs         # 进程管理
-│   └── config.rs          # 配置解析
-├── common/                # 共享库（协议定义）
-│   └── src/
-│       ├── lib.rs         # Request/Response 枚举
-│       ├── crypto.rs      # 加密会话
-│       └── func.rs        # 工具函数
-├── client/                # 客户端库
-│   └── src/lib.rs         # TCP 客户端实现（含 Mock 模式）
-├── app/                   # Dioxus 前端应用 (Web + 桌面)
-│   ├── src/
-│   │   ├── main.rs        # 路由与入口
-│   │   ├── views/         # 页面：登录、首页、服务管理
-│   │   └── widgets/       # 自定义组件：图表、卡片、对话框
-│   └── assets/            # CSS 样式资源
-├── PawnIO/                # PawnIO 子模块
-└── hwlib/                 # 硬件抽象层（未使用）
+```sh
+cargo run -p App
 ```
 
-## 🚀 快速开始
+Windows 需要 MSVC Rust 工具链、Visual Studio C++ Build Tools 和 CMake。macOS 需要 macOS 15 或更新版本及 Xcode Command Line Tools。各平台的准备步骤见[客户端开发指南](app/README.md)。
 
-### 前置要求
+### 连接远程主机
 
-- **Rust** 1.83+ (2024 Edition)
-- **Node.js** 18+ (可选，用于前端开发)
-- **Dioxus CLI** (可选): `cargo install dioxus-cli`
-- **NVIDIA 驱动** (可选，用于 GPU 监控)
+1. 在 Windows 上生成 Ed25519 密钥并设置密码。命令会在终端显示公钥，并把加密密钥文件写入用户主目录的 `id_ed25519.json`。如果该文件已存在，请先备份，生成命令会覆盖它。
 
-### 1. 生成密钥对
+   ```sh
+   cargo run --bin keygen
+   ```
 
-首先为客户端认证生成 Ed25519 密钥对：
+2. 在 Windows 服务端将 [config.example.toml](config.example.toml) 复制为工作目录下的 `config.toml`。把生成的公钥添加到 `[web_panel].authorized_keys`。客户端保管加密私钥文件。使用 macOS 客户端时，将加密密钥文件复制到 Mac。
+3. 在包含 `config.toml` 的目录中启动服务端。首次从源码启动时，在仓库根目录运行以下命令。
 
-```bash
-cargo run --bin keygen
-```
+   ```sh
+   cargo run --bin RemoteHelperServer
+   ```
 
-这将在用户目录生成 `~/id_ed25519.json` 密钥文件：
+4. 在桌面客户端输入 `主机地址:端口`。同机调试可用 `127.0.0.1:9999`。选择密钥文件，输入密码后连接。用户主目录下的 `id_ed25519.json` 可自动选用。
 
-- **公钥**（Base64 编码）：添加到服务器配置的 `authorized_keys`
-- **私钥文件**（加密存储在 `~/id_ed25519.json`）：客户端自动读取
+### 构建发布版本
 
-### 2. 配置服务器
-
-编辑 `config.toml`：
-
-```toml
-[web_panel]
-enabled = true
-local_port = 9999
-frpc_exe_path = "frpc.exe"
-frpc_args = ["-f", "your_token"]
-authorized_keys = ["YOUR_PUBLIC_KEY_FROM_KEYGEN"]
-startup_delay_secs = 0
-max_connections = 100
-connection_timeout_secs = 300
-
-[[service]]
-description = "Remote Desktop Access"
-exe_path = "frpc.exe"
-args = ["-f", "token:port"]
-# 服务启动模式："none" | "oneshot" | "continuous"
-# - "none"      : 不自动启动
-# - "oneshot"   : 启动后会立即结束（不保留 PID）
-# - "continuous": 启动后会持续运行（保留 PID 以便后续销毁）
-auto_start = "none"
-allow_web_control = true
-```
-
-### 3. 启动服务器
-
-#### 开发模式
-
-```bash
-# 开发模式
-cargo run
-
-# 生产模式
-cargo build --release
-./target/release/RemoteHelperServer.exe
-```
-
-#### 生产部署
-
-```bash
-# 编译 Release 版本
-cargo build --release
-
-# 将编译产物和 config.toml 部署到目标目录
-cp target/release/RemoteHelperServer.exe /path/to/deploy/
-cp config.toml /path/to/deploy/
-
-# 如需注册为系统服务，可使用 NSSM 等工具
-# nssm install RemoteHelperServer /path/to/deploy/RemoteHelperServer.exe
-```
-
-### 4. 运行客户端
-
-#### Web 客户端（开发模式）
-
-```bash
-cd app
-dx serve
-# 访问 http://localhost:8080
-```
-
-#### 桌面客户端（开发模式）
-
-```bash
-cd app
-cargo tauri dev
-```
-
-#### 构建发布版本
-
-```bash
-# Web 客户端
-cd app
-dx build --release
-
+```sh
 # 桌面客户端
-cd app
-cargo tauri build
+cargo build --release -p App
+
+# Windows 服务端
+cargo build --release --bin RemoteHelperServer
 ```
 
-## 📖 使用说明
+Windows 部署使用 `target/release/RemoteHelperServer.exe`，从包含 `config.toml` 的工作目录启动。如果设置了 Cargo 输出目录，以实际目录为准。桌面客户端的打包产物和发布流程见[客户端开发指南](app/README.md)。
 
-### 服务器命令
+## 服务端配置
 
-```bash
-# 运行服务器
-cargo run --bin RemoteHelperServer
+`[web_panel]` 和 `allow_web_control` 是现有配置使用的兼容名称。修改 `config.toml` 后重启服务端。
 
-# 生成密钥对
-cargo run --bin keygen
-```
+| 选项 | 用途 |
+| --- | --- |
+| `[web_panel].enabled` | 是否启动可选的 frpc 隧道。关闭后服务端仍监听 TCP 端口 |
+| `[web_panel].local_port` | TCP 监听端口。示例使用 `9999` |
+| `[web_panel].frpc_exe_path` / `frpc_args` | frpc 程序路径和启动参数。示例直接使用局域网连接 |
+| `[web_panel].authorized_keys` | 获准连接的 Base64 公钥列表 |
+| `[web_panel].startup_delay_secs` / `health_check_url` | 启动前等待时间和可选的网络检测地址 |
+| `[web_panel].max_connections` / `connection_timeout_secs` | 最大并发连接数和连接超时。默认值分别为 100 和 300 秒 |
+| `[[service]].allow_web_control` | 是否允许远程客户端控制该服务 |
+| `[[service]].auto_start` | 启动策略，支持 `none`、`oneshot` 和 `continuous` |
 
-### 客户端连接
+客户端添加的动态服务保存在服务端内存中。需要重启后继续可用的服务，请写入服务端配置。
 
-1. 启动服务器（默认监听端口 9999）
-2. 打开 Web 客户端或桌面客户端
-3. 输入服务器地址（如 `localhost:9999`）
-4. 输入 `~/id_ed25519.json` 文件的密码短语进行认证
-5. 查看系统状态和管理服务
+## 开发
 
-> **注意**：客户端会自动从用户目录读取 `~/id_ed25519.json` 密钥文件
+| 路径 | 职责 |
+| --- | --- |
+| [app/](app/) | GPUI Kit 桌面界面和本地登录设置 |
+| [client/](client/) | TCP 连接、认证、请求和模拟数据 |
+| [common/](common/) | 请求与响应类型、加密会话和消息帧 |
+| [src/](src/) | Windows 服务端、监控任务、请求分派和进程管理 |
+| [hwlib/](hwlib/) 和 [PawnIO/](PawnIO/) | Windows 硬件监控及驱动模块资源 |
 
-## 🔧 配置详解
+在 Windows 上检查整个工作区。只开发桌面客户端时，也可单独检查 `App`。
 
-### 服务器配置 (`config.toml`)
-
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| `enabled` | 是否启用 Web 面板 | `true` |
-| `local_port` | TCP 监听端口 | `9999` |
-| `frpc_exe_path` | frpc 可执行文件路径 | `"frpc.exe"` |
-| `authorized_keys` | 授权的公钥列表（Base64） | `[]` |
-| `startup_delay_secs` | 启动延迟（秒） | `0` |
-| `max_connections` | 最大并发连接数 | `100` |
-| `connection_timeout_secs` | 连接超时时间（秒） | `300` |
-
-### 服务配置
-
-```toml
-[[service]]
-description = "服务描述"
-exe_path = "可执行文件路径"
-args = ["参数1", "参数2"]
-auto_start = "none"           # 服务启动模式："none" | "oneshot" | "continuous"
-allow_web_control = true     # 允许 Web 控制
-```
-
-## 🔒 安全特性
-
-### 加密通信
-
-1. **握手阶段**：
-   - 客户端生成临时 X25519 密钥对
-   - 服务器生成临时 X25519 密钥对
-   - 双方交换公钥并计算共享密钥
-
-2. **加密层**：
-   - 算法：AES-256-GCM
-   - 密钥派生：SHA256(X25519 共享密钥)
-   - 每条消息使用唯一 nonce（避免重放攻击）
-
-3. **消息格式**：
-
-   ```
-   [4 字节长度][加密的 JSON 载荷][16 字节 GCM 标签]
-   ```
-
-### 身份认证
-
-1. 服务器发送随机挑战（30 秒有效期）
-2. 客户端使用 Ed25519 私钥签名挑战
-3. 服务器验证签名和公钥授权
-4. 认证成功后建立会话
-
-### 密钥管理
-
-- 私钥使用 PBKDF2 + AES-256-GCM 加密存储
-- 公钥使用 Base64 编码配置
-- 挑战 30 秒后自动失效
-
-## 📊 监控指标
-
-### 系统信息
-
-- **CPU**：使用率（%）、型号
-- **内存**：已用/总量（GB）、使用率（%）
-- **GPU**（NVIDIA）：使用率（%）、显存使用量、型号
-- **网络**：接收/发送字节数、实时速率
-- **运行时间**：系统正常运行时间
-
-### 进程管理
-
-- 服务状态（运行中/已停止）
-- 进程 PID
-- 启动/停止/重启操作
-- 日志查看（服务/隧道日志实现简单轮转）
-
-## 🛠️ 开发
-
-### 代码质量
-
-```bash
-# 格式化代码
-cargo fmt --all
-
-# 代码检查
-cargo clippy --workspace -- -D warnings
-
-# 运行测试
-cargo test --workspace
-
-# 编译检查
+```sh
+cargo fmt --all --check
 cargo check --workspace
+cargo test --workspace
+cargo clippy -p App --no-deps --all-targets -- -D warnings
 ```
 
-### 项目约定
+协议变更从 `common/src/lib.rs` 的 `Request` 和 `Response` 开始，同步检查服务端 `src/handlers/`、客户端 `client/src/requests.rs` 及对应的界面调用方。参见[贡献指南](CONTRIBUTING.md)和[变更记录](CHANGELOG.md)。
 
-- **Rust Edition**: 2024
-- **错误处理**：服务器使用 `anyhow::Result`，客户端使用 `Result<T, String>`
-- **日志**：服务器使用 `tracing`，客户端使用 Tauri/Console 日志
-- **并发安全**：`Arc<RwLock<T>>` + `AtomicUsize`
-- **异步运行时**：Tokio multi_thread（4 线程）
+## 故障排查
 
-### 修改协议
+- **无法连接**时，检查服务端进程、监听端口和客户端输入的地址。使用 frpc 时，同时检查隧道进程。
+- **认证失败**时，检查服务端白名单是否包含密钥文件对应的公钥，并核对密码。
+- **GPU 指标缺失**时，检查远程主机的 NVIDIA 驱动和服务端 NVML 日志。
+- **部分传感器指标缺失**时，查看服务端硬件驱动初始化日志。驱动失败时，服务端仍可提供其他可用指标。
 
-修改 `common/src/lib.rs` 中的 `Request`/`Response` 后，需要同步更新：
+服务端向控制台和 `logs/server.YYYY-MM-DD.log` 输出日志，主日志按日轮转。服务和隧道分别写入 `logs/service_{id}.log` 和 `logs/web_tunnel.log`，打开日志文件时如果发现超过 10 MiB，会先轮转。
 
-1. `src/server.rs` → `process_authenticated_request()`
-2. `client/src/lib.rs` → `send_request()` 调用
-3. `app/src/views/` → 页面中对应的请求处理
+## 后续计划
 
-## 🐛 故障排除
+- 动态服务持久化
+- TLS 证书支持
+- 每客户端速率限制
+- Prometheus 指标端点
+- 多 GPU 支持
+- Linux 平台支持
 
-### 服务器无法启动
+## 许可证与致谢
 
-- ✅ 检查 `config.toml` 语法是否正确
-- ✅ 确认端口 9999 未被占用
-- ✅ 验证 `frpc_exe_path` 文件存在
+项目采用 [MIT 许可证](LICENSE)。主要依赖包括 [GPUI Kit](https://gpui-kit.com/)、[Tokio](https://tokio.rs/)、[sysinfo](https://github.com/GuillaumeGomez/sysinfo) 和 [nvml-wrapper](https://github.com/Cldfire/nvml-wrapper)。
 
-### 认证失败
-
-- ✅ 确认 `~/id_ed25519.json` 文件存在且格式正确
-- ✅ 公钥与 `keygen` 生成的匹配
-- ✅ 密码短语正确
-- ✅ 挑战未过期（30 秒内）
-- ✅ 密钥文件权限正确
-
-### GPU 监控显示 None
-
-- ✅ 安装 NVIDIA 驱动
-- ✅ 仅支持 NVIDIA GPU
-- ✅ 查看服务器日志了解 NVML 初始化状态
-
-### 连接数限制
-
-- ✅ 增加配置中的 `max_connections`
-- ✅ 检查客户端是否正确关闭连接
-- ✅ 考虑实现连接池
-
-## 📝 日志
-
-### 服务器日志
-
-- **位置**：`logs/server.log`
-- **轮转**：**不自动轮转**（由 tracing_appender 写入）。如需轮转，请使用系统日志轮转工具或部署脚本（例如通过 NSSM 或外部轮转工具）。
-- **输出**：同时输出到 stdout 和文件
-
-### 服务日志
-
-- **静态服务**：`logs/service_{id}.log`
-- **Web 隧道**：`logs/web_tunnel.log`
-- **轮转**：超过 10MB 自动轮转（服务与 Web 隧道日志由程序实现简单轮转）
-
-## 🔮 未来计划
-
-- [ ] 动态服务持久化存储
-- [ ] TLS 证书支持
-- [ ] 每客户端速率限制
-- [ ] Prometheus 指标端点
-- [ ] 多 GPU 支持
-- [ ] Linux 平台支持
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
-
-## 🙏 致谢
-
-- [Tauri](https://tauri.app/) - 跨平台桌面应用框架
-- [Dioxus](https://dioxuslabs.com/) - Rust 响应式 UI 框架
-- [Tokio](https://tokio.rs/) - 异步运行时
-- [sysinfo](https://github.com/GuillaumeGomez/sysinfo) - 系统信息库
-- [nvml-wrapper](https://github.com/Cldfire/nvml-wrapper) - NVIDIA GPU 监控
-
-## 📧 联系方式
-
-- **作者**: Hughsean
-- **邮箱**: <Hughsean.F@outlook.com>
-- **项目**: [GitHub Repository](#)
-
----
-
-**注意**：本项目当前支持 Windows 和 macOS，未来可能扩展更多平台支持。
+欢迎通过 [GitHub Issues](https://github.com/Hughsean/RemoteHelper/issues) 提交问题。
