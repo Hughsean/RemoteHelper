@@ -1,5 +1,6 @@
-use crate::trend::{SERIES, TrendPlot, series_color};
-use crate::{message, panel, request_error, small_button};
+use crate::theme::workspace_background;
+use crate::ui::{message, panel, request_error, small_button};
+use crate::views::trend::{SERIES, TrendPlot, series_color};
 use common::{Request, Response, SystemInfo};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::StyledExt;
@@ -230,7 +231,7 @@ impl Dashboard {
                                     .relative()
                                     .min_w_0()
                                     .flex_1()
-                                    .bg(crate::workspace_background())
+                                    .bg(workspace_background())
                                     .child(div().absolute().inset_0().child(self.trend.clone())),
                             ),
                     )

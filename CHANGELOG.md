@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- 桌面客户端按「入口 / 装配 / 外壳 / 页面」分层拆分 `app/src/main.rs`，页面移入 `app/src/views/`，主题、共用构件和图标资源独立成模块。
+
 ## [2.3.1] - 2026-11-25
 
 ### Fixed

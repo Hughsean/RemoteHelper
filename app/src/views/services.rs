@@ -1,4 +1,5 @@
-use crate::{field, message, panel, request_error};
+use crate::theme::accent;
+use crate::ui::{field, message, nav_variant, panel, request_error};
 use common::{PathItem, Request, Response, ServiceAction, ServiceInfo};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, StyledExt};
@@ -246,7 +247,7 @@ impl Services {
                     .small()
                     .w_full()
                     .disabled(busy)
-                    .with_variant(crate::nav_variant(index == form.selected, cx))
+                    .with_variant(nav_variant(index == form.selected, cx))
                     .label(format!("{kind}  {}", item.path))
                     .on_click(cx.listener(move |view, _, window, cx| {
                         view.choose_suggestion(index, window, cx)
@@ -289,7 +290,7 @@ impl Services {
                     .child(
                         Button::new("submit-add")
                             .label("添加")
-                            .with_variant(crate::nav_variant(true, cx))
+                            .with_variant(nav_variant(true, cx))
                             .disabled(busy)
                             .on_click(cx.listener(Self::add_service)),
                     ),
@@ -394,8 +395,8 @@ impl Render for Services {
                         .justify_center()
                         .rounded_lg()
                         .size(px(40.))
-                        .bg(crate::accent().opacity(0.12))
-                        .text_color(crate::accent())
+                        .bg(accent().opacity(0.12))
+                        .text_color(accent())
                         .child(Icon::from(IconName::Server)),
                 )
                 .child(div().text_sm().font_semibold().child("暂无服务"))
@@ -437,7 +438,7 @@ impl Render for Services {
                                         Button::new("add-service")
                                             .icon(Icon::from(IconName::Plus))
                                             .label("添加服务")
-                                            .with_variant(crate::nav_variant(true, cx))
+                                            .with_variant(nav_variant(true, cx))
                                             .disabled(self.busy || self.form.is_some())
                                             .on_click(cx.listener(Self::open_form)),
                                     ),

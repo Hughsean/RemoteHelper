@@ -1,4 +1,5 @@
-use crate::{RemoteHelper, brand_mark, field, message, nav_variant, panel};
+use crate::shell::RemoteHelper;
+use crate::ui::{brand_mark, field, message, nav_variant, panel};
 use gpui_kit::base::{Disableable, StyledExt};
 use gpui_kit::component::{
     ActiveTheme,
