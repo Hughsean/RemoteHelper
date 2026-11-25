@@ -185,9 +185,8 @@ mod tests {
 
 ### 更新文档
 
-- **README.md**：用户文档和快速开始
-- [app/README.md](app/README.md) 记录桌面界面的开发、构建和打包方式
-- [.github/copilot-instructions.md](.github/copilot-instructions.md) 记录项目架构和开发约定
+- **README.md**：用户文档、项目结构和开发命令
+- [app/README.md](app/README.md) 记录桌面界面的架构、开发、构建和打包方式
 - **CHANGELOG.md**：版本变更记录
 - **代码注释**：复杂逻辑说明
 
