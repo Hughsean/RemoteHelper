@@ -1,121 +1,377 @@
-// Dioxus prelude 包含了 Dioxus 应用中使用的许多常见项。在需要 Dioxus 的地方导入它是好的做法
-use dioxus::prelude::*;
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
 
-use views::{Home, Login, Services};
+mod dashboard;
+mod login;
+mod services;
+mod trend;
 
-/// 定义一个包含应用所有布局和路由 UI 的视图模块。
-mod views;
-/// 自定义组件模块
-mod widgets;
+use common::Response;
+use dashboard::Dashboard;
+use gpui_kit::assets::IconName;
+use gpui_kit::base::StyledExt;
+use gpui_kit::component::{
+    ActiveTheme, Icon, Sizable, Theme, ThemeMode,
+    button::{Button, ButtonCustomVariant, ButtonVariant, ButtonVariants},
+    h_flex, v_flex,
+};
+use gpui_kit::*;
+use login::Login;
+use services::Services;
+use tokio::runtime::Handle;
 
-/// Route 枚举用于定义应用内部路由的结构。所有路由枚举都需要派生 [`Routable`] trait，它为路由器工作提供必要的方法。
-///
-/// 每个变体代表路由器可以匹配的不同 URL 模式。如果匹配该模式，将渲染该路由的组件。
-#[derive(Debug, Clone, Routable, PartialEq)]
-#[rustfmt::skip]
-enum Route {
-    // 登录页面（默认路由）
-    #[route("/")]
-    Login {},
+// GPUI Kit's default bundle omits several Lucide icons used by this app.
+gpui_kit::assets::icon_assets!(
+    ExtraIcons,
+    [
+        Activity,
+        Server,
+        Cpu,
+        MemoryStick,
+        Monitor,
+        RefreshCw,
+        Plus,
+        ChevronDown
+    ]
+);
 
-    // 仪表板页面
-    #[route("/home")]
-    Home {},
+struct AppAssets;
 
-    // 服务管理页面
-    #[route("/services")]
-    Services {},
-}
-
-// 我们可以使用 `asset!` 宏在 Dioxus 中导入资源。该宏接受相对于 crate 根目录的资源路径。
-// 该宏返回一个 `Asset` 类型，它将在浏览器中显示为资源路径，或在桌面包中显示为本地路径。
-// const FAVICON: Asset = asset!("/assets/favicon.svg");
-// asset 宏还会压缩一些资源如 CSS 和 JS 以使包更小
-const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
-
-fn main() {
-    let _guard = common::logging::tracing_init(None, None, tracing::Level::DEBUG);
-
-    #[cfg(feature = "desktop")]
-    {
-        // `launch` 函数是 Dioxus 应用的主入口点。它接受一个组件，并使用您启用的平台功能渲染它
-
-        let mut cfg = dioxus::desktop::Config::new().with_window(
-            dioxus::desktop::WindowBuilder::new()
-                .with_title("RemoteHelper - 远程系统监控")
-                .with_resizable(true)
-                .with_inner_size(dioxus::desktop::LogicalSize::new(800, 700))
-                .with_min_inner_size(dioxus::desktop::LogicalSize::new(800, 700)),
-        );
-
-        // 仅在Windows上移除菜单栏
-        #[cfg(target_os = "windows")]
-        {
-            tracing::info!("移除 Windows 菜单栏");
-            cfg = cfg.with_menu(None);
+impl AssetSource for AppAssets {
+    fn load(&self, path: &str) -> Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        match ExtraIcons.load(path)? {
+            Some(data) => Ok(Some(data)),
+            None => gpui_kit::assets::Assets.load(path),
         }
+    }
 
-        // macOS 自定义中文菜单
-        #[cfg(target_os = "macos")]
-        {
-            use dioxus::desktop::muda::{Menu, PredefinedMenuItem, Submenu};
-
-            let menu = Menu::new();
-
-            // 应用菜单
-            let app_submenu = Submenu::new("RemoteHelper", true);
-            app_submenu
-                .append(&PredefinedMenuItem::about(Some("关于 RemoteHelper"), None))
-                .ok();
-            app_submenu.append(&PredefinedMenuItem::separator()).ok();
-            app_submenu
-                .append(&PredefinedMenuItem::hide(Some("隐藏")))
-                .ok();
-            app_submenu
-                .append(&PredefinedMenuItem::hide_others(Some("隐藏其他")))
-                .ok();
-            app_submenu
-                .append(&PredefinedMenuItem::show_all(Some("显示全部")))
-                .ok();
-            app_submenu.append(&PredefinedMenuItem::separator()).ok();
-            app_submenu
-                .append(&PredefinedMenuItem::quit(Some("退出")))
-                .ok();
-            menu.append(&app_submenu).ok();
-
-            // 窗口菜单
-            let window_submenu = Submenu::new("窗口", true);
-            window_submenu
-                .append(&PredefinedMenuItem::minimize(Some("最小化")))
-                .ok();
-            window_submenu
-                .append(&PredefinedMenuItem::maximize(Some("最大化")))
-                .ok();
-            window_submenu.append(&PredefinedMenuItem::separator()).ok();
-            window_submenu
-                .append(&PredefinedMenuItem::close_window(Some("关闭窗口")))
-                .ok();
-            menu.append(&window_submenu).ok();
-
-            cfg = cfg.with_menu(menu);
-        }
-        dioxus::LaunchBuilder::desktop().with_cfg(cfg).launch(App);
+    fn list(&self, path: &str) -> Result<Vec<SharedString>> {
+        let mut paths = ExtraIcons.list(path)?;
+        paths.extend(gpui_kit::assets::Assets.list(path)?);
+        paths.sort_unstable();
+        paths.dedup();
+        Ok(paths)
     }
 }
 
-/// App 是我们应用的主组件。组件是 Dioxus 应用的构建块。每个组件是一个函数，接受一些 props 并返回一个 Element。在这种情况下，App 不接受 props 因为它是应用的根。
-///
-/// 组件应该用 `#[component]` 注解以支持 props、更好的错误消息和自动完成
-#[component]
-fn App() -> Element {
-    // `rsx!` 宏让我们在 Rust 中定义 HTML。它扩展为包含所有 HTML 的 Element。
-    rsx! {
-        // 除了元素和文本（我们稍后会看到），rsx 可以包含其他组件。在这种情况下，
-        // 我们使用 `document::Link` 组件将链接添加到应用的头部，用于主 CSS 文件。
-        // document::Link { rel: "svg", href: FAVICON }
-        document::Link { rel: "stylesheet", href: MAIN_CSS }
+fn main() {
+    let _log = common::logging::tracing_init(None, None, tracing::Level::INFO);
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("无法启动网络运行时");
+    let handle = runtime.handle().clone();
 
-        // 路由器组件渲染我们上面定义的路由枚举。它将处理 URL 的同步并渲染活动路由的布局和组件。
-        Router::<Route> {}
+    gpui_kit::application()
+        .with_assets(AppAssets)
+        .run(move |cx| {
+            gpui_kit::init(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
+            Theme::update(cx, |theme| {
+                theme.background = workspace_background();
+                theme.foreground = rgb(0xe7eeed).into();
+                theme.muted_foreground = rgb(0xaeb9bd).into();
+                theme.border = rgb(0x394344).into();
+                theme.muted = rgb(0x283232).into();
+                theme.input = rgb(0x394545).into();
+                theme.ring = accent();
+                theme.popover = surface();
+                theme.popover_foreground = theme.foreground;
+            });
+            let result = gpui_kit::open_window(
+                WindowOptions {
+                    titlebar: Some(TitlebarOptions {
+                        title: Some("RemoteHelper".into()),
+                        ..Default::default()
+                    }),
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                        None,
+                        size(px(1080.), px(760.)),
+                        cx,
+                    ))),
+                    #[cfg(target_os = "windows")]
+                    window_background: WindowBackgroundAppearance::MicaBackdrop,
+                    window_min_size: Some(size(px(780.), px(580.))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| RemoteHelper::new(handle.clone(), window, cx)),
+            );
+            match result {
+                Ok(_) => cx.activate(true),
+                Err(error) => {
+                    tracing::error!(%error, "无法打开 RemoteHelper 窗口");
+                    cx.quit();
+                }
+            }
+        });
+}
+
+#[derive(PartialEq, Eq)]
+enum Page {
+    Dashboard,
+    Services,
+}
+
+struct RemoteHelper {
+    runtime: Handle,
+    login: Login,
+    session: Option<Session>,
+}
+
+struct Session {
+    address: String,
+    page: Page,
+    dashboard: Entity<Dashboard>,
+    services: Entity<Services>,
+}
+
+impl RemoteHelper {
+    fn new(runtime: Handle, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self {
+            runtime,
+            login: Login::new(window, cx),
+            session: None,
+        }
+    }
+
+    fn open_session(&mut self, address: String, window: &mut Window, cx: &mut Context<Self>) {
+        let dashboard = cx.new(|cx| Dashboard::new(self.runtime.clone(), cx));
+        let services = cx.new(|cx| Services::new(self.runtime.clone(), window, cx));
+        self.session = Some(Session {
+            address,
+            page: Page::Dashboard,
+            dashboard,
+            services,
+        });
+        cx.notify();
+    }
+
+    fn show_services(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(session) = &mut self.session
+            && session.page != Page::Services
+        {
+            session.page = Page::Services;
+            session.services.update(cx, Services::refresh);
+            cx.notify();
+        }
+    }
+
+    fn show_dashboard(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if let Some(session) = &mut self.session {
+            session.page = Page::Dashboard;
+            cx.notify();
+        }
+    }
+}
+
+impl Render for RemoteHelper {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let content = match &self.session {
+            None => self.render_login(cx).into_any_element(),
+            Some(session) => {
+                let dashboard = session.page == Page::Dashboard;
+                let border = cx.theme().border;
+                let muted = cx.theme().muted_foreground;
+                let toolbar = h_flex()
+                    .h(px(40.))
+                    .px_3()
+                    .gap_2()
+                    .flex_shrink_0()
+                    .border_b_1()
+                    .border_color(border)
+                    .child(page_tab(
+                        dashboard,
+                        Button::new("dashboard")
+                            .label("监控")
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(Self::show_dashboard)),
+                    ))
+                    .child(page_tab(
+                        !dashboard,
+                        Button::new("services")
+                            .label("服务")
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(Self::show_services)),
+                    ));
+                let status = h_flex()
+                    .h(px(28.))
+                    .px_4()
+                    .gap_2()
+                    .flex_shrink_0()
+                    .border_t_1()
+                    .border_color(border)
+                    .text_xs()
+                    .text_color(muted)
+                    .child(Icon::from(IconName::Server).small())
+                    .child(div().min_w_0().truncate().child(session.address.clone()));
+
+                v_flex()
+                    .size_full()
+                    .child(toolbar)
+                    .child(div().min_h_0().w_full().flex_1().child(if dashboard {
+                        session.dashboard.clone().into_any_element()
+                    } else {
+                        session.services.clone().into_any_element()
+                    }))
+                    .child(status)
+                    .into_any_element()
+            }
+        };
+        div()
+            .size_full()
+            .bg(window_tint())
+            .text_color(cx.theme().foreground)
+            .child(content)
+    }
+}
+
+fn page_tab(active: bool, button: Button) -> Div {
+    v_flex()
+        .relative()
+        .h_full()
+        .items_center()
+        .justify_center()
+        .child(button)
+        .children(active.then(|| {
+            div()
+                .absolute()
+                .bottom_0()
+                .w(px(18.))
+                .h(px(2.))
+                .rounded_full()
+                .bg(accent())
+        }))
+}
+
+fn window_tint() -> Hsla {
+    #[cfg(target_os = "windows")]
+    {
+        workspace_background().opacity(0.76)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        workspace_background()
+    }
+}
+
+fn workspace_background() -> Hsla {
+    rgb(0x1b2222).into()
+}
+
+fn surface() -> Hsla {
+    rgb(0x283031).into()
+}
+
+fn accent() -> Hsla {
+    rgb(0x70dbc0).into()
+}
+
+fn nav_variant(active: bool, cx: &App) -> ButtonVariant {
+    if active {
+        let accent = accent();
+        ButtonVariant::Custom(
+            ButtonCustomVariant::new(cx)
+                .color(accent)
+                .foreground(accent)
+                .hover(accent.opacity(0.24))
+                .active(accent.opacity(0.30)),
+        )
+    } else {
+        ButtonVariant::Ghost
+    }
+}
+
+fn brand_mark() -> Div {
+    let accent = accent();
+    div()
+        .size(px(32.))
+        .rounded_md()
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(accent.opacity(0.14))
+        .text_color(accent)
+        .child(Icon::from(IconName::Activity).small())
+}
+
+fn small_button(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    active: bool,
+    cx: &App,
+) -> Button {
+    Button::new(id)
+        .label(label)
+        .small()
+        .with_variant(nav_variant(active, cx))
+}
+
+fn panel(cx: &App) -> Div {
+    v_flex()
+        .min_w_0()
+        .gap_3()
+        .p_3()
+        .rounded_md()
+        .border_1()
+        .border_color(cx.theme().border)
+        .bg(surface())
+}
+
+fn field(label: &'static str, element: impl IntoElement) -> Div {
+    v_flex()
+        .gap_1()
+        .child(div().text_sm().font_medium().child(label))
+        .child(element)
+}
+
+fn message(text: impl Into<SharedString>, error: bool, cx: &App) -> Div {
+    let theme = cx.theme();
+    div()
+        .text_sm()
+        .text_color(if error {
+            theme.danger
+        } else {
+            theme.muted_foreground
+        })
+        .child(text.into())
+}
+
+fn request_error(response: Response) -> String {
+    match response {
+        Response::Error(error) => error,
+        _ => "服务器返回了意外响应".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppAssets;
+    use gpui_kit::AssetSource;
+    use gpui_kit::assets::IconName;
+
+    #[test]
+    fn application_icons_load_from_the_asset_source() {
+        for icon in [
+            IconName::Activity,
+            IconName::Server,
+            IconName::Cpu,
+            IconName::MemoryStick,
+            IconName::Monitor,
+            IconName::RefreshCw,
+            IconName::Plus,
+            IconName::ChevronDown,
+            IconName::Check,
+        ] {
+            let path = icon.path();
+            let svg = AppAssets
+                .load(path.as_ref())
+                .expect("icon path should exist");
+            assert!(svg.is_some_and(|bytes| !bytes.is_empty()), "missing {path}");
+        }
     }
 }

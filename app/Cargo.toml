@@ -7,7 +7,6 @@ authors.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { version = "0.7", features = ["router", "fullstack"] }
 
 # 与服务器通信的客户端库
 client.workspace = true
@@ -20,35 +19,20 @@ tokio.features = ["full"]
 # 序列化
 serde.workspace = true
 serde_json.workspace = true
-
-# 加密库（用于密钥解密）
-ed25519-dalek.workspace = true
-base64.workspace = true
-aes-gcm.workspace = true
-pbkdf2.workspace = true
-sha2.workspace = true
-
-# 日志
-log.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
 
 # 系统工具
 dirs.workspace = true
-once_cell = "1.20"
-dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false, features = ["router"] }
-
-# 本地存储
-gloo-storage.workspace = true
+gpui-kit = "=0.11.0"
 
 
 [features]
 default = ["desktop"]
 # The feature that are only required for the web = ["dioxus/web"] build target should be optional and only enabled in the web = ["dioxus/web"] feature
-web = ["dioxus/web"]
+web = []
 # The feature that are only required for the desktop = ["dioxus/desktop"] build target should be optional and only enabled in the desktop = ["dioxus/desktop"] feature
-desktop = ["dioxus/desktop"]
+desktop = []
 # The feature that are only required for the mobile = ["dioxus/mobile"] build target should be optional and only enabled in the mobile = ["dioxus/mobile"] feature
-mobile = ["dioxus/mobile"]
+mobile = []
 # The feature that are only required for the server = ["dioxus/server"] build target should be optional and only enabled in the server = ["dioxus/server"] feature
-server = ["dioxus/server"]
+server = []
