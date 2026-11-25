@@ -1,6 +1,5 @@
 //! 跨页面共用的界面构件：面板、字段、提示文字与导航按钮。
 
-use crate::theme::{accent, surface};
 use common::Response;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::StyledExt;
@@ -12,7 +11,7 @@ use gpui_kit::component::{
 use gpui_kit::*;
 
 /// 顶部导航标签：激活时在下方画一条强调色短线。
-pub(crate) fn page_tab(active: bool, button: Button) -> Div {
+pub(crate) fn page_tab(active: bool, button: Button, cx: &App) -> Div {
     v_flex()
         .relative()
         .h_full()
@@ -26,17 +25,17 @@ pub(crate) fn page_tab(active: bool, button: Button) -> Div {
                 .w(px(18.))
                 .h(px(2.))
                 .rounded_full()
-                .bg(accent())
+                .bg(cx.theme().primary)
         }))
 }
 
 /// 导航按钮配色：激活时用强调色，否则是幽灵按钮。
 pub(crate) fn nav_variant(active: bool, cx: &App) -> ButtonVariant {
     if active {
-        let accent = accent();
+        let accent = cx.theme().primary;
         ButtonVariant::Custom(
             ButtonCustomVariant::new(cx)
-                .color(accent)
+                .color(accent.opacity(0.14))
                 .foreground(accent)
                 .hover(accent.opacity(0.24))
                 .active(accent.opacity(0.30)),
@@ -46,8 +45,8 @@ pub(crate) fn nav_variant(active: bool, cx: &App) -> ButtonVariant {
     }
 }
 
-pub(crate) fn brand_mark() -> Div {
-    let accent = accent();
+pub(crate) fn brand_mark(cx: &App) -> Div {
+    let accent = cx.theme().primary;
     div()
         .size(px(32.))
         .rounded_md()
@@ -79,7 +78,7 @@ pub(crate) fn panel(cx: &App) -> Div {
         .rounded_md()
         .border_1()
         .border_color(cx.theme().border)
-        .bg(surface())
+        .bg(cx.theme().group_box)
 }
 
 pub(crate) fn field(label: &'static str, element: impl IntoElement) -> Div {

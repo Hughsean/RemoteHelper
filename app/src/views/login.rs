@@ -211,7 +211,7 @@ impl RemoteHelper {
                     .pb_3()
                     .border_b_1()
                     .border_color(cx.theme().border)
-                    .child(brand_mark())
+                    .child(brand_mark(cx))
                     .child(
                         v_flex()
                             .gap_1()

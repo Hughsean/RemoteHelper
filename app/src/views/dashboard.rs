@@ -1,4 +1,3 @@
-use crate::theme::workspace_background;
 use crate::ui::{message, panel, request_error, small_button};
 use crate::views::trend::{SERIES, TrendPlot, series_color};
 use common::{Request, Response, SystemInfo};
@@ -231,7 +230,7 @@ impl Dashboard {
                                     .relative()
                                     .min_w_0()
                                     .flex_1()
-                                    .bg(workspace_background())
+                                    .bg(cx.theme().background)
                                     .child(div().absolute().inset_0().child(self.trend.clone())),
                             ),
                     )

@@ -1,4 +1,3 @@
-use crate::theme::accent;
 use crate::ui::{field, message, nav_variant, panel, request_error};
 use common::{PathItem, Request, Response, ServiceAction, ServiceInfo};
 use gpui_kit::assets::IconName;
@@ -395,8 +394,8 @@ impl Render for Services {
                         .justify_center()
                         .rounded_lg()
                         .size(px(40.))
-                        .bg(accent().opacity(0.12))
-                        .text_color(accent())
+                        .bg(cx.theme().primary.opacity(0.12))
+                        .text_color(cx.theme().primary)
                         .child(Icon::from(IconName::Server)),
                 )
                 .child(div().text_sm().font_semibold().child("暂无服务"))

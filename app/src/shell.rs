@@ -141,6 +141,7 @@ impl Render for RemoteHelper {
                             .ghost()
                             .small()
                             .on_click(cx.listener(Self::show_dashboard)),
+                        cx,
                     ))
                     .child(page_tab(
                         !dashboard,
@@ -149,6 +150,7 @@ impl Render for RemoteHelper {
                             .ghost()
                             .small()
                             .on_click(cx.listener(Self::show_services)),
+                        cx,
                     ));
                 let status = h_flex()
                     .h(px(28.))
@@ -176,7 +178,7 @@ impl Render for RemoteHelper {
         };
         div()
             .size_full()
-            .bg(window_tint())
+            .bg(window_tint(cx))
             .text_color(cx.theme().foreground)
             .child(content)
     }

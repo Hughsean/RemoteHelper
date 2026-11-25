@@ -24,7 +24,6 @@ pub(crate) fn run(runtime: Handle) {
     });
     application.run(move |cx| {
         gpui_kit::init(cx);
-        theme::init(cx);
         match open_main_window(runtime.clone(), cx) {
             Ok(()) => cx.activate(true),
             Err(error) => {
@@ -48,13 +47,15 @@ fn open_main_window(runtime: Handle, cx: &mut App) -> gpui_kit::Result<()> {
                 size(px(1080.), px(760.)),
                 cx,
             ))),
-            #[cfg(target_os = "windows")]
-            window_background: WindowBackgroundAppearance::MicaBackdrop,
+            window_background: theme::window_background(),
             window_min_size: Some(size(px(780.), px(580.))),
             ..Default::default()
         },
         cx,
-        |window, cx| cx.new(|cx| RemoteHelper::new(runtime.clone(), window, cx)),
+        |window, cx| {
+            theme::bind_window(window, cx);
+            cx.new(|cx| RemoteHelper::new(runtime.clone(), window, cx))
+        },
     )?;
     Ok(())
 }
