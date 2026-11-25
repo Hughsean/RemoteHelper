@@ -48,14 +48,14 @@ pub(crate) fn nav_variant(active: bool, cx: &App) -> ButtonVariant {
 pub(crate) fn brand_mark(cx: &App) -> Div {
     let accent = cx.theme().primary;
     div()
-        .size(px(32.))
-        .rounded_md()
+        .size(px(44.))
+        .rounded_lg()
         .flex()
         .items_center()
         .justify_center()
         .bg(accent.opacity(0.14))
         .text_color(accent)
-        .child(Icon::from(IconName::Activity).small())
+        .child(Icon::from(IconName::Activity).size(px(20.)))
 }
 
 pub(crate) fn small_button(

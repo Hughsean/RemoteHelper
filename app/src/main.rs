@@ -5,6 +5,7 @@
 
 mod assets;
 mod bootstrap;
+mod notifications;
 mod shell;
 mod theme;
 mod ui;

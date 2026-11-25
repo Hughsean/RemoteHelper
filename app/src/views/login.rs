@@ -1,8 +1,8 @@
 use crate::shell::RemoteHelper;
-use crate::ui::{brand_mark, field, message, nav_variant, panel};
+use crate::ui::{brand_mark, panel};
 use gpui_kit::base::{Disableable, StyledExt};
 use gpui_kit::component::{
-    ActiveTheme,
+    ActiveTheme, Sizable,
     button::{Button, ButtonVariants},
     h_flex,
     input::{Input, InputContentType, InputEvent, InputState},
@@ -69,7 +69,6 @@ pub(crate) struct Login {
     key_path: Option<PathBuf>,
     choosing_key: bool,
     pending: bool,
-    error: Option<String>,
     _enter: Subscription,
 }
 
@@ -101,7 +100,6 @@ impl Login {
             key_path,
             choosing_key: false,
             pending: false,
-            error: None,
             _enter: enter,
         }
     }
@@ -127,10 +125,11 @@ impl RemoteHelper {
                 match result {
                     Ok(Some(paths)) => {
                         view.login.key_path = paths.into_iter().next();
-                        view.login.error = None;
                     }
                     Ok(None) => {}
-                    Err(error) => view.login.error = Some(format!("无法打开文件选择器：{error}")),
+                    Err(error) => view
+                        .notices
+                        .error(format!("无法打开文件选择器：{error}"), cx),
                 }
                 cx.notify();
             });
@@ -149,14 +148,13 @@ impl RemoteHelper {
             address.is_empty(),
             password.is_empty(),
         ) {
-            (_, true, _) => return self.login_error("请输入服务器地址", cx),
-            (None, _, _) => return self.login_error("请选择密钥文件", cx),
-            (_, _, true) => return self.login_error("请输入密钥文件密码", cx),
+            (_, true, _) => return self.notices.warning("请输入服务器地址", cx),
+            (None, _, _) => return self.notices.warning("请选择密钥文件", cx),
+            (_, _, true) => return self.notices.warning("请输入密钥文件密码", cx),
             (Some(path), false, false) => path.clone(),
         };
 
         self.login.pending = true;
-        self.login.error = None;
         cx.notify();
 
         let settings = LoginSettings {
@@ -172,22 +170,24 @@ impl RemoteHelper {
             _ = this.update_in(cx, |view, window, cx| {
                 view.login.pending = false;
                 match result {
-                    Ok(()) => {
+                    Ok(save_error) => {
                         view.login
                             .password
                             .update(cx, |input, cx| input.set_value("", window, cx));
                         view.open_session(address, window, cx);
+                        if let Some(error) = save_error {
+                            view.notices
+                                .warning(format!("已连接，无法保存登录设置：{error}"), cx);
+                        }
                     }
-                    Err(error) => view.login_error(error, cx),
+                    Err(error) => {
+                        view.notices.error(error, cx);
+                        cx.notify();
+                    }
                 }
             });
         })
         .detach();
-    }
-
-    fn login_error(&mut self, error: impl Into<String>, cx: &mut Context<Self>) {
-        self.login.error = Some(error.into());
-        cx.notify();
     }
 
     pub(crate) fn render_login(&self, cx: &mut Context<Self>) -> Div {
@@ -201,75 +201,18 @@ impl RemoteHelper {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "未选择文件".to_string());
         let muted = cx.theme().muted_foreground;
-        let card = panel(cx)
-            .w(px(420.))
-            .p_6()
-            .gap_4()
-            .child(
-                h_flex()
-                    .gap_3()
-                    .pb_3()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(brand_mark(cx))
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .child(div().text_lg().font_semibold().child("RemoteHelper"))
-                            .child(div().text_sm().text_color(muted).child("连接远程服务器")),
-                    ),
-            )
-            .child(field(
-                "服务器地址",
-                Input::new(&login.address).disabled(disabled),
-            ))
-            .child(field(
-                "密钥文件",
-                h_flex()
-                    .gap_3()
-                    .child(
-                        Button::new("select-key")
-                            .label("选择文件")
-                            .disabled(disabled)
-                            .on_click(cx.listener(Self::choose_key)),
-                    )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .text_color(muted)
-                            .child(filename),
-                    ),
-            ))
-            .child(field(
-                "密码",
-                Input::new(&login.password)
-                    .content_type(InputContentType::Password)
-                    .disabled(disabled),
-            ))
-            .children(
-                login
-                    .error
-                    .as_ref()
-                    .map(|error| message(error.clone(), true, cx)),
-            )
-            .child(
-                Button::new("login")
-                    .with_variant(nav_variant(true, cx))
-                    .w_full()
-                    .disabled(disabled)
-                    .label(if pending { "正在连接…" } else { "连接" })
-                    .on_click(cx.listener(|view, _, window, cx| view.start_login(window, cx))),
-            )
-            .child(message(
-                "将 id_ed25519.json 放在用户主目录可自动加载。",
-                false,
-                cx,
-            ));
+        let stroke = cx.theme().border;
 
+        let actions = h_flex().gap_2().child(
+            Button::new("login")
+                .primary()
+                .flex_1()
+                .disabled(disabled)
+                .label(if pending { "正在连接…" } else { "连接" })
+                .on_click(cx.listener(|view, _, window, cx| view.start_login(window, cx))),
+        );
         #[cfg(debug_assertions)]
-        let card = card.child(
+        let actions = actions.child(
             Button::new("demo")
                 .ghost()
                 .label("使用模拟数据")
@@ -280,17 +223,111 @@ impl RemoteHelper {
                 })),
         );
 
+        let card = panel(cx)
+            .w(px(492.))
+            .max_w_full()
+            .rounded(px(12.))
+            .p_7()
+            .gap_6()
+            .child(
+                h_flex().gap_4().child(brand_mark(cx)).child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_size(px(24.))
+                                .font_semibold()
+                                .child("RemoteHelper"),
+                        )
+                        .child(div().text_sm().text_color(muted).child("连接远程服务器")),
+                ),
+            )
+            .child(
+                v_flex()
+                    .border_t_1()
+                    .border_color(stroke)
+                    .child(login_row(
+                        "服务器地址",
+                        Input::new(&login.address)
+                            .appearance(false)
+                            .disabled(disabled),
+                        stroke,
+                    ))
+                    .child(login_row(
+                        "密钥文件",
+                        h_flex()
+                            .w_full()
+                            .h_full()
+                            .gap_2()
+                            .min_w_0()
+                            .px_2()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .truncate()
+                                    .min_w_0()
+                                    .text_sm()
+                                    .text_color(muted)
+                                    .child(filename),
+                            )
+                            .child(
+                                Button::new("select-key")
+                                    .small()
+                                    .ghost()
+                                    .flex_shrink_0()
+                                    .label("选择文件")
+                                    .tooltip("主目录中的 id_ed25519.json 会自动加载")
+                                    .disabled(disabled)
+                                    .on_click(cx.listener(Self::choose_key)),
+                            ),
+                        stroke,
+                    ))
+                    .child(login_row(
+                        "密钥密码",
+                        Input::new(&login.password)
+                            .appearance(false)
+                            .content_type(InputContentType::Password)
+                            .disabled(disabled),
+                        stroke,
+                    )),
+            )
+            .child(actions);
+
         div()
             .size_full()
             .flex()
             .items_center()
             .justify_center()
-            .p_4()
+            .p_6()
             .child(card)
     }
 }
 
-async fn authenticate(settings: LoginSettings, password: String) -> Result<(), String> {
+fn login_row(label: &'static str, input: impl IntoElement, stroke: Hsla) -> Div {
+    h_flex()
+        .h(px(48.))
+        .border_b_1()
+        .border_color(stroke)
+        .child(
+            div()
+                .w(px(90.))
+                .flex_shrink_0()
+                .text_sm()
+                .font_medium()
+                .child(label),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .h_full()
+                .flex_1()
+                .flex()
+                .items_center()
+                .child(input),
+        )
+}
+
+async fn authenticate(settings: LoginSettings, password: String) -> Result<Option<String>, String> {
     if let Some(key_path) = &settings.key_path {
         let content = tokio::fs::read_to_string(key_path)
             .await
@@ -310,8 +347,9 @@ async fn authenticate(settings: LoginSettings, password: String) -> Result<(), S
         .map_err(|_| "连接超时".to_string())?
         .map_err(|error| format!("连接失败：{error}"))?;
     *client::CONNECTION.lock().await = Some(connection);
-    if let Err(error) = settings.save().await {
+    let save_error = settings.save().await.err();
+    if let Some(error) = &save_error {
         tracing::warn!(%error, "无法保存登录设置");
     }
-    Ok(())
+    Ok(save_error)
 }
