@@ -13,17 +13,81 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const EDGE_PX: f32 = 7.;
 const MIN_FRAME_PX: f32 = 10.;
+const EXTENT_TRANSITION: Duration = Duration::from_millis(180);
+
+#[derive(Default)]
+pub(super) struct NavigatorExtent {
+    shown: Option<(f64, f64)>,
+    transition: Option<ExtentTransition>,
+}
+
+struct ExtentTransition {
+    from: (f64, f64),
+    to: (f64, f64),
+    started: Instant,
+}
+
+impl NavigatorExtent {
+    fn for_view(&self, view: &Viewport) -> (f64, f64) {
+        let (first, last) = self.shown.unwrap_or_else(|| view.extent());
+        if view.following() {
+            // 实时滑轨和主图共用播放时钟，待播放的新采样不会把滑块推离右端。
+            let edge = view.live_edge();
+            (first.min(edge - 1.), edge)
+        } else {
+            (first, last)
+        }
+    }
+
+    pub(super) fn advance(&mut self, target: (f64, f64), now: Instant, animate: bool) -> bool {
+        let Some(shown) = self.shown.filter(|_| animate) else {
+            self.shown = Some(target);
+            self.transition = None;
+            return false;
+        };
+        // 新目标从上一帧的位置接续，避免采样或历史同步改变比例尺时跳动。
+        if self
+            .transition
+            .as_ref()
+            .is_none_or(|motion| motion.to != target)
+        {
+            self.transition = (shown != target).then_some(ExtentTransition {
+                from: shown,
+                to: target,
+                started: now,
+            });
+        }
+        let Some(&ExtentTransition { from, to, started }) = self.transition.as_ref() else {
+            return false;
+        };
+        let t =
+            now.saturating_duration_since(started).as_secs_f64() / EXTENT_TRANSITION.as_secs_f64();
+        if t >= 1. {
+            self.shown = Some(to);
+            self.transition = None;
+            return false;
+        }
+        let t = 1. - (1. - t).powi(3);
+        self.shown = Some((from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t));
+        true
+    }
+}
 
 impl TrendPlot {
+    fn navigator_extent(&self) -> (f64, f64) {
+        self.drag
+            .map_or_else(|| self.nav_extent.for_view(&self.view), |drag| drag.extent)
+    }
+
     pub(super) fn navigator(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let muted = theme.muted_foreground;
         let border = theme.border;
-        let extent = self.drag.map_or(self.view.extent(), |drag| drag.extent);
+        let extent = self.navigator_extent();
         let shown = self.view.shown();
         let following = self.view.following();
         let has_data = self.data_span().is_some();
@@ -43,7 +107,7 @@ impl TrendPlot {
         let nav_bounds = self.nav_bounds.clone();
         let overview = self.nav_runs.clone();
         let colors = series_colors(cx);
-        let shade = theme.background.opacity(0.54);
+        let track = theme.border.opacity(0.65);
         let frame_color = theme
             .primary
             .opacity(if self.drag.is_some() { 1. } else { 0.88 });
@@ -90,7 +154,7 @@ impl TrendPlot {
                     move |bounds, _, _| nav_bounds.set(Some(bounds)),
                     move |bounds, _, window, _| {
                         let width = f32::from(bounds.size.width);
-                        if width <= 1. || !has_data {
+                        if width <= 1. {
                             return;
                         }
                         let top = bounds.top();
@@ -100,6 +164,13 @@ impl TrendPlot {
                         let right = bounds.left() + px(box_range.1);
 
                         window.with_content_mask(Some(ContentMask { bounds }), |window| {
+                            window.paint_quad(fill(
+                                Bounds::new(
+                                    point(bounds.left(), bounds.bottom() - px(3.)),
+                                    size(bounds.size.width, px(1.)),
+                                ),
+                                track,
+                            ));
                             if let Some((index, runs)) = &overview {
                                 let plot = Bounds::new(
                                     point(bounds.left(), top + px(3.)),
@@ -117,21 +188,10 @@ impl TrendPlot {
                             if !interactive {
                                 return;
                             }
-                            for (x, w) in [
-                                (bounds.left(), left - bounds.left()),
-                                (right, bounds.right() - right),
-                            ] {
-                                if w > px(0.) {
-                                    window.paint_quad(fill(
-                                        Bounds::new(point(x, top), size(w, height)),
-                                        shade,
-                                    ));
-                                }
-                            }
                             window.paint_quad(quad(
                                 Bounds::new(point(left, top), size(right - left, height)),
                                 px(4.),
-                                frame_color.opacity(0.10),
+                                frame_color.opacity(0.06),
                                 px(1.),
                                 frame_color,
                                 BorderStyle::Solid,
@@ -150,17 +210,11 @@ impl TrendPlot {
                 .inset_0(),
             );
 
-        let label_width = if with_date {
-            76.
-        } else if with_seconds {
-            54.
-        } else {
-            42.
-        };
+        // 时间标签切换格式时，不改变滑轨宽度和横坐标。
         let edge = |text: String, right: bool| {
             div()
                 .flex_shrink_0()
-                .w(px(label_width))
+                .w(px(76.))
                 .when(right, |el| el.text_right())
                 .text_size(px(11.))
                 .text_color(muted)
@@ -268,7 +322,7 @@ impl TrendPlot {
     fn brush_at(&self, x: Pixels) -> Option<Handle> {
         let bounds = self.nav_bounds.get()?;
         let width = f32::from(bounds.size.width);
-        let frame = brush_frame(self.view.extent(), self.view.shown(), width);
+        let frame = brush_frame(self.navigator_extent(), self.view.shown(), width);
         hit_handle(frame, f32::from(x - bounds.left()))
     }
 
@@ -276,14 +330,15 @@ impl TrendPlot {
         let Some(bounds) = self.nav_bounds.get() else {
             return;
         };
-        let extent = self.view.extent();
+        let extent = self.navigator_extent();
         let Some(at) = time_at(bounds, extent, x) else {
             return;
         };
         let (mut start, mut end) = self.view.shown();
         let handle = self.brush_at(x);
         if handle.is_none() {
-            let span = (end - start).clamp(self.view.narrowest(), extent.1 - extent.0);
+            let available = extent.1 - extent.0;
+            let span = (end - start).clamp(self.view.narrowest().min(available), available);
             start = (at - span / 2.).clamp(extent.0, extent.1 - span);
             end = start + span;
             self.view.set_window(start, end, SLOW);
@@ -294,6 +349,7 @@ impl TrendPlot {
         } else {
             handle.cursor()
         };
+        self.nav_extent.advance(extent, Instant::now(), false);
         self.drag = Some(Brush {
             handle,
             extent,
@@ -326,6 +382,9 @@ fn brush_frame(extent: (f64, f64), window: (f64, f64), width: f32) -> (f32, f32)
     let x_of = |at: f64| ((at - extent.0) / length).clamp(0., 1.) as f32 * width;
     let (left, right) = (x_of(window.0), x_of(window.1));
     let size = (right - left).max(MIN_FRAME_PX.min(width));
+    if right == width {
+        return (width - size, width);
+    }
     let left = ((left + right - size) * 0.5).clamp(0., width - size);
     (left, left + size)
 }
@@ -404,7 +463,86 @@ impl Brush {
 
 #[cfg(test)]
 mod tests {
-    use super::{Brush, Handle, Viewport, brush_frame, hit_handle};
+    use super::{
+        Brush, EXTENT_TRANSITION, Handle, Instant, NavigatorExtent, Viewport, brush_frame,
+        hit_handle,
+    };
+
+    #[test]
+    fn live_brush_stays_pinned_while_samples_and_extent_advance() {
+        let mut extent = NavigatorExtent::default();
+        let mut view = Viewport::default();
+        let now = Instant::now();
+        view.extend_history(0., 600_000., 600_000.);
+        extent.advance(view.extent(), now, true);
+
+        for (elapsed, latest, clock) in [
+            (0, 601_000., 600_000.),
+            (90, 601_000., 600_090.),
+            (500, 601_000., 600_500.),
+            (1_000, 602_000., 600_910.),
+        ] {
+            view.extend_history(0., latest, clock);
+            extent.advance(
+                view.extent(),
+                now + std::time::Duration::from_millis(elapsed),
+                true,
+            );
+            let track = extent.for_view(&view);
+            let frame = brush_frame(track, view.shown(), 600.);
+            assert_eq!(track.1, clock);
+            assert_eq!(frame.1, 600.);
+            assert_eq!(hit_handle(frame, 600.), Some(Handle::End));
+        }
+    }
+
+    #[test]
+    fn browsing_after_a_clock_rollback_exposes_the_full_history_range() {
+        let mut view = Viewport::default();
+        let extent = NavigatorExtent::default();
+        view.extend_history(0., 900_000., 420_000.);
+        assert_eq!(extent.for_view(&view), (0., 420_000.));
+
+        view.set_window(600_000., 750_000., std::time::Duration::ZERO);
+        let track = extent.for_view(&view);
+        assert_eq!(track, (0., 900_000.));
+        assert!(brush_frame(track, view.shown(), 600.).1 < 600.);
+    }
+
+    #[test]
+    fn new_history_extent_moves_the_brush_without_jumping() {
+        let mut extent = NavigatorExtent::default();
+        let start = Instant::now();
+        let window = (300_000., 600_000.);
+        let frame = |extent: &NavigatorExtent| brush_frame(extent.shown.unwrap(), window, 600.);
+        assert!(!extent.advance((0., 600_000.), start, true));
+        let before = frame(&extent);
+        let target = (0., 720_000.);
+        assert!(extent.advance(target, start, true));
+        assert_eq!(frame(&extent), before);
+
+        let mid = start + EXTENT_TRANSITION / 2;
+        assert!(extent.advance(target, mid, true));
+        let middle = frame(&extent);
+        assert!(middle.1 < before.1 && middle.1 > brush_frame(target, window, 600.).1);
+
+        let next = (120_000., 780_000.);
+        assert!(extent.advance(next, mid, true));
+        assert_eq!(frame(&extent), middle);
+        assert!(!extent.advance(next, mid + EXTENT_TRANSITION, true));
+        assert_eq!(extent.shown, Some(next));
+    }
+
+    #[test]
+    fn disabling_motion_applies_the_current_extent_immediately() {
+        let mut extent = NavigatorExtent::default();
+        let now = Instant::now();
+        extent.advance((0., 600_000.), now, true);
+        assert!(extent.advance((0., 720_000.), now, true));
+        assert!(!extent.advance((0., 780_000.), now, false));
+        assert_eq!(extent.shown, Some((0., 780_000.)));
+        assert!(!extent.advance((0., 780_000.), now, true));
+    }
 
     #[test]
     fn minimum_width_still_has_two_handles_and_a_draggable_middle() {

@@ -470,7 +470,13 @@ impl HistoryCache {
 
     pub async fn query(&self, range: TimeRange) -> HistoryResult<HistoryQuery> {
         check_range(range)?;
-        self.run(move |state| state.query(range)).await
+        self.run(move |state| state.query(range, DAY_MS)).await
+    }
+
+    /// 供总览分段读取，保留跨边界的邻点，同时跳过与短区间无关的相邻日文件。
+    pub async fn query_overview(&self, range: TimeRange) -> HistoryResult<HistoryQuery> {
+        check_range(range)?;
+        self.run(move |state| state.query(range, 180_000)).await
     }
 
     pub async fn extent(&self) -> HistoryResult<Option<TimeRange>> {
@@ -1098,7 +1104,7 @@ impl State {
         extent
     }
 
-    fn query(&mut self, range: TimeRange) -> HistoryResult<HistoryQuery> {
+    fn query(&mut self, range: TimeRange, margin: i64) -> HistoryResult<HistoryQuery> {
         let _reader = self.root.as_deref().map(reader_lock).transpose()?;
         let mut result = HistoryQuery {
             summary: self.meta.summary.clone(),
@@ -1133,8 +1139,8 @@ impl State {
             )
         });
         let expanded = TimeRange {
-            from: range.from.saturating_sub(DAY_MS),
-            to: range.to.saturating_add(DAY_MS),
+            from: range.from.saturating_sub(margin),
+            to: range.to.saturating_add(margin),
         };
         for key @ (day, day_id) in keys {
             let prefix = &self.prefixes[&key];
@@ -1151,7 +1157,10 @@ impl State {
                 from: i64::from(day) * DAY_MS,
                 to: (i64::from(day) + 1) * DAY_MS,
             };
-            if !owner.intersects(expanded) && !gap_range.is_some_and(|gap| gap.intersects(range)) {
+            if !(owner.intersects(expanded)
+                && (margin == DAY_MS || data_range.is_some_and(|data| data.intersects(expanded))))
+                && !gap_range.is_some_and(|gap| gap.intersects(range))
+            {
                 result.coverage.push(LocalCoverage {
                     day,
                     day_id,

@@ -1,6 +1,7 @@
 //! GPUI 装配层：创建应用、注册窗口重开处理、打开主窗口。
 
 use crate::assets::AppAssets;
+use crate::preferences::ClientPreferences;
 use crate::shell::RemoteHelper;
 use crate::theme;
 use gpui_kit::*;
@@ -24,6 +25,8 @@ pub(crate) fn run(runtime: Handle) {
     });
     application.run(move |cx| {
         gpui_kit::init(cx);
+        ClientPreferences::load().install(cx);
+        theme::install_window_surface(cx);
         // 开发用：只渲染趋势图并截图，不登录。
         #[cfg(debug_assertions)]
         if std::env::var_os("REMOTEHELPER_PREVIEW").is_some() {
@@ -59,7 +62,7 @@ fn open_main_window(runtime: Handle, cx: &mut App) -> gpui_kit::Result<()> {
                 size(px(1080.), px(760.)),
                 cx,
             ))),
-            window_background: theme::window_background(),
+            window_background: theme::window_background(cx),
             window_min_size: Some(size(px(780.), px(580.))),
             ..Default::default()
         },

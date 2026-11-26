@@ -1,11 +1,13 @@
 //! 应用外壳（根视图）：在登录页与会话页之间切换，并记住关闭前的界面。
 
 use crate::notifications::Notices;
-use crate::theme::window_tint;
+use crate::preferences::{ClientPreferences, StartPage};
+use crate::theme;
 use crate::ui::{ConnectionStatus, page_tab};
 use crate::views::{
     Dashboard, Login, Services,
     history_settings::{HistoryPreferences, HistorySettings, HistorySettingsChange},
+    settings::{Settings, SettingsSession},
 };
 use client::history::{HistoryCache, HistorySync, SavedHistory};
 use gpui_kit::assets::IconName;
@@ -53,6 +55,8 @@ pub(crate) struct RemoteHelper {
     pub(crate) login: Login,
     pub(crate) notices: Notices,
     session: Option<Session>,
+    settings: Entity<Settings>,
+    login_settings: bool,
     slide: Option<PageSlide>,
     offline_choices: Option<Vec<SavedHistory>>,
     opening_offline: bool,
@@ -71,7 +75,7 @@ struct Session {
     page: Page,
     dashboard: Entity<Dashboard>,
     services: Entity<Services>,
-    settings: Entity<HistorySettings>,
+    history_settings: Entity<HistorySettings>,
     preferences: HistoryPreferences,
     remote: Option<HistoryRemote>,
     offline: Option<(HistoryCache, Option<i64>)>,
@@ -104,11 +108,37 @@ impl HistoryRemote {
 impl RemoteHelper {
     pub(crate) fn new(runtime: Handle, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let login = Login::new(window, cx);
+        let settings = cx.new(|cx| Settings::new(runtime.clone(), window, cx));
+        let mut previous = ClientPreferences::get(cx);
+        cx.observe_global_in::<ClientPreferences>(window, move |view, window, cx| {
+            let current = ClientPreferences::get(cx);
+            if current.appearance != previous.appearance {
+                theme::apply_window_theme(window, cx);
+            }
+            if current.frosted != previous.frosted {
+                theme::apply_window_material(window, cx);
+            }
+            if current.refresh_rate != previous.refresh_rate
+                && let Some(session) = &view.session
+            {
+                session.dashboard.update(cx, |dashboard, cx| {
+                    dashboard.apply_refresh_preference(
+                        previous.refresh_rate,
+                        current.refresh_rate,
+                        cx,
+                    );
+                });
+            }
+            previous = current;
+        })
+        .detach();
         let mut this = Self {
             runtime,
             login,
             notices: Notices::new(window),
             session: None,
+            settings,
+            login_settings: false,
             slide: None,
             offline_choices: None,
             opening_offline: false,
@@ -127,7 +157,11 @@ impl RemoteHelper {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.enter_session(address, Page::Dashboard, window, cx);
+        let page = match ClientPreferences::get(cx).start_page {
+            StartPage::Monitor => Page::Dashboard,
+            StartPage::Services => Page::Services,
+        };
+        self.enter_session(address, page, window, cx);
         self.start_slide(point(px(0.), px(18.)), true);
     }
 
@@ -235,7 +269,7 @@ impl RemoteHelper {
             );
         });
         let services = cx.new(|_| Services::new(self.runtime.clone(), self.notices));
-        let settings = cx.new(|cx| {
+        let history_settings = cx.new(|cx| {
             HistorySettings::new(
                 self.runtime.clone(),
                 public_key,
@@ -256,19 +290,34 @@ impl RemoteHelper {
         if page == Page::Services && offline.is_none() {
             services.update(cx, |view, cx| view.refresh(window, cx));
         }
-        if page == Page::Settings {
-            settings.update(cx, |view, cx| view.refresh(window, cx));
-        }
         if offline.is_none() {
             LastScreen::remember(&address, page, cx);
         }
         self.offline_choices = None;
+        self.login_settings = false;
+        self.settings.update(cx, |view, cx| {
+            view.set_session(
+                Some(SettingsSession {
+                    address: address.clone(),
+                    fingerprint: remote
+                        .as_ref()
+                        .map(|remote| remote.identity.fingerprint.clone()),
+                    offline: offline.is_some(),
+                    history: history_settings.clone(),
+                }),
+                window,
+                cx,
+            );
+            if page == Page::Settings {
+                view.opened(window, cx);
+            }
+        });
         self.session = Some(Session {
             address,
             page,
             dashboard,
             services,
-            settings,
+            history_settings,
             preferences,
             remote,
             offline,
@@ -299,13 +348,13 @@ impl RemoteHelper {
         let cache = session.offline.as_ref().map(|(cache, _)| cache.clone());
         let anchor = session.offline.as_ref().and_then(|(_, anchor)| *anchor);
         if preferences_changed {
-            session.settings.update(cx, |view, cx| {
+            session.history_settings.update(cx, |view, cx| {
                 view.apply_preferences(session.preferences, window, cx);
                 view.set_sources(session.sync.clone(), cache.clone(), cx);
-                if session.page == Page::Settings {
-                    view.refresh(window, cx);
-                }
             });
+            if session.page == Page::Settings {
+                self.settings.update(cx, |view, cx| view.opened(window, cx));
+            }
         }
         session.dashboard.update(cx, |view, cx| {
             view.history_sources(
@@ -358,22 +407,22 @@ impl RemoteHelper {
     }
 
     fn show_settings(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(session) = &mut self.session
-            && session.page != Page::Settings
-        {
-            session.page = Page::Settings;
-            session
-                .dashboard
-                .update(cx, |view, cx| view.set_polling(false, cx));
-            session
-                .settings
-                .update(cx, |view, cx| view.refresh(window, cx));
-            if session.offline.is_none() {
-                LastScreen::remember(&session.address, Page::Settings, cx);
+        match &mut self.session {
+            Some(session) if session.page != Page::Settings => {
+                session.page = Page::Settings;
+                session
+                    .dashboard
+                    .update(cx, |view, cx| view.set_polling(false, cx));
+                if session.offline.is_none() {
+                    LastScreen::remember(&session.address, Page::Settings, cx);
+                }
+                self.start_slide(point(px(28.), px(0.)), false);
             }
-            self.start_slide(point(px(28.), px(0.)), false);
-            cx.notify();
+            None if !self.login_settings => self.login_settings = true,
+            _ => return,
         }
+        self.settings.update(cx, |view, cx| view.opened(window, cx));
+        cx.notify();
     }
 
     fn list_offline(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -455,8 +504,10 @@ impl RemoteHelper {
         cx.notify();
     }
 
-    fn leave_session(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn leave_session(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         self.session = None;
+        self.settings
+            .update(cx, |view, cx| view.set_session(None, window, cx));
         self.slide = None;
         self.session_epoch = self.session_epoch.wrapping_add(1);
         cx.remove_global::<LastScreen>();
@@ -496,6 +547,28 @@ fn slide_in(content: AnyElement, slide: Option<PageSlide>, cx: &App) -> AnyEleme
 impl Render for RemoteHelper {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let content = match &self.session {
+            None if self.login_settings => v_flex()
+                .size_full()
+                .child(
+                    h_flex()
+                        .h(px(40.))
+                        .px_3()
+                        .flex_shrink_0()
+                        .border_b_1()
+                        .border_color(cx.theme().border)
+                        .child(
+                            Button::new("settings-return-login")
+                                .label("返回登录")
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.login_settings = false;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .child(div().flex_1().min_h_0().child(self.settings.clone()))
+                .into_any_element(),
             None => v_flex()
                 .size_full()
                 .child(div().flex_1().min_h_0().child(self.render_login(cx)))
@@ -508,15 +581,26 @@ impl Render for RemoteHelper {
                         .id("offline-history-list")
                         .overflow_y_scroll()
                         .child(
-                            Button::new("offline-history")
-                                .label(if self.opening_offline {
-                                    "正在读取缓存…"
-                                } else {
-                                    "离线历史"
-                                })
-                                .ghost()
-                                .small()
-                                .on_click(cx.listener(Self::list_offline)),
+                            h_flex()
+                                .gap_2()
+                                .child(
+                                    Button::new("offline-history")
+                                        .label(if self.opening_offline {
+                                            "正在读取缓存…"
+                                        } else {
+                                            "离线历史"
+                                        })
+                                        .ghost()
+                                        .small()
+                                        .on_click(cx.listener(Self::list_offline)),
+                                )
+                                .child(
+                                    Button::new("login-settings")
+                                        .label("设置")
+                                        .ghost()
+                                        .small()
+                                        .on_click(cx.listener(Self::show_settings)),
+                                ),
                         )
                         .children(
                             self.offline_choices
@@ -581,8 +665,8 @@ impl Render for RemoteHelper {
                     }))
                     .child(page_tab(
                         session.page == Page::Settings,
-                        Button::new("history-settings")
-                            .label("历史设置")
+                        Button::new("settings")
+                            .label("设置")
                             .ghost()
                             .small()
                             .on_click(cx.listener(Self::show_settings)),
@@ -626,7 +710,7 @@ impl Render for RemoteHelper {
                 let page = match session.page {
                     Page::Dashboard => session.dashboard.clone().into_any_element(),
                     Page::Services => session.services.clone().into_any_element(),
-                    Page::Settings => session.settings.clone().into_any_element(),
+                    Page::Settings => self.settings.clone().into_any_element(),
                 };
                 let content = v_flex()
                     .size_full()
@@ -643,7 +727,6 @@ impl Render for RemoteHelper {
         };
         div()
             .size_full()
-            .bg(window_tint(cx))
             .text_color(cx.theme().foreground)
             .child(content)
     }

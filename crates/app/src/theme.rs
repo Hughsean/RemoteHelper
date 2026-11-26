@@ -1,5 +1,6 @@
 //! 全局主题和原生窗口材质。透明度只用于背景层，文本和图表使用主题前景色。
 
+use crate::preferences::{Appearance, ClientPreferences};
 use gpui_kit::component::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::*;
 
@@ -42,14 +43,52 @@ const LIGHT: Palette = Palette {
     metrics: [0x08769f, 0x6248d2, 0xb82f63],
 };
 
+pub(crate) fn install_window_surface(cx: &mut App) {
+    gpui_kit::base::Root::register_plugin(cx, |_, _| WindowSurface);
+}
+
+struct WindowSurface;
+
+impl Render for WindowSurface {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+impl gpui_kit::base::RootPlugin for WindowSurface {
+    fn style(&self, surface: &mut Stateful<Div>, _: &mut Window, cx: &mut App) {
+        // GPUI Kit 默认在页面下面铺一层不透明底色；在根表面替换它才能露出磨砂。
+        surface
+            .style()
+            .refine(&StyleRefinement::default().bg(window_tint(cx)));
+    }
+}
+
 /// 新窗口与系统深浅模式同步，打开后也响应系统外观变化。
 pub(crate) fn bind_window(window: &mut Window, cx: &mut App) {
     #[cfg(target_os = "windows")]
-    apply_desktop_acrylic(window);
-    apply(ThemeMode::from(window.appearance()), cx);
+    apply_desktop_backdrop(window, window_background(cx));
+    apply_window_theme(window, cx);
     window
-        .observe_window_appearance(|window, cx| apply(ThemeMode::from(window.appearance()), cx))
+        .observe_window_appearance(apply_window_theme)
         .detach();
+}
+
+pub(crate) fn apply_window_theme(window: &mut Window, cx: &mut App) {
+    let mode = match ClientPreferences::get(cx).appearance {
+        Appearance::System => ThemeMode::from(window.appearance()),
+        Appearance::Light => ThemeMode::Light,
+        Appearance::Dark => ThemeMode::Dark,
+    };
+    apply(mode, cx);
+}
+
+pub(crate) fn apply_window_material(window: &Window, cx: &mut App) {
+    let appearance = window_background(cx);
+    window.set_background_appearance(appearance);
+    #[cfg(target_os = "windows")]
+    apply_desktop_backdrop(window, appearance);
+    cx.refresh_windows();
 }
 
 fn apply(mode: ThemeMode, cx: &mut App) {
@@ -124,9 +163,9 @@ fn apply(mode: ThemeMode, cx: &mut App) {
 }
 
 /// 底色着色后仍能露出原生材质；纯色窗口直接使用主题底色。
-pub(crate) fn window_tint(cx: &App) -> Hsla {
+fn window_tint(cx: &App) -> Hsla {
     let theme = cx.theme();
-    let opacity = if window_background() == WindowBackgroundAppearance::Opaque {
+    let opacity = if window_background(cx) == WindowBackgroundAppearance::Opaque {
         1.
     } else if theme.is_dark() {
         0.26
@@ -136,8 +175,20 @@ pub(crate) fn window_tint(cx: &App) -> Hsla {
     theme.background.opacity(opacity)
 }
 
+pub(crate) fn window_background(cx: &App) -> WindowBackgroundAppearance {
+    if ClientPreferences::get(cx).frosted {
+        native_background()
+    } else {
+        WindowBackgroundAppearance::Opaque
+    }
+}
+
+pub(crate) fn supports_frosted() -> bool {
+    native_background() != WindowBackgroundAppearance::Opaque
+}
+
 #[cfg(target_os = "windows")]
-pub(crate) fn window_background() -> WindowBackgroundAppearance {
+fn native_background() -> WindowBackgroundAppearance {
     use std::{mem::size_of, sync::OnceLock};
     use windows::{
         Wdk::System::SystemServices::RtlGetVersion,
@@ -170,18 +221,18 @@ pub(crate) fn window_background() -> WindowBackgroundAppearance {
 }
 
 #[cfg(target_os = "windows")]
-fn apply_desktop_acrylic(window: &Window) {
+fn apply_desktop_backdrop(window: &Window, appearance: WindowBackgroundAppearance) {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use windows::Win32::{
         Foundation::HWND,
         Graphics::Dwm::{
-            DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
-            DwmSetWindowAttribute,
+            DWMSBT_NONE, DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
+            DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
         },
         UI::Controls::MARGINS,
     };
 
-    if window_background() != WindowBackgroundAppearance::MicaBackdrop {
+    if native_background() != WindowBackgroundAppearance::MicaBackdrop {
         return;
     }
     let Ok(handle) = HasWindowHandle::window_handle(window) else {
@@ -191,12 +242,18 @@ fn apply_desktop_acrylic(window: &Window) {
         return;
     };
     let hwnd = HWND(handle.hwnd.get() as *mut _);
-    let material = DWMSBT_TRANSIENTWINDOW;
+    let acrylic = appearance == WindowBackgroundAppearance::MicaBackdrop;
+    let material = if acrylic {
+        DWMSBT_TRANSIENTWINDOW
+    } else {
+        DWMSBT_NONE
+    };
+    let margin = if acrylic { -1 } else { 0 };
     let margins = MARGINS {
-        cxLeftWidth: -1,
-        cxRightWidth: -1,
-        cyTopHeight: -1,
-        cyBottomHeight: -1,
+        cxLeftWidth: margin,
+        cxRightWidth: margin,
+        cyTopHeight: margin,
+        cyBottomHeight: margin,
     };
     // HWND 来自仍存活的 GPUI 窗口，传入的材质和边距只在调用期间读取。
     unsafe {
@@ -206,8 +263,10 @@ fn apply_desktop_acrylic(window: &Window) {
             std::ptr::from_ref(&material).cast(),
             std::mem::size_of_val(&material) as u32,
         ) {
-            tracing::debug!(%error, "DWM 亚克力不可用，使用 GPUI 模糊材质");
-            window.set_background_appearance(WindowBackgroundAppearance::Blurred);
+            tracing::debug!(%error, "无法设置 DWM 窗口材质");
+            if acrylic {
+                window.set_background_appearance(WindowBackgroundAppearance::Blurred);
+            }
         } else {
             let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
         }
@@ -215,11 +274,11 @@ fn apply_desktop_acrylic(window: &Window) {
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) fn window_background() -> WindowBackgroundAppearance {
+fn native_background() -> WindowBackgroundAppearance {
     WindowBackgroundAppearance::Blurred
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-pub(crate) fn window_background() -> WindowBackgroundAppearance {
+fn native_background() -> WindowBackgroundAppearance {
     WindowBackgroundAppearance::Opaque
 }

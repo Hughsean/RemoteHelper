@@ -150,6 +150,35 @@ async fn put(cache: &HistoryCache, day: &DayEntry, offset: u64, bytes: &[u8]) ->
 }
 
 #[tokio::test]
+async fn overview_can_read_cached_days_outside_the_detail_window() {
+    let temp = Temp::new();
+    let cache = test_cache(Some(temp.0.clone()), STORE, policy(), true).unwrap();
+    for day in [1, 3] {
+        let (entry, head, block) = sealed(day, [day as u8; 16], day as u64);
+        put(&cache, &entry, 0, &head).await.unwrap();
+        put(&cache, &entry, head.len() as u64, &block)
+            .await
+            .unwrap();
+    }
+    let detail = cache
+        .query((stamp(3, 0), stamp(3, 10_000)).into())
+        .await
+        .unwrap();
+    assert!(
+        detail
+            .samples
+            .iter()
+            .all(|sample| sample.frame.time_ms >= stamp(3, 0))
+    );
+    let old = cache
+        .query_overview((stamp(1, 0), stamp(2, 0)).into())
+        .await
+        .unwrap();
+    assert_eq!(old.samples[0].frame.time_ms, stamp(1, 1000));
+    assert_eq!(old.coverage.len(), 2);
+}
+
+#[tokio::test]
 async fn each_day_resumes_its_own_prefix_and_recovers_interrupted_packet() {
     let temp = Temp::new();
     let cache = test_cache(Some(temp.0.clone()), STORE, policy(), true).unwrap();

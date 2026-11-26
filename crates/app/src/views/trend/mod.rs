@@ -6,12 +6,14 @@
 
 mod aggregation;
 mod navigator;
+mod overview;
 mod playback;
 mod status;
 mod step;
 mod viewport;
 
-use self::navigator::Brush;
+use self::navigator::{Brush, NavigatorExtent};
+pub(super) use self::overview::{Overview, OverviewPlan};
 pub(super) use self::playback::Playback;
 use self::playback::{Band, LivePoint, Mark};
 use self::step::{StepReading, StepRun, paint_steps, value_y};
@@ -26,6 +28,7 @@ use std::{
     cell::Cell,
     collections::VecDeque,
     rc::Rc,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -110,6 +113,7 @@ pub(crate) struct TrendPlot {
     steps: Rc<[Vec<StepRun>; 3]>,
     /// 进度条上整段历史的概览。
     nav_runs: Option<(usize, Rc<[StepRun]>)>,
+    nav_history: Option<Arc<Overview>>,
     timeline: Option<Timeline>,
     view: Viewport,
     interval_ms: Option<u64>,
@@ -117,6 +121,7 @@ pub(crate) struct TrendPlot {
     /// 指针在画布上的位置（窗口坐标）：竖线钉在这个像素上，时刻每帧按窗口重算。
     hover: Option<(Pixels, Pixels)>,
     drag: Option<Brush>,
+    nav_extent: NavigatorExtent,
     nav_cursor: CursorStyle,
     chart_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     nav_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
@@ -136,12 +141,14 @@ impl TrendPlot {
             marks: Rc::from([]),
             steps: Default::default(),
             nav_runs: None,
+            nav_history: None,
             timeline: None,
             view: Viewport::default(),
             interval_ms: Some(1000),
             visible: [true; 3],
             hover: None,
             drag: None,
+            nav_extent: NavigatorExtent::default(),
             nav_cursor: CursorStyle::PointingHand,
             chart_bounds: Rc::new(Cell::new(None)),
             nav_bounds: Rc::new(Cell::new(None)),
@@ -160,6 +167,7 @@ impl TrendPlot {
                 self.history.clear();
                 self.timeline = None;
                 self.view = Viewport::default();
+                self.nav_extent = NavigatorExtent::default();
                 self.drag = None;
                 self.nav_cursor = CursorStyle::PointingHand;
             } else if last.at == at {
@@ -279,7 +287,14 @@ impl TrendPlot {
 
     /// 清除持久化历史时保留实时样本。
     pub(crate) fn set_history(&mut self, query: HistoryQuery, cx: &mut Context<Self>) {
+        self.nav_history = None;
         self.set_prepared_history(Playback::new(query, self.history_range()), cx);
+    }
+
+    pub(super) fn set_overview(&mut self, overview: Option<Arc<Overview>>, cx: &mut Context<Self>) {
+        self.nav_history = overview;
+        self.nav_runs = None;
+        cx.notify();
     }
 
     pub(super) fn set_prepared_history(&mut self, stored: Playback, cx: &mut Context<Self>) {
@@ -560,7 +575,12 @@ impl TrendPlot {
             let runs = if self.modern() {
                 let extent = (first.floor() as i64, (last.ceil() as i64).saturating_add(1)).into();
                 let mut merged = playback::merge(self.stored.as_ref(), &self.live, extent);
-                aggregation::covered_runs(std::mem::take(&mut merged.series[index]), bucket)
+                let current = std::mem::take(&mut merged.series[index]);
+                if let Some(overview) = &self.nav_history {
+                    overview.runs(index, current)
+                } else {
+                    aggregation::covered_runs(current, bucket)
+                }
             } else {
                 aggregation::runs(&self.history, index, bucket)
             };
@@ -758,7 +778,12 @@ impl Render for TrendPlot {
         let flowing = self.interval_ms.is_some()
             && !reduced_motion
             && self.timeline.is_some_and(|timeline| clock < timeline.to);
-        if (tweening || flowing) && window.is_visible() {
+        let navigating = self.drag.is_none()
+            && self.data_span().is_some()
+            && self
+                .nav_extent
+                .advance(self.view.extent(), now, !reduced_motion);
+        if (tweening || flowing || navigating) && window.is_visible() {
             window.request_animation_frame();
         }
         let chart_bounds = self.chart_bounds.clone();
@@ -889,9 +914,19 @@ impl Render for TrendPlot {
                             })
                             .on_mouse_down(
                                 MouseButton::Left,
-                                cx.listener(|this, event: &MouseDownEvent, window, cx| {
-                                    if event.click_count >= 2 {
-                                        this.reset_view(window, cx);
+                                cx.listener(|this, _: &MouseDownEvent, _, cx| {
+                                    if this.interactive() {
+                                        this.view.hold();
+                                        cx.notify();
+                                    }
+                                }),
+                            )
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener(|this, _: &MouseDownEvent, _, cx| {
+                                    if this.interactive() && !this.view.following() {
+                                        this.view.go_latest(SLOW);
+                                        cx.notify();
                                     }
                                 }),
                             )

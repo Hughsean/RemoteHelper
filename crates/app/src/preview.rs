@@ -80,7 +80,6 @@ impl Render for Preview {
         v_flex()
             .size_full()
             .p_4()
-            .bg(theme::window_tint(cx))
             .text_color(cx.theme().foreground)
             .child(
                 v_flex()
@@ -129,7 +128,7 @@ pub(crate) fn open(cx: &mut App) -> Result<()> {
                 size(px(1080.), px(760.)),
                 cx,
             ))),
-            window_background: theme::window_background(),
+            window_background: theme::window_background(cx),
             ..Default::default()
         },
         cx,

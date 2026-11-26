@@ -166,6 +166,14 @@ impl Viewport {
         self.retarget(duration);
     }
 
+    /// 定格当前帧，保留屏幕上已经显示的区间，包括动画中的中间位置。
+    pub(super) fn hold(&mut self) {
+        self.view = self.shown;
+        self.wanted = self.span();
+        self.follow = false;
+        self.tween = None;
+    }
+
     /// 保持右端不变，只改宽度。
     pub(super) fn set_span(&mut self, span: f64, duration: Duration) {
         self.wanted = span.clamp(self.narrowest(), self.length());
@@ -444,6 +452,22 @@ mod tests {
             assert!(((at + offset) / step).fract().abs() < 1e-9);
         }
         assert!(times.iter().all(|at| *at >= 1_234. && *at < 61_234.));
+    }
+
+    #[test]
+    fn holding_and_resuming_keeps_the_visible_window_width() {
+        let mut view = Viewport::default();
+        view.extend(0., 600_000.);
+        view.zoom_at(0.5, 0.5, FAST);
+        let shown = view.shown();
+        view.hold();
+        view.extend(0., 660_000.);
+        assert_eq!(view.shown(), shown);
+        assert!(!view.following());
+
+        view.go_latest(std::time::Duration::ZERO);
+        assert_eq!(view.shown(), (360_000., 660_000.));
+        assert!(view.following());
     }
 
     #[test]

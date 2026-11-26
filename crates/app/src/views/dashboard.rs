@@ -1,7 +1,8 @@
 use crate::notifications::Notices;
+use crate::preferences::{ClientPreferences, RefreshRate};
 use crate::ui::{ConnectionStatus, panel, request_error, trend_title};
-use crate::views::trend::{Playback, SERIES, TrendPlot, series_colors};
-use client::history::{HistoryCache, HistoryQuery, HistorySync, SyncStatus};
+use crate::views::trend::{Overview, OverviewPlan, Playback, SERIES, TrendPlot, series_colors};
+use client::history::{HistoryCache, HistoryError, HistoryQuery, HistorySync, SyncStatus};
 use common::{Request, Response, SystemInfo, history_api::TimeRange};
 use gpui_kit::assets::IconName;
 use gpui_kit::base::StyledExt;
@@ -19,13 +20,14 @@ use std::{
 };
 use tokio::runtime::Handle;
 
-const INTERVALS: [(Option<u64>, &str); 4] = [
-    (Some(500), "0.5 秒"),
-    (Some(1000), "1 秒"),
-    (Some(3000), "3 秒"),
-    (None, "暂停"),
-];
 const INTERVAL_FONT_SIZE: f32 = 13.;
+
+fn refresh_intervals() -> impl Iterator<Item = (Option<u64>, &'static str)> {
+    RefreshRate::CHOICES
+        .into_iter()
+        .map(|(rate, label)| (Some(rate.millis()), label))
+        .chain([(None, "暂停")])
+}
 
 pub(crate) struct Dashboard {
     latest: Option<SystemInfo>,
@@ -45,6 +47,9 @@ impl Dashboard {
         connection_status: Entity<ConnectionStatus>,
         cx: &mut Context<Self>,
     ) -> Self {
+        let interval = Some(ClientPreferences::get(cx).refresh_rate.millis());
+        let trend = cx.new(TrendPlot::new);
+        trend.update(cx, |plot, cx| plot.set_interval(interval, cx));
         let polling = cx.spawn(async move |this, cx| {
             while let Ok(interval) =
                 this.update(cx, |view, _| view.interval.filter(|_| view.poll_active))
@@ -95,8 +100,8 @@ impl Dashboard {
         });
         Self {
             latest: None,
-            trend: cx.new(TrendPlot::new),
-            interval: Some(1000),
+            trend,
+            interval,
             visible: [true; 3],
             refresh_failed: false,
             poll_active: true,
@@ -125,6 +130,17 @@ impl Dashboard {
         self.trend
             .update(cx, |plot, cx| plot.set_interval(interval, cx));
         cx.notify();
+    }
+
+    pub(crate) fn apply_refresh_preference(
+        &mut self,
+        previous: RefreshRate,
+        current: RefreshRate,
+        cx: &mut Context<Self>,
+    ) {
+        if self.interval == Some(previous.millis()) {
+            self.set_interval(Some(current.millis()), cx);
+        }
     }
 
     pub(crate) fn set_polling(&mut self, active: bool, cx: &mut Context<Self>) {
@@ -162,8 +178,12 @@ impl Dashboard {
             let mut query_band = None;
             let mut query_pending = true;
             let mut online_error = None;
-            let mut active: Option<AbortWork<Result<HistoryCache, client::history::HistoryError>>> =
-                None;
+            let mut overview: Option<Arc<Overview>> = None;
+            let mut overview_work: Option<(
+                OverviewPlan,
+                AbortWork<Result<Overview, HistoryError>>,
+            )> = None;
+            let mut active: Option<AbortWork<Result<HistoryCache, HistoryError>>> = None;
             let mut deadline = Instant::now();
             while let Ok(viewport) = this.update(cx, |view, cx| view.trend.read(cx).history_range())
             {
@@ -189,6 +209,25 @@ impl Dashboard {
                     deadline = Instant::now() + Duration::from_millis(150);
                 }
                 let band = query_band.unwrap_or(visible);
+                if overview_work
+                    .as_ref()
+                    .is_some_and(|(_, work)| work.0.is_finished())
+                {
+                    let (_, mut work) = overview_work.take().unwrap();
+                    if let Ok(Ok(completed)) = (&mut work.0).await {
+                        let completed = Arc::new(completed);
+                        overview = Some(completed.clone());
+                        if this
+                            .update(cx, |view, cx| {
+                                view.trend
+                                    .update(cx, |plot, cx| plot.set_overview(Some(completed), cx));
+                            })
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
+                }
                 if active.as_ref().is_some_and(|work| work.0.is_finished()) {
                     let mut completed = active.take().expect("已完成的历史同步任务");
                     match (&mut completed.0).await {
@@ -216,9 +255,52 @@ impl Dashboard {
                         .clone()
                         .or_else(|| sync.as_ref().and_then(|sync| sync.active_cache()))
                     {
+                        let query_cache = cache.clone();
                         let mut work =
-                            AbortWork(runtime.spawn(async move { cache.query(band).await }));
+                            AbortWork(runtime.spawn(async move { query_cache.query(band).await }));
                         if let Ok(Ok(mut query)) = (&mut work.0).await {
+                            if overview
+                                .as_ref()
+                                .is_some_and(|old| old.store_id() != cache.store_id())
+                            {
+                                overview = None;
+                                let _ = this.update(cx, |view, cx| {
+                                    view.trend
+                                        .update(cx, |plot, cx| plot.set_overview(None, cx));
+                                });
+                            }
+                            let next = OverviewPlan::new(cache.store_id(), &query);
+                            if overview_work
+                                .as_ref()
+                                .is_some_and(|(pending, _)| Some(pending) != next.as_ref())
+                            {
+                                overview_work = None;
+                            }
+                            match next {
+                                Some(plan)
+                                    if overview.as_ref().is_none_or(|old| old.plan() != &plan)
+                                        && overview_work.is_none() =>
+                                {
+                                    let previous = overview.clone();
+                                    let pending = plan.clone();
+                                    overview_work = Some((
+                                        plan,
+                                        AbortWork(runtime.spawn(async move {
+                                            Overview::load(cache, pending, previous).await
+                                        })),
+                                    ));
+                                }
+                                Some(_) => {}
+                                None => {
+                                    overview_work = None;
+                                    if overview.take().is_some() {
+                                        let _ = this.update(cx, |view, cx| {
+                                            view.trend
+                                                .update(cx, |plot, cx| plot.set_overview(None, cx));
+                                        });
+                                    }
+                                }
+                            }
                             if offline || online_error.is_some() {
                                 query.status = SyncStatus::Failed {
                                     at_ms: wall_ms(),
@@ -276,10 +358,9 @@ impl Dashboard {
 
     pub(crate) fn interval_control(dashboard: &Entity<Self>, cx: &App) -> Div {
         let selected = dashboard.read(cx).interval;
-        let label = INTERVALS
-            .iter()
+        let label = refresh_intervals()
             .find(|(value, _)| *value == selected)
-            .map_or("—", |(_, label)| *label);
+            .map_or("—", |(_, label)| label);
         let view = dashboard.downgrade();
         let menu = Button::new("interval")
             .xsmall()
@@ -296,7 +377,7 @@ impl Dashboard {
                     .child(Icon::from(IconName::ChevronDown).size(px(11.))),
             )
             .dropdown_menu_with_anchor(Anchor::BottomRight, move |menu, _, _| {
-                INTERVALS.into_iter().fold(menu, |menu, (value, label)| {
+                refresh_intervals().fold(menu, |menu, (value, label)| {
                     let view = view.clone();
                     menu.item(
                         PopupMenuItem::new(label)

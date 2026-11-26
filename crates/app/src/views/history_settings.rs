@@ -60,6 +60,12 @@ pub(crate) enum HistorySettingsChange {
     CacheCleared,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum HistorySection {
+    Cache,
+    Server,
+}
+
 type ChangeHandler = Rc<dyn Fn(HistorySettingsChange, &mut Window, &mut App)>;
 
 const SERVER_FIELDS: [&str; 5] = [
@@ -146,6 +152,7 @@ struct ServerResult {
 
 pub(crate) struct HistorySettings {
     runtime: Handle,
+    section: HistorySection,
     public_key: String,
     sync: Option<Arc<HistorySync>>,
     offline_cache: Option<HistoryCache>,
@@ -187,6 +194,7 @@ impl HistorySettings {
         cache_fields.set(preference_values(preferences.cache), window, cx);
         Self {
             runtime,
+            section: HistorySection::Cache,
             public_key,
             sync,
             offline_cache,
@@ -270,6 +278,22 @@ impl HistorySettings {
             window,
             cx,
         );
+    }
+
+    pub(crate) fn open_section(
+        &mut self,
+        section: HistorySection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.section = section;
+        match section {
+            HistorySection::Cache => self.refresh_usage(window, cx),
+            HistorySection::Server if self.snapshot.is_none() || self.server_stale => {
+                self.refresh(window, cx);
+            }
+            HistorySection::Server => cx.notify(),
+        }
     }
 
     fn signal(&self, change: HistorySettingsChange, window: &mut Window, cx: &mut App) {
@@ -1051,21 +1075,10 @@ impl HistorySettings {
 
 impl Render for HistorySettings {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .id("history-settings-scroll")
-            .size_full()
-            .overflow_y_scroll()
-            .child(
-                v_flex()
-                    .w_full()
-                    .max_w(px(760.))
-                    .mx_auto()
-                    .p_4()
-                    .gap_3()
-                    .child(div().text_size(px(18.)).font_semibold().child("历史设置"))
-                    .child(self.render_server(cx))
-                    .child(self.render_cache(cx)),
-            )
+        match self.section {
+            HistorySection::Cache => self.render_cache(cx),
+            HistorySection::Server => self.render_server(cx),
+        }
     }
 }
 
