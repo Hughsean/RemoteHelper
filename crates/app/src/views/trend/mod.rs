@@ -5,6 +5,7 @@
 //! 时刻为不动点、并暂停实时跟随。
 
 mod aggregation;
+mod axis;
 mod navigator;
 mod overview;
 mod playback;
@@ -110,6 +111,7 @@ pub(crate) struct TrendPlot {
     stored_anchor: Option<i64>,
     bands: Rc<[Band]>,
     marks: Rc<[Mark]>,
+    axis: axis::PercentAxis,
     steps: Rc<[Vec<StepRun>; 3]>,
     /// 进度条上整段历史的概览。
     nav_runs: Option<(usize, Rc<[StepRun]>)>,
@@ -139,6 +141,7 @@ impl TrendPlot {
             stored_anchor: None,
             bands: Rc::from([]),
             marks: Rc::from([]),
+            axis: Default::default(),
             steps: Default::default(),
             nav_runs: None,
             nav_history: None,
@@ -783,9 +786,6 @@ impl Render for TrendPlot {
             && self
                 .nav_extent
                 .advance(self.view.extent(), now, !reduced_motion);
-        if (tweening || flowing || navigating) && window.is_visible() {
-            window.request_animation_frame();
-        }
         let chart_bounds = self.chart_bounds.clone();
         let measured_width = self.chart_width();
         self.sync_steps(measured_width);
@@ -793,6 +793,18 @@ impl Render for TrendPlot {
         let (start, end) = self.view.shown();
         let span = (end - start).max(1.);
         let visible = self.visible;
+        let peak = self
+            .steps
+            .iter()
+            .zip(visible)
+            .filter(|(_, show)| *show)
+            .filter_map(|(runs, _)| StepRun::peak_in(runs, (start, end)))
+            .reduce(f32::max);
+        let (axis_top, axis_marks, axis_moving) = self.axis.update(peak, now, !reduced_motion);
+        if (tweening || flowing || navigating || axis_moving) && window.is_visible() {
+            window.request_animation_frame();
+        }
+        let grid_marks = axis_marks.clone();
         let theme = cx.theme();
         let grid = theme.chart_grid;
         let marker_edge = theme.background.blend(theme.group_box);
@@ -873,20 +885,16 @@ impl Render for TrendPlot {
                             .flex_shrink_0()
                             .text_size(px(11.))
                             .text_color(muted)
-                            .children(
-                                ["100%", "75%", "50%", "25%", "0%"]
-                                    .into_iter()
-                                    .enumerate()
-                                    .map(|(index, label)| {
-                                        div()
-                                            .absolute()
-                                            .right(px(9.))
-                                            .top(relative(index as f32 / 4.))
-                                            .mt(px(-7.))
-                                            .line_height(px(14.))
-                                            .child(label)
-                                    }),
-                            ),
+                            .children(axis_marks.into_iter().map(|(value, at, alpha)| {
+                                div()
+                                    .absolute()
+                                    .right(px(9.))
+                                    .top(relative(at.max(0.)))
+                                    .mt(px(-7.))
+                                    .line_height(px(14.))
+                                    .text_color(muted.opacity(alpha))
+                                    .child(format!("{value}%"))
+                            })),
                     )
                     .child(
                         div()
@@ -968,13 +976,18 @@ impl Render for TrendPlot {
                                                     status_colors,
                                                     window,
                                                 );
-                                                let mut rules = PathBuilder::stroke(px(1.));
-                                                for index in 0..=4 {
+                                                for &(_, at, alpha) in &grid_marks {
                                                     let y = bounds.top()
-                                                        + bounds.size.height * (index as f32 / 4.);
-                                                    rules.move_to(point(bounds.left(), y));
-                                                    rules.line_to(point(bounds.right(), y));
+                                                        + bounds.size.height * at.max(0.);
+                                                    let mut rule = PathBuilder::stroke(px(1.));
+                                                    rule.move_to(point(bounds.left(), y));
+                                                    rule.line_to(point(bounds.right(), y));
+                                                    if let Ok(path) = rule.build() {
+                                                        window
+                                                            .paint_path(path, grid.opacity(alpha));
+                                                    }
                                                 }
+                                                let mut rules = PathBuilder::stroke(px(1.));
                                                 for fraction in &tick_lines {
                                                     let x = bounds.left()
                                                         + bounds.size.width * *fraction;
@@ -992,6 +1005,7 @@ impl Render for TrendPlot {
                                                             bounds,
                                                             colors[index],
                                                             false,
+                                                            axis_top,
                                                             window,
                                                         );
                                                     }
@@ -1017,7 +1031,10 @@ impl Render for TrendPlot {
                                                         hover_values.into_iter().enumerate()
                                                     {
                                                         if let Some(value) = value {
-                                                            let y = value_y(bounds, value.value);
+                                                            let y = value_y(
+                                                                bounds,
+                                                                value.value / axis_top,
+                                                            );
                                                             window.paint_quad(quad(
                                                                 Bounds::new(
                                                                     point(x - px(4.), y - px(4.)),

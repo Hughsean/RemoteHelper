@@ -72,6 +72,25 @@ impl StepRun {
         end < at || (!self.inclusive_end && end == at)
     }
 
+    pub(super) fn peak_in(runs: &[Self], (start, end): (f64, f64)) -> Option<f32> {
+        let first = runs.partition_point(|run| run.ends_before(start));
+        runs[first..]
+            .iter()
+            .take_while(|run| run.points[0].at as f64 <= end)
+            .flat_map(|run| {
+                // 视口起点前的最后一个样本可能仍覆盖视口左侧。
+                let first = run
+                    .points
+                    .partition_point(|point| point.at as f64 <= start)
+                    .saturating_sub(1);
+                let last = run.points.partition_point(|point| point.at as f64 <= end);
+                run.points[first..last]
+                    .iter()
+                    .map(|point| point.reading.value)
+            })
+            .reduce(f32::max)
+    }
+
     pub(super) fn reading_at(runs: &[Self], at: f64) -> Option<StepReading> {
         let run = runs.get(runs.partition_point(|run| run.ends_before(at)))?;
         let index = run.points.partition_point(|point| point.at as f64 <= at);
@@ -90,13 +109,14 @@ pub(super) fn paint_steps(
     bounds: Bounds<Pixels>,
     color: Hsla,
     overview: bool,
+    axis_top: f32,
     window: &mut Window,
 ) {
     let (start, end) = time;
     let position = |at: f64, value: f32| {
         point(
             bounds.left() + bounds.size.width * ((at - start) / (end - start).max(1.)) as f32,
-            value_y(bounds, value),
+            value_y(bounds, value / axis_top),
         )
     };
 
@@ -162,6 +182,17 @@ pub(super) fn paint_steps(
 #[cfg(test)]
 mod tests {
     use super::{PlotPoint, StepRun};
+
+    #[test]
+    fn peak_uses_visible_steps_and_the_left_edge_carry_in() {
+        let runs = [
+            StepRun::new(vec![PlotPoint::raw(10, 0.9)], 20),
+            StepRun::new(vec![PlotPoint::raw(25, 0.2), PlotPoint::raw(40, 0.8)], 50),
+        ];
+        assert_eq!(StepRun::peak_in(&runs, (20., 24.)), None);
+        assert_eq!(StepRun::peak_in(&runs, (30., 39.)), Some(0.2));
+        assert_eq!(StepRun::peak_in(&runs, (30., 41.)), Some(0.8));
+    }
 
     #[test]
     fn readouts_change_at_the_sample_and_leave_missing_intervals_empty() {

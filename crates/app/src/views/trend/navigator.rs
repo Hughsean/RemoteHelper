@@ -182,6 +182,7 @@ impl TrendPlot {
                                     plot,
                                     colors[*index].opacity(0.78),
                                     true,
+                                    1.,
                                     window,
                                 );
                             }
