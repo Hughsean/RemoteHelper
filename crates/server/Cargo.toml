@@ -1,6 +1,6 @@
 [package]
 name = "RemoteHelperServer"
-version = "3.0.0-rc.1"
+version = "3.0.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -33,12 +33,7 @@ x25519-dalek.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
-windows-sys.features = [
-  "Win32_Foundation",
-  "Win32_Security",
-  "Win32_Security_Authorization",
-  "Win32_Storage_FileSystem",
-]
+windows-sys.features = ["Win32_Storage_FileSystem"]
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

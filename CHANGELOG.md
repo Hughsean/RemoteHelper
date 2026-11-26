@@ -7,47 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [3.0.0] - 2026-11-26
 
-- 后续 GitHub Releases 不再构建或上传 Intel Mac 安装包；macOS 下载仅提供 Apple Silicon 版。Windows x64 客户端和服务端发布不变。
+### 新增
 
-## [3.0.0-rc.1] - 2026-11-26
+- Windows 服务端可在后台持续记录 CPU、内存、网络及可用的温度、功率等指标。采样历史按 UTC 日期保存，支持写入中断后恢复，并按天数或容量清理。
+- 桌面端分页同步历史，按服务端身份隔离本地缓存，支持登录前离线回看。趋势图标记采样缺口、时钟回拨、待同步区间和已淘汰历史。
+- 登录前后均可进入统一的「设置」，调整主题、磨砂、动画、登录后页面、默认采样刷新和本地缓存。服务器指纹、历史采样与封存、保留策略、时钟和权限归入「远程服务器」，由授权管理员保存更改。
 
-### Added
+### 改进
 
-- Windows 服务端可在后台持续记录 CPU、内存、网络及可用的温度、功率等指标。历史按 UTC 日期保存，支持写入中断后恢复，并按天数或容量清理。
-- 桌面端支持分页同步历史、按服务端身份隔离本地缓存，以及登录前离线回看。趋势图会区分采样缺口、时钟回拨、未同步区间和已被服务端清理的历史。
-- 新增历史设置页，可查看存储状态和调整本地缓存；配置过权限的管理员还可调整服务端历史设置并确认时钟异常。
+- 重做监控趋势图，支持以指针为锚点滚轮缩放、Shift + 滚轮平移，以及按时间加权合并密集采样。底部滑轨独立显示完整的已缓存历史概览，实时跟随时选框贴住右端。
+- 左击趋势图定格当前区间，右击恢复实时跟随，保留当前时间窗口宽度。可拖动底部选框和手柄浏览历史，双击滑轨恢复默认窗口。
+- 桌面客户端正文、底栏和设置页使用统一的窗口材质。连接状态位于顶部标签栏，刷新间隔位于监控页底栏。
+- 简化登录和新增服务流程，统一窗口级通知。关闭 macOS 窗口后，从 Dock 重开可恢复原来的页面。
+- Rust 工作区成员统一移入 `crates/`，共享依赖集中声明。
+- macOS 安装包提供 Apple Silicon 版，Windows 提供 x64 客户端和服务端。
 
 ### 升级说明
 
-1. **远程历史需同时升级客户端和 Windows 服务端。** 备份现有 `config.toml`、服务端身份文件和历史目录（如已存在）。旧服务端仍可用于实时监控，但不会提供远程历史；已固定指纹的地址不会自动降级到旧协议。
-2. 若尚未初始化服务端身份，在部署目录运行 `RemoteHelperServer.exe --init-server-identity`，随后正常启动服务端。通过可信渠道核对命令输出的 SHA-256 指纹，再在客户端确认并连接。若需远程修改历史设置，将客户端公钥同时加入 `[web_panel].authorized_keys` 和 `[history].admin_keys`，再重启服务端。
-3. 远程历史和实时请求分别使用 TCP 连接；如果并发上限被设为 `1`，应提高上限后再使用历史同步。服务端历史文件默认写入配置目录下的 `history/`，不加密，请限制访问权限。
+1. 使用远程历史时，请同时升级客户端和 Windows 服务端，并备份当前 `config.toml`、服务端身份文件及已有历史。旧服务端可继续用于实时监控；已固定指纹的地址需要通过身份校验。
+2. 首次启用历史时，在 `config.toml` 所在的部署目录运行 `RemoteHelperServer.exe --init-server-identity`，核对输出的 SHA-256 指纹后启动服务端。Windows 身份文件使用部署目录的继承权限，请确保服务账户能读取它。已初始化的部署沿用现有身份文件。
+3. 如需远程修改历史设置，将客户端公钥加入 `[web_panel].authorized_keys` 和 `[history].admin_keys`，再重启服务端。实时请求与历史同步各用一条 TCP 连接，请将并发上限设为至少 2。默认历史目录为部署目录下的 `history/`。
 
 ### 下载
 
 | 平台 | 文件 |
 | --- | --- |
-| Windows x64 桌面端 | `RemoteHelper-x86_64-pc-windows-msvc.exe` |
+| Windows x64 客户端 | `RemoteHelper-x86_64-pc-windows-msvc.exe` |
 | Windows x64 服务端 | `RemoteHelperServer-x86_64-pc-windows-msvc.zip`（含服务端、`keygen`、配置示例和许可证） |
-| macOS 15+ Intel | `RemoteHelper-x86_64-apple-darwin.dmg` |
 | macOS 15+ Apple Silicon | `RemoteHelper-aarch64-apple-darwin.dmg` |
 
-macOS 安装包使用临时签名（ad hoc），未做 Developer ID 签名或公证。
-
-### Fixed
-
-- macOS 客户端关闭窗口后，点击 Dock 图标会重新打开窗口，并回到关闭前的界面：已登录时恢复原来的页面，停在登录页时仍显示登录页。
-
-### Changed
-
-- Rust 工作区成员统一移入 `crates/`，共享依赖集中声明；桌面端与服务端包名保持不变。桌面端按入口、装配、外壳和页面分层。
-- 桌面客户端随系统深浅模式切换配色。窗口使用原生模糊材质，卡片采用分层半透明背景。
-- 登录页使用一体化表单，切换页面时使用短距离滑入动效。客户端消息在独立通知层显示，新增服务在悬浮弹窗中操作。
-- 顶部导航使用三色圆点显示连接状态。监控页在底栏提供刷新间隔选择。
-- 趋势图移除时间范围下拉菜单，以指针时刻为锚点滚轮缩放，支持 Shift + 滚轮平移和双击重置。底部滑块显示历史概览，可拖动选框和手柄调整时间范围，或点右箭头回到实时。悬停时显示该时刻各条阶梯线的读数。
-- 趋势图在较宽时间范围按图宽合并密集采样，悬停读数标注平均值的时间周期。
+macOS 安装包使用 ad hoc 签名。
 
 ## [2.3.1] - 2026-11-25
 
@@ -290,8 +281,8 @@ The following features are planned for future releases:
 
 ---
 
-[Unreleased]: https://github.com/Hughsean/RemoteHelper/compare/v3.0.0-rc.1...HEAD
-[3.0.0-rc.1]: https://github.com/Hughsean/RemoteHelper/compare/v2.3.1...v3.0.0-rc.1
+[Unreleased]: https://github.com/Hughsean/RemoteHelper/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/Hughsean/RemoteHelper/compare/v2.3.1...v3.0.0
 [2.3.1]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.3.1
 [2.3.0]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.3.0
 [2.0.2]: https://github.com/Hughsean/RemoteHelper/releases/tag/v2.0.2
