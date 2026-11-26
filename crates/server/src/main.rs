@@ -28,10 +28,11 @@ async fn main() -> anyhow::Result<()> {
     let mut args = std::env::args_os().skip(1);
     let config_path = std::path::Path::new(config::CONFIG_PATH);
     if let Some(arg) = args.next() {
-        anyhow::ensure!(
-            arg == "--init-server-identity",
-            "不支持的命令；用法：--init-server-identity [服务账户标识]"
-        );
+        #[cfg(windows)]
+        let usage = "用法：--init-server-identity";
+        #[cfg(unix)]
+        let usage = "用法：--init-server-identity [服务账户标识]";
+        anyhow::ensure!(arg == "--init-server-identity", "不支持的命令；{usage}");
         let reader = args
             .next()
             .map(|reader| {
@@ -40,10 +41,7 @@ async fn main() -> anyhow::Result<()> {
                     .map_err(|_| anyhow::anyhow!("无效的服务账户标识"))
             })
             .transpose()?;
-        anyhow::ensure!(
-            args.next().is_none(),
-            "用法：--init-server-identity [服务账户标识]"
-        );
+        anyhow::ensure!(args.next().is_none(), "{usage}");
         let identity = identity::initialize(config_path, reader.as_deref())?;
         println!("服务端公钥指纹：{}", identity.fingerprint());
         return Ok(());

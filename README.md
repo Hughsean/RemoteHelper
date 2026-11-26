@@ -42,6 +42,10 @@ Windows 需要 MSVC Rust 工具链、Visual Studio C++ Build Tools 和 CMake。m
 
 4. 在桌面客户端输入 `主机地址:端口`。同机调试可用 `127.0.0.1:9999`。选择密钥文件，输入密码后连接。用户主目录下的 `id_ed25519.json` 可自动选用。
 
+### 启用远程历史
+
+在包含 `config.toml` 的部署目录中运行一次 `.\RemoteHelperServer.exe --init-server-identity`，核对输出的公钥指纹后，再不带参数启动服务端。Windows 使用部署目录的继承权限保存 `identity/server-identity.v1`；只要当前账户能写入该目录，就不需要为初始化额外提权。若使用其他账户运行服务端，请确认它能读取身份文件。不要将私钥放在共享目录或提交到 Git。
+
 ### 构建发布版本
 
 ```sh
