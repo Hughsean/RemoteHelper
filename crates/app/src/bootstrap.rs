@@ -19,12 +19,14 @@ pub(crate) fn run(runtime: Handle) {
             return;
         }
         match open_main_window(reopen_runtime.clone(), cx) {
-            Ok(()) => cx.activate(true),
+            Ok(_) => cx.activate(true),
             Err(error) => tracing::error!(%error, "无法重新打开 RemoteHelper 窗口"),
         }
     });
     application.run(move |cx| {
         gpui_kit::init(cx);
+        #[cfg(target_os = "macos")]
+        crate::shortcuts::install(runtime.clone(), cx);
         ClientPreferences::load().install(cx);
         theme::install_window_surface(cx);
         // 开发用：只渲染趋势图并截图，不登录。
@@ -40,7 +42,7 @@ pub(crate) fn run(runtime: Handle) {
             return;
         }
         match open_main_window(runtime.clone(), cx) {
-            Ok(()) => cx.activate(true),
+            Ok(_) => cx.activate(true),
             Err(error) => {
                 tracing::error!(%error, "无法打开 RemoteHelper 窗口");
                 cx.quit();
@@ -49,9 +51,9 @@ pub(crate) fn run(runtime: Handle) {
     });
 }
 
-/// 打开主窗口。启动与 Dock 图标重开共用，界面状态由 [`RemoteHelper`] 自己还原。
-fn open_main_window(runtime: Handle, cx: &mut App) -> gpui_kit::Result<()> {
-    gpui_kit::open_window(
+/// 打开主窗口。启动、Dock 图标重开和应用菜单共用，界面状态由 [`RemoteHelper`] 自己还原。
+pub(crate) fn open_main_window(runtime: Handle, cx: &mut App) -> gpui_kit::Result<AnyWindowHandle> {
+    let (window, _) = gpui_kit::open_window(
         WindowOptions {
             titlebar: Some(TitlebarOptions {
                 title: Some("RemoteHelper".into()),
@@ -72,5 +74,5 @@ fn open_main_window(runtime: Handle, cx: &mut App) -> gpui_kit::Result<()> {
             cx.new(|cx| RemoteHelper::new(runtime.clone(), window, cx))
         },
     )?;
-    Ok(())
+    Ok(window)
 }

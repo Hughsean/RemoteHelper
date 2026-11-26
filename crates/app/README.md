@@ -18,6 +18,16 @@ cargo test -p App
 cargo clippy -p App --no-deps --all-targets -- -D warnings
 ```
 
+macOS Apple Silicon 上还可以用仓库根目录的 `build.sh` 生成可双击运行的 `dist/RemoteHelper.app`：
+
+```sh
+./build.sh              # 构建、ad hoc 签名并打开应用
+./build.sh --no-open    # 只构建、不启动
+./build.sh --force      # 覆盖已存在的 dist/RemoteHelper.app
+```
+
+脚本会从 `crates/app/Cargo.toml` 读取版本，并在连接局域网主机时请求「本地网络」权限。
+
 调试构建的登录页提供「使用模拟数据」。连接远程主机时，可手动选择密钥文件，或使用用户主目录中的 `id_ed25519.json`。登录成功后，客户端会在系统配置目录的 `remotehelper/login_data.json` 中保存服务器地址和密钥文件路径。每次连接都需输入密钥密码。
 
 开发趋势图时，可运行离线预览，查看两小时的合成历史。在 Windows PowerShell 中运行 `$env:REMOTEHELPER_PREVIEW="1"; cargo run -p App`。在 macOS 终端中运行 `REMOTEHELPER_PREVIEW=1 cargo run -p App`。可选的 `REMOTEHELPER_PREVIEW_FROZEN=1` 会自动缩放到历史窗口，`REMOTEHELPER_PREVIEW_HOVER=1` 会显示读数卡。
@@ -30,6 +40,7 @@ cargo clippy -p App --no-deps --all-targets -- -D warnings
 | --- | --- |
 | [src/main.rs](src/main.rs) | 进程入口：日志和 Tokio 运行时 |
 | [src/bootstrap.rs](src/bootstrap.rs) | GPUI 应用装配：资源、主题、窗口重开（Dock 图标还原）和开窗 |
+| [src/shortcuts.rs](src/shortcuts.rs) | macOS 应用菜单、窗口动作和系统快捷键 |
 | [src/shell.rs](src/shell.rs) | 页面切换动效、顶部导航、底栏和关窗前页签记忆 |
 | [src/theme.rs](src/theme.rs) | 系统主题、配色和原生窗口材质 |
 | [src/notifications.rs](src/notifications.rs) | 窗口级提示、警告和错误通知 |
@@ -44,7 +55,7 @@ cargo clippy -p App --no-deps --all-targets -- -D warnings
 
 按钮、输入框、通知和弹窗复用 [GPUI Kit 组件库](https://gpui-kit.com/zh-CN/component/)。网络任务交给 Tokio，结果返回 GPUI 视图后更新状态。提示、警告和错误在窗口右下角展示。新增服务在独立弹窗中填写。页面滑入动效遵循系统的减少动画设置。
 
-顶部标签栏右侧用绿、黄、红三色圆点表示在线、连接中和已断开。监控页底栏右侧可将刷新间隔设为 0.5 秒、1 秒、3 秒或暂停。暂停时，连接圆点显示最近一次确认的状态。
+顶部标签栏右侧用绿、黄、红三色圆点表示在线、连接中和已断开。监控页底栏右侧以圆点和时长显示当前刷新间隔，点击可设为 0.5 秒、1 秒、3 秒或暂停；刷新中圆点为绿色，暂停时整体弱化。暂停时，连接圆点显示最近一次确认的状态。
 
 趋势图以直角阶梯显示采样值。拉宽时间范围时，图表根据图宽合并密集采样，悬停卡片显示均值周期。缩回细节范围后显示原始采样。滚轮以指针时刻为锚点缩放，Shift + 滚轮平移。左击主图定格当前区间，右击主图或点击底部箭头恢复实时跟随，主图点击保留当前窗口宽度。底部滑轨显示完整的已缓存历史概览，可拖动选框和手柄，也可点击框外跳转；双击滑轨恢复设置中的默认窗口。交互参考 [Argus](https://github.com/Ray-lea/Argus) 的历史页。
 

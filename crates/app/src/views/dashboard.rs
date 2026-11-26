@@ -20,7 +20,7 @@ use std::{
 };
 use tokio::runtime::Handle;
 
-const INTERVAL_FONT_SIZE: f32 = 13.;
+const INTERVAL_FONT_SIZE: f32 = 12.;
 
 fn refresh_intervals() -> impl Iterator<Item = (Option<u64>, &'static str)> {
     RefreshRate::CHOICES
@@ -361,20 +361,28 @@ impl Dashboard {
         let label = refresh_intervals()
             .find(|(value, _)| *value == selected)
             .map_or("—", |(_, label)| label);
+        // 与趋势图底部的「实时」状态一致：圆点加短标签，暂停时转为弱化色。
+        let state_color = if selected.is_some() {
+            cx.theme().success
+        } else {
+            cx.theme().muted_foreground
+        };
         let view = dashboard.downgrade();
         let menu = Button::new("interval")
             .xsmall()
             .compact()
             .ghost()
             .h(px(20.))
-            .px(px(5.))
+            .px(px(6.))
+            .rounded_full()
             .accessibility_label(format!("刷新间隔 {label}"))
             .child(
                 h_flex()
-                    .gap_1()
+                    .gap_1p5()
                     .text_size(px(INTERVAL_FONT_SIZE))
-                    .child(label)
-                    .child(Icon::from(IconName::ChevronDown).size(px(11.))),
+                    .text_color(state_color)
+                    .child(div().size(px(5.)).rounded_full().bg(state_color))
+                    .child(label),
             )
             .dropdown_menu_with_anchor(Anchor::BottomRight, move |menu, _, _| {
                 refresh_intervals().fold(menu, |menu, (value, label)| {

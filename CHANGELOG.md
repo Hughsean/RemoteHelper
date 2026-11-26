@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 改进
+
+- 监控页底栏的刷新间隔改为与趋势图一致的状态样式：圆点加时长，去掉下拉箭头，暂停时整体弱化。
+
+### 修复
+
+- macOS 客户端补齐应用菜单和窗口快捷键：应用菜单提供设置、隐藏和退出，Command+Q、Command+W、Command+M、Control+Command+F 等快捷键恢复响应。
+
 ## [3.0.0] - 2026-11-26
 
 ### 新增

@@ -10,6 +10,8 @@ mod preferences;
 #[cfg(debug_assertions)]
 mod preview;
 mod shell;
+#[cfg(target_os = "macos")]
+mod shortcuts;
 mod theme;
 mod ui;
 mod views;

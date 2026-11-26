@@ -49,6 +49,14 @@ impl LastScreen {
     }
 }
 
+/// 最近创建的主窗口视图，供 macOS 应用菜单在全局动作中找到界面。
+#[cfg(target_os = "macos")]
+#[derive(Clone)]
+pub(crate) struct MainView(pub(crate) WeakEntity<RemoteHelper>);
+
+#[cfg(target_os = "macos")]
+impl Global for MainView {}
+
 /// 应用根视图：未登录时渲染登录页，登录后渲染监控或服务页。
 pub(crate) struct RemoteHelper {
     pub(crate) runtime: Handle,
@@ -148,6 +156,8 @@ impl RemoteHelper {
         if let Some(remembered) = cx.try_global::<LastScreen>().cloned() {
             this.enter_session(remembered.address, remembered.page, window, cx);
         }
+        #[cfg(target_os = "macos")]
+        cx.set_global(MainView(cx.weak_entity()));
         this
     }
 
@@ -407,6 +417,11 @@ impl RemoteHelper {
     }
 
     fn show_settings(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_settings(window, cx);
+    }
+
+    /// 打开设置页。窗口按钮和 macOS 应用菜单共用。
+    pub(crate) fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match &mut self.session {
             Some(session) if session.page != Page::Settings => {
                 session.page = Page::Settings;
