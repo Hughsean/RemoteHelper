@@ -1,5 +1,7 @@
 # History format v1
 
+> [简体中文](FORMAT.zh-CN.md)
+
 The storage lifecycle and clock semantics are specified in [design §§5–7](../../.doc/design/history-persistence.md). This file specifies the bytes chosen for §§7.1–7.2. Fixed-width fields are little-endian. `ID` is 16 bytes in UUID string order (without separators). All CRCs are CRC32C of all preceding bytes of the header, sidecar, or packet itself, stored as `u32`.
 
 | Structure | Fields in byte order |
